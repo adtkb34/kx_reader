@@ -50,7 +50,7 @@ AGENT_ENABLED=1 npm run dev
 | `AGENT_TIMEOUT_MS` | `600000` | 单次超时（毫秒） |
 | `CURSOR_API_KEY` | — | 若不用 `agent login`，可透传密钥 |
 
-同一本书同时只能跑一个 agent；并发请求返回 409。不会自动 `git commit`。
+同一本书同时只能跑一个 agent；并发请求返回 409。内容写盘成功后，阅读器会在该书目录自动 `git init`（如需要）并 `git add` / `git commit`（message 由 AI 生成；失败则回退到默认文案）。不自动 `git push`。
 
 ### Agent 配置
 
@@ -111,6 +111,7 @@ shared/                   server 与 client 共用的类型、状态定义、小
 | DELETE | `/api/books/:bookId/annotations/section?sectionId=` | 删除整条标注（孤立标注清理） |
 | GET | `/api/books/:bookId/git/status` | 该书根目录是否含 `.git` |
 | GET | `/api/books/:bookId/git/refs` | 本地 branch / tag 列表 |
+| GET | `/api/books/:bookId/git/history` | 全书 `git log`（`?limit=`，默认 100） |
 | GET | `/api/books/:bookId/chapters/:chapterId/history` | 该章节文件的 `git log` |
 | GET | `/api/books/:bookId/chapters/:chapterId/compare?from=&to=&mode=` | 两 ref 间按小节 id 对齐的 diff（`mode=unified\|sideBySide`） |
 | GET | `/api/books/:bookId/chapters/:chapterId/sections/:sectionId` | 小节 Markdown 原文 |
@@ -124,7 +125,7 @@ shared/                   server 与 client 共用的类型、状态定义、小
 - **稳定 ID**：标注以 `章节id#小节id` 为键。示例手册要求所有标题带显式 `{#id}` 且永不改变，这是标注能在内容重新生成后存活的根基。
 - **标注与内容分离**：标注存于 `data/`，内容存于 `books/`，重新生成内容不可能覆盖标注。
 - **孤立标注兜底**：id 失联的标注进入专门面板，绝不静默丢失。
-- **一书一仓 + Git 对比**：每本书应是独立 Git 仓库（`books/<book-id>/.git`）。阅读器只读 Git：顶栏「对比变更」可选 branch / tag / hash，按小节 id 对齐后展示 unified / side-by-side diff。阅读器不负责 commit。
+- **一书一仓 + Git 对比**：每本书应是独立 Git 仓库（`books/<book-id>/.git`）。内容变更后阅读器自动 commit（无仓则先 init；message 由 AI 生成）。顶栏「对比变更」可选 branch / tag / hash。不自动 push。
 - **本地 AI 对话框**：可选调用本机 CLI（Cursor Agent / Claude Code 等）；在 `config/agents.json` 配置 `bin`、`args`、调用说明与模型，以及共享行为；默认 `AGENT_ENABLED` 关闭。
 - **服务端/客户端一致性**：目录抽取与正文切分共用 `shared/sections.ts` 的同一套 slug 与分组规则。
 - **可扩展为团队服务**：所有读写走 REST API，文件存储实现在 `AnnotationStore` 接口之后；换成数据库 + 登录即可多人使用，前端无需改动。

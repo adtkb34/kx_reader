@@ -51,7 +51,8 @@ interface GitRunResult {
   code: number;
 }
 
-function runGit(cwd: string, args: string[]): Promise<GitRunResult> {
+/** Exported for book commit helpers. */
+export async function runGit(cwd: string, args: string[]): Promise<GitRunResult> {
   return new Promise((resolve, reject) => {
     const child = spawn('git', args, {
       cwd,
@@ -121,27 +122,14 @@ export async function listBookRefs(bookId: string): Promise<GitRefSummary[]> {
   return out;
 }
 
-export async function listFileHistory(
-  bookId: string,
-  relFile: string,
-  limit = 50,
-): Promise<GitCommitSummary[]> {
-  if (!hasBookGit(bookId)) throw new GitError('not a git repository', 503);
-  assertSafeRelFile(relFile);
-  const lim = Number.isFinite(limit) ? Math.min(Math.max(1, Math.floor(limit)), 200) : 50;
-  const root = bookRoot(bookId);
-  const result = await runGit(root, [
-    'log',
-    `-n${lim}`,
-    '--format=%H%x09%h%x09%s%x09%an%x09%aI',
-    '--',
-    relFile,
-  ]);
-  if (result.code !== 0) {
-    throw new GitError(result.stderr.trim() || 'failed to read history', 500);
-  }
+function parseLogLimit(limit: number | undefined, fallback: number): number {
+  if (!Number.isFinite(limit)) return fallback;
+  return Math.min(Math.max(1, Math.floor(limit!)), 200);
+}
+
+function parseCommitLog(stdout: string): GitCommitSummary[] {
   const out: GitCommitSummary[] = [];
-  for (const line of result.stdout.split('\n')) {
+  for (const line of stdout.split('\n')) {
     if (!line.trim()) continue;
     const [sha, shortSha, subject, author, date] = line.split('\t');
     if (!sha) continue;
@@ -154,6 +142,46 @@ export async function listFileHistory(
     });
   }
   return out;
+}
+
+export async function listBookHistory(
+  bookId: string,
+  limit = 100,
+): Promise<GitCommitSummary[]> {
+  if (!hasBookGit(bookId)) throw new GitError('not a git repository', 503);
+  const lim = parseLogLimit(limit, 100);
+  const root = bookRoot(bookId);
+  const result = await runGit(root, [
+    'log',
+    `-n${lim}`,
+    '--format=%H%x09%h%x09%s%x09%an%x09%aI',
+  ]);
+  if (result.code !== 0) {
+    throw new GitError(result.stderr.trim() || 'failed to read history', 500);
+  }
+  return parseCommitLog(result.stdout);
+}
+
+export async function listFileHistory(
+  bookId: string,
+  relFile: string,
+  limit = 50,
+): Promise<GitCommitSummary[]> {
+  if (!hasBookGit(bookId)) throw new GitError('not a git repository', 503);
+  assertSafeRelFile(relFile);
+  const lim = parseLogLimit(limit, 50);
+  const root = bookRoot(bookId);
+  const result = await runGit(root, [
+    'log',
+    `-n${lim}`,
+    '--format=%H%x09%h%x09%s%x09%an%x09%aI',
+    '--',
+    relFile,
+  ]);
+  if (result.code !== 0) {
+    throw new GitError(result.stderr.trim() || 'failed to read history', 500);
+  }
+  return parseCommitLog(result.stdout);
 }
 
 /** Blob text at ref:path; missing path → empty string. */

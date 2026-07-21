@@ -9,6 +9,7 @@ import { SECTION_STATUS_IDS, type SectionStatus } from '../../shared/annotations
 import {
   GitError,
   hasBookGit,
+  listBookHistory,
   listBookRefs,
   listFileHistory,
 } from './gitHistory';
@@ -27,6 +28,7 @@ import {
   putChapterSection,
   SectionWriteError,
 } from './sectionWrite';
+import { tryCommitBookChanges } from './bookCommit';
 
 const app = express();
 app.use(express.json());
@@ -87,7 +89,17 @@ app.put('/api/books/:bookId/chapters/:chapterId/sections/:sectionId', async (req
     return badRequest(res, 'markdown is required');
   }
   try {
-    res.json(await putChapterSection(bookId, req.params.chapterId, req.params.sectionId, markdown));
+    const saved = await putChapterSection(
+      bookId,
+      req.params.chapterId,
+      req.params.sectionId,
+      markdown,
+    );
+    await tryCommitBookChanges(bookId, {
+      fallbackMessage: `docs: update ${req.params.chapterId}#${req.params.sectionId}`,
+      hint: `section edit ${req.params.chapterId}#${req.params.sectionId}`,
+    });
+    res.json(saved);
   } catch (err) {
     if (err instanceof SectionWriteError) {
       res.status(err.status).json({ error: err.message });
@@ -178,6 +190,17 @@ app.get('/api/books/:bookId/git/refs', async (req, res) => {
   if (!bookId) return;
   try {
     res.json(await listBookRefs(bookId));
+  } catch (err) {
+    if (!sendGitError(res, err)) throw err;
+  }
+});
+
+app.get('/api/books/:bookId/git/history', async (req, res) => {
+  const bookId = await requireBook(req, res);
+  if (!bookId) return;
+  const limitRaw = Number(req.query.limit);
+  try {
+    res.json(await listBookHistory(bookId, Number.isFinite(limitRaw) ? limitRaw : 100));
   } catch (err) {
     if (!sendGitError(res, err)) throw err;
   }

@@ -92,6 +92,9 @@ export const api = {
 
   gitRefs: (bookId: string) => request<GitRefSummary[]>(`/books/${bookId}/git/refs`),
 
+  gitHistory: (bookId: string, limit = 100) =>
+    request<GitCommitSummary[]>(`/books/${bookId}/git/history?limit=${limit}`),
+
   chapterHistory: (bookId: string, chapterId: string, limit = 50) =>
     request<GitCommitSummary[]>(
       `/books/${bookId}/chapters/${chapterId}/history?limit=${limit}`,

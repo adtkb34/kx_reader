@@ -1359,7 +1359,8 @@ code {
   flex: 1;
 }
 
-.compare-input {
+.compare-input,
+.compare-select {
   font: inherit;
   font-size: 13px;
   padding: 6px 10px;
@@ -1368,13 +1369,17 @@ code {
   background: #fff;
 }
 
+.compare-select {
+  min-width: 16rem;
+  max-width: 100%;
+}
+
 .compare-mode {
   display: flex;
   gap: 4px;
 }
 
-.compare-mode .btn.active,
-.lens-btn.active {
+.compare-mode .btn.active {
   background: var(--accent-soft, #efeae0);
   color: var(--ink, #181816);
 }

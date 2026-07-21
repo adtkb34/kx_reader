@@ -4,3 +4,4 @@ Hard rules (must obey):
 - Keep Markdown structure compatible with the sample handbook (details blocks, mermaid, wireframes, structure rules).
 - Read and obey the authoring rules in the sample handbook at: {{authoringPath}}
   (especially chapters on structure, format, details, and the checklist).
+- Do not run `git add`, `git commit`, or `git push`. The reader commits the book repository after a successful write.

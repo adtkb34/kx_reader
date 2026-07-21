@@ -11,6 +11,7 @@ import {
 } from './agentConfig';
 import { resolveExecutable, runConfiguredCli } from './drivers/runCli';
 import type { AgentSseEvent } from './agentTypes';
+import { tryCommitBookChanges } from './bookCommit';
 
 export type { AgentSseEvent } from './agentTypes';
 export type { AgentCatalogPublic };
@@ -136,7 +137,7 @@ export async function startAgentRun(opts: {
     prompt,
   });
 
-  return runConfiguredCli({
+  const result = await runConfiguredCli({
     bin,
     args,
     cwd: root,
@@ -148,4 +149,31 @@ export async function startAgentRun(opts: {
       runningByBook.delete(opts.bookId);
     },
   });
+
+  if (result.code === 0) {
+    const hintBits = [
+      `agent ${agent.id}/${behavior.id}`,
+      opts.chapterId ? `chapter ${opts.chapterId}` : null,
+      opts.userPrompt.trim().slice(0, 120),
+    ].filter(Boolean);
+    const commit = await tryCommitBookChanges(opts.bookId, {
+      fallbackMessage: `docs: agent ${behavior.id}`,
+      hint: hintBits.join(' — '),
+    });
+    if (commit?.committed) {
+      opts.onEvent({
+        type: 'log',
+        stream: 'stdout',
+        text: `\n[book-git] committed ${commit.sha?.slice(0, 7) ?? ''} — ${commit.message ?? ''}\n`,
+      });
+    } else if (commit?.initialized) {
+      opts.onEvent({
+        type: 'log',
+        stream: 'stdout',
+        text: '\n[book-git] repository initialized\n',
+      });
+    }
+  }
+
+  return result;
 }

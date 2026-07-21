@@ -112,3 +112,72 @@ export async function runConfiguredCli(opts: RunConfiguredCliOpts): Promise<{ co
     });
   });
 }
+
+/** Capture full stdout/stderr (for short one-shot prompts like commit messages). */
+export async function runCliCapture(opts: {
+  bin: string;
+  args: string[];
+  cwd: string;
+  timeoutMs?: number;
+}): Promise<{ code: number; stdout: string; stderr: string }> {
+  const bin = opts.bin.trim();
+  const binPath = await resolveExecutable(bin);
+  if (!binPath) {
+    throw new Error(`agent binary not found: ${bin}`);
+  }
+  const timeout =
+    opts.timeoutMs && opts.timeoutMs > 0
+      ? opts.timeoutMs
+      : Number.isFinite(CLI_TIMEOUT_MS) && CLI_TIMEOUT_MS > 0
+        ? CLI_TIMEOUT_MS
+        : 60_000;
+
+  return new Promise((resolve, reject) => {
+    let child: ChildProcess;
+    try {
+      child = spawn(binPath, opts.args, {
+        cwd: opts.cwd,
+        env: { ...process.env, NO_OPEN_BROWSER: '1' },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    } catch (err) {
+      reject(err);
+      return;
+    }
+
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      try {
+        child.kill('SIGKILL');
+      } catch {
+        // ignore
+      }
+      reject(new Error(`CLI timed out after ${timeout}ms`));
+    }, timeout);
+
+    child.stdout?.setEncoding('utf8');
+    child.stderr?.setEncoding('utf8');
+    child.stdout?.on('data', (chunk: string) => {
+      stdout += chunk;
+    });
+    child.stderr?.on('data', (chunk: string) => {
+      stderr += chunk;
+    });
+    child.on('error', (err) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(err);
+    });
+    child.on('close', (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ code: code ?? 1, stdout, stderr });
+    });
+  });
+}

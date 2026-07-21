@@ -38,23 +38,8 @@ const visibleSections = computed(() => {
   return sections.filter((s) => s.kind !== 'unchanged');
 });
 
-const refOptions = computed(() => {
-  const names = new Set<string>();
-  const opts: { value: string; label: string }[] = [];
-  const push = (value: string, label: string) => {
-    if (names.has(value)) return;
-    names.add(value);
-    opts.push({ value, label });
-  };
-  push('HEAD', 'HEAD');
-  for (const r of refs.value) {
-    push(r.name, `${r.kind}: ${r.name}`);
-  }
-  for (const h of history.value) {
-    push(h.sha, `${h.shortSha} — ${h.subject || '(no subject)'}`);
-  }
-  return opts;
-});
+const branches = computed(() => refs.value.filter((r) => r.kind === 'branch'));
+const tags = computed(() => refs.value.filter((r) => r.kind === 'tag'));
 
 async function bootstrap(): Promise<void> {
   loadError.value = '';
@@ -65,7 +50,7 @@ async function bootstrap(): Promise<void> {
     if (!status.hasGit) return;
     const [r, h] = await Promise.all([
       api.gitRefs(props.bookId),
-      api.chapterHistory(props.bookId, props.chapterId),
+      api.gitHistory(props.bookId, 100),
     ]);
     refs.value = r;
     history.value = h;
@@ -143,17 +128,46 @@ watch(
         <div class="compare-controls">
           <label class="compare-field">
             <span>From</span>
-            <input v-model="fromRef" list="compare-ref-options" class="compare-input" />
+            <select v-model="fromRef" class="compare-select">
+              <option value="HEAD">HEAD</option>
+              <optgroup v-if="branches.length" label="Branches">
+                <option v-for="b in branches" :key="'from-b-' + b.name" :value="b.name">
+                  {{ b.name }}
+                </option>
+              </optgroup>
+              <optgroup v-if="tags.length" label="Tags">
+                <option v-for="t in tags" :key="'from-t-' + t.name" :value="t.name">
+                  {{ t.name }}
+                </option>
+              </optgroup>
+              <optgroup v-if="history.length" label="Commits">
+                <option v-for="h in history" :key="'from-h-' + h.sha" :value="h.sha">
+                  {{ h.shortSha }} — {{ h.subject || '(no subject)' }}
+                </option>
+              </optgroup>
+            </select>
           </label>
           <label class="compare-field">
             <span>To</span>
-            <input v-model="toRef" list="compare-ref-options" class="compare-input" />
+            <select v-model="toRef" class="compare-select">
+              <option value="HEAD">HEAD</option>
+              <optgroup v-if="branches.length" label="Branches">
+                <option v-for="b in branches" :key="'to-b-' + b.name" :value="b.name">
+                  {{ b.name }}
+                </option>
+              </optgroup>
+              <optgroup v-if="tags.length" label="Tags">
+                <option v-for="t in tags" :key="'to-t-' + t.name" :value="t.name">
+                  {{ t.name }}
+                </option>
+              </optgroup>
+              <optgroup v-if="history.length" label="Commits">
+                <option v-for="h in history" :key="'to-h-' + h.sha" :value="h.sha">
+                  {{ h.shortSha }} — {{ h.subject || '(no subject)' }}
+                </option>
+              </optgroup>
+            </select>
           </label>
-          <datalist id="compare-ref-options">
-            <option v-for="o in refOptions" :key="o.value" :value="o.value">
-              {{ o.label }}
-            </option>
-          </datalist>
           <div class="compare-mode" role="group" aria-label="展示方式">
             <button
               type="button"
