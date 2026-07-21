@@ -1,0 +1,63 @@
+{
+  "defaultAgent": "cursor",
+  "defaultBehavior": "doc-edit",
+  "agents": [
+    {
+      "id": "cursor",
+      "title": "Cursor Agent",
+      "driver": "cursor-cli",
+      "bin": "agent",
+      "args": [
+        "-p",
+        "--trust",
+        "--force",
+        "--workspace",
+        "{{bookRoot}}",
+        "--add-dir",
+        "{{readerRoot}}",
+        "--output-format",
+        "text"
+      ],
+      "promptFile": "prompts/drivers/cursor-cli.md",
+      "defaultModel": "grok-4.5-high",
+      "models": [
+        { "id": "", "title": "默认（CLI）" },
+        { "id": "grok-4.5-high", "title": "Grok 4.5 High" },
+        { "id": "composer-2.5", "title": "Composer 2.5" },
+        { "id": "gpt-5.4-high", "title": "GPT-5.4 High" },
+        { "id": "claude-sonnet-4-thinking", "title": "Claude Sonnet 4 Thinking" }
+      ]
+    },
+    {
+      "id": "claude-code",
+      "title": "Claude Code",
+      "driver": "claude-code",
+      "bin": "claude",
+      "args": [
+        "-p",
+        "--permission-mode",
+        "acceptEdits",
+        "--output-format",
+        "text"
+      ],
+      "promptFile": "prompts/drivers/claude-code.md",
+      "models": [
+        { "id": "", "title": "默认（CLI）" },
+        { "id": "sonnet", "title": "Sonnet" },
+        { "id": "opus", "title": "Opus" }
+      ]
+    }
+  ],
+  "behaviors": [
+    {
+      "id": "doc-edit",
+      "title": "改文档",
+      "promptFile": "prompts/doc-edit.md"
+    },
+    {
+      "id": "doc-review",
+      "title": "审读挑错",
+      "promptFile": "prompts/doc-review.md"
+    }
+  ]
+}

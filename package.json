@@ -1,0 +1,26 @@
+{
+  "name": "doc-book-reader",
+  "private": true,
+  "version": "0.1.0",
+  "description": "书本式项目文档阅读器：翻页、跳转、细节折叠、标记与备注持久化",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n server,client -c blue,green npm:dev:server npm:dev:client",
+    "dev:agent": "AGENT_ENABLED=1 concurrently -k -n server,client -c blue,green npm:dev:server npm:dev:client",
+    "dev:server": "npm run dev -w server",
+    "dev:client": "npm run dev -w client",
+    "build": "npm run typecheck && npm run build -w client",
+    "typecheck": "npm run typecheck -w server && npm run typecheck -w client",
+    "start": "npm run start -w server"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.3",
+    "typescript": "^5.9.3"
+  }
+}
