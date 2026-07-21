@@ -4,5 +4,14 @@ dist/
 .DS_Store
 data/annotations/*.tmp
 
+# Only ship the sample handbook; other books stay local
+books/*
+!books/sample/
+!books/sample/**
+
 # Per-book git repos (compare feature); parent tracks content only
 books/**/.git/
+
+# Annotations: keep sample only
+data/annotations/*
+!data/annotations/sample.json
