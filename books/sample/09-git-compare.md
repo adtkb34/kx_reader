@@ -7,12 +7,19 @@ layer: impl
 
 ## 一书一仓 {#book-git}
 
-每本书推荐在 `books/<book-id>/` 下独立 `git init`。内容改动在该书仓库内 commit；标注仍在 reader 的 `data/`，不进书仓。
+每本书推荐在 `books/<book-id>/` 下独立 `git init`。内容改动由阅读器在该书仓库内自动 commit；标注仍在 reader 的 `data/`，不进书仓。
 
 ## 按小节对齐的 diff {#section-diff}
 
 可选 branch / tag / hash，支持 unified 与并排。对齐键是小节 id，不是行号——因此稳定 id 同样重要。
 
-## 阅读器不 commit {#non-goals}
+## 自动 commit {#auto-commit}
 
-阅读器只读 Git 历史。不会自动 `git add` / `git commit`；本地 Agent 改文件后也由人决定是否提交。
+每次内容变更（小节编辑保存或 Agent 写盘成功），阅读器会在该书根目录：
+
+1. 若无 `.git` 则 `git init`（并补本地 `user.name` / `user.email` 若缺失）；
+2. `git add -A`；
+3. 用 AI 根据 staged diff 生成一行 commit message（CLI 不可用则回退默认文案）；
+4. `git commit`。
+
+不自动 `push`。Agent 自身不要执行 git 命令。

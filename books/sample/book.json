@@ -2,19 +2,37 @@
   "title": "示例手册：文档书阅读器",
   "description": "产品说明与写书唯一规范。顶栏切换「场景 / 实现」：非技术读场景，机械规范与设计在实现。",
   "lenses": [
-    { "id": "scenario", "title": "场景" },
-    { "id": "impl", "title": "实现" }
+    {
+      "id": "scenario",
+      "title": "场景"
+    },
+    {
+      "id": "impl",
+      "title": "实现"
+    }
   ],
   "contents": [
-    { "type": "page", "file": "01-overview.md" },
+    {
+      "type": "page",
+      "file": "01-overview.md"
+    },
     {
       "type": "group",
       "id": "writing",
       "title": "写作",
       "children": [
-        { "type": "page", "file": "02-structure.md" },
-        { "type": "page", "file": "03-format.md" },
-        { "type": "page", "file": "04-details.md" }
+        {
+          "type": "page",
+          "file": "02-structure.md"
+        },
+        {
+          "type": "page",
+          "file": "03-format.md"
+        },
+        {
+          "type": "page",
+          "file": "04-details.md"
+        }
       ]
     },
     {
@@ -22,8 +40,14 @@
       "id": "reading",
       "title": "阅读",
       "children": [
-        { "type": "page", "file": "05-navigation.md" },
-        { "type": "page", "file": "06-lenses.md" }
+        {
+          "type": "page",
+          "file": "05-navigation.md"
+        },
+        {
+          "type": "page",
+          "file": "06-lenses.md"
+        }
       ]
     },
     {
@@ -31,9 +55,18 @@
       "id": "review",
       "title": "审读",
       "children": [
-        { "type": "page", "file": "07-annotations.md" },
-        { "type": "page", "file": "08-persistence.md" },
-        { "type": "page", "file": "09-git-compare.md" }
+        {
+          "type": "page",
+          "file": "07-annotations.md"
+        },
+        {
+          "type": "page",
+          "file": "08-persistence.md"
+        },
+        {
+          "type": "page",
+          "file": "09-git-compare.md"
+        }
       ]
     },
     {
@@ -41,10 +74,19 @@
       "id": "design",
       "title": "设计",
       "children": [
-        { "type": "page", "file": "10-architecture.md" },
-        { "type": "page", "file": "11-local-agent.md" }
+        {
+          "type": "page",
+          "file": "10-architecture.md"
+        },
+        {
+          "type": "page",
+          "file": "11-local-agent.md"
+        }
       ]
     },
-    { "type": "page", "file": "12-checklist.md" }
+    {
+      "type": "page",
+      "file": "12-checklist.md"
+    }
   ]
 }

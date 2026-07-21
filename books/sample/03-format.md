@@ -20,7 +20,7 @@ data/
   annotations/<book-id>.json   # 阅读器维护的标注数据，生成器【禁止】读写
 ```
 
-内容变更后应在**该书仓库**内 `git add` + `git commit`；阅读器只读历史做按小节 id 的对比，不会自动 commit。标注仍在 reader 的 `data/`，与内容仓分离。
+内容变更后由阅读器在该书仓库内自动 `git add` / `git commit`（见 [自动 commit](09-git-compare.md#auto-commit)）；也可人手提交。标注仍在 reader 的 `data/`，与内容仓分离。
 
 ```mermaid
 flowchart TD
