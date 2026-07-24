@@ -27,11 +27,18 @@ export interface TocChapter {
   title: string;
   file: string;
   sections: TocSection[];
-  /** Omit = always visible under every lens. */
+  /**
+   * Derived from book.json `correspondences` (which lens key lists this page).
+   * Omit = always visible under every lens.
+   */
   layer?: PageLayer;
-  /** Sibling page id to jump to when switching lens. */
-  pair?: string;
 }
+
+/**
+ * One topic across lenses: lens id → chapter id.
+ * Multi-key rows define switch targets; single-key rows are membership only.
+ */
+export type LensCorrespondence = Record<PageLayer, string>;
 
 /** Nested TOC: groups are folders only; pages are leaves. */
 export type TocTreeNode =
@@ -44,6 +51,10 @@ export interface BookToc {
   description?: string;
   /** When set, reader shows a lens switcher and filters TOC / prev-next. */
   lenses?: BookLens[];
+  /**
+   * Cross-lens page groups from book.json. Also used to derive chapter.layer.
+   */
+  correspondences?: LensCorrespondence[];
   /** Nested sidebar tree (groups + pages). */
   tree: TocTreeNode[];
   /** Leaf pages in DFS reading / prev-next order (always flat). */

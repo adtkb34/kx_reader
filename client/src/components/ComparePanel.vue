@@ -6,7 +6,13 @@ import {
   type GitRefSummary,
 } from '@/api';
 import { ui } from '@/stores/ui';
-import type { ChapterCompareResult, CompareMode, SectionChangeKind } from '@shared/sectionDiff';
+import type {
+  ChapterCompareResult,
+  CompareMode,
+  DiffLine,
+  DiffPart,
+  SectionChangeKind,
+} from '@shared/sectionDiff';
 
 const props = defineProps<{
   bookId: string;
@@ -31,6 +37,18 @@ const kindLabel: Record<SectionChangeKind, string> = {
   added: '新增',
   removed: '删除',
 };
+
+function lineSign(line: DiffLine, side: 'unified' | 'from' | 'to'): string {
+  if (side === 'unified') {
+    return line.op === 'add' ? '+' : line.op === 'del' ? '−' : ' ';
+  }
+  if (side === 'from') return line.op === 'del' ? '−' : ' ';
+  return line.op === 'add' ? '+' : ' ';
+}
+
+function partClass(p: DiffPart): string {
+  return p.op === 'eq' ? 'diff-inline eq' : `diff-inline ${p.op}`;
+}
 
 const visibleSections = computed(() => {
   const sections = result.value?.sections ?? [];
@@ -168,22 +186,22 @@ watch(
               </optgroup>
             </select>
           </label>
-          <div class="compare-mode" role="group" aria-label="展示方式">
+          <div class="compare-mode-switch" role="group" aria-label="展示方式">
             <button
               type="button"
-              class="btn ghost"
+              class="compare-mode-opt"
               :class="{ active: mode === 'unified' }"
               @click="mode = 'unified'"
             >
-              Unified
+              合并
             </button>
             <button
               type="button"
-              class="btn ghost"
+              class="compare-mode-opt"
               :class="{ active: mode === 'sideBySide' }"
               @click="mode = 'sideBySide'"
             >
-              Side by side
+              并排
             </button>
           </div>
           <label class="compare-check">
@@ -205,6 +223,11 @@ watch(
           </template>
         </div>
 
+        <div v-if="result && mode === 'unified' && visibleSections.length > 0" class="compare-legend">
+          <span class="compare-legend-item from"><span class="compare-legend-sign">−</span> From</span>
+          <span class="compare-legend-item to"><span class="compare-legend-sign">+</span> To</span>
+        </div>
+
         <p v-if="result && visibleSections.length === 0" class="muted">没有差异。</p>
 
         <div
@@ -223,31 +246,69 @@ watch(
           <div v-if="expanded[sec.id]" class="compare-body" :data-mode="mode">
             <template v-if="mode === 'sideBySide'">
               <div class="diff-cols">
-                <pre class="diff-col from"><template
-                  v-for="(line, i) in sec.lines"
-                  :key="'L' + i"
-                  ><span
-                    v-if="line.op !== 'add'"
-                    class="diff-line"
-                    :class="line.op"
-                    >{{ line.op === 'del' ? '- ' : '  ' }}{{ line.text }}
+                <div class="diff-col-wrap from">
+                  <div class="diff-col-head">From</div>
+                  <pre class="diff-col from"><template
+                    v-for="(line, i) in sec.lines"
+                    :key="'L' + i"
+                    ><span
+                      v-if="line.op !== 'add'"
+                      class="diff-line"
+                      :class="[line.op, { 'has-parts': !!line.parts }]"
+                      ><span class="diff-sign" aria-hidden="true">{{ lineSign(line, 'from') }}</span
+                      ><span class="diff-content"
+                        ><template v-if="line.parts"
+                          ><mark
+                            v-for="(p, j) in line.parts"
+                            :key="j"
+                            :class="partClass(p)"
+                            >{{ p.text }}</mark
+                          ></template
+                        ><template v-else>{{ line.text }}</template></span
+                      >
 </span></template></pre>
-                <pre class="diff-col to"><template
-                  v-for="(line, i) in sec.lines"
-                  :key="'R' + i"
-                  ><span
-                    v-if="line.op !== 'del'"
-                    class="diff-line"
-                    :class="line.op"
-                    >{{ line.op === 'add' ? '+ ' : '  ' }}{{ line.text }}
+                </div>
+                <div class="diff-col-wrap to">
+                  <div class="diff-col-head">To</div>
+                  <pre class="diff-col to"><template
+                    v-for="(line, i) in sec.lines"
+                    :key="'R' + i"
+                    ><span
+                      v-if="line.op !== 'del'"
+                      class="diff-line"
+                      :class="[line.op, { 'has-parts': !!line.parts }]"
+                      ><span class="diff-sign" aria-hidden="true">{{ lineSign(line, 'to') }}</span
+                      ><span class="diff-content"
+                        ><template v-if="line.parts"
+                          ><mark
+                            v-for="(p, j) in line.parts"
+                            :key="j"
+                            :class="partClass(p)"
+                            >{{ p.text }}</mark
+                          ></template
+                        ><template v-else>{{ line.text }}</template></span
+                      >
 </span></template></pre>
+                </div>
               </div>
             </template>
             <pre v-else class="diff-unified"><template
               v-for="(line, i) in sec.lines"
               :key="i"
-              ><span class="diff-line" :class="line.op"
-                >{{ line.op === 'add' ? '+' : line.op === 'del' ? '-' : ' ' }} {{ line.text }}
+              ><span
+                class="diff-line"
+                :class="[line.op, { 'has-parts': !!line.parts }]"
+                ><span class="diff-sign" aria-hidden="true">{{ lineSign(line, 'unified') }}</span
+                ><span class="diff-content"
+                  ><template v-if="line.parts"
+                    ><mark
+                      v-for="(p, j) in line.parts"
+                      :key="j"
+                      :class="partClass(p)"
+                      >{{ p.text }}</mark
+                    ></template
+                  ><template v-else>{{ line.text }}</template></span
+                >
 </span></template></pre>
           </div>
         </div>

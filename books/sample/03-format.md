@@ -1,8 +1,6 @@
 ---
 id: format
 title: 内容格式规范
-layer: impl
-pair: structure
 ---
 本页是写书的**机械合同**（实现透镜）。生成或修改任何书之前，必须遵守。核心只有一条：**id 必须稳定**。结构思想见场景透镜的 [结构思想](02-structure.md#thesis)。
 
@@ -16,6 +14,10 @@ books/
     01-overview.md      # 章节文件；可用子目录分组，如 identity/01-auth.md
     identity/
       01-auth.md
+    assets/             # 本书照片/插图（相对路径引用）
+      overview.png
+      screenshots/
+        login.jpg
 data/
   annotations/<book-id>.json   # 阅读器维护的标注数据，生成器【禁止】读写
 ```
@@ -55,6 +57,11 @@ flowchart TD
     { "id": "scenario", "title": "场景" },
     { "id": "impl", "title": "实现" }
   ],
+  "correspondences": [
+    { "scenario": "structure", "impl": "format" },
+    { "scenario": "navigation" },
+    { "impl": "architecture" }
+  ],
   "contents": [
     { "type": "page", "file": "01-overview.md" },
     {
@@ -74,24 +81,22 @@ flowchart TD
 - **`page`**：叶子页，对应一个 Markdown 文件；可路由、可翻页、可标注。
 - **`group`**：目录文件夹，只出现在左侧 TOC，**不是**页面；`id` 小写 kebab-case，全书唯一且稳定。
 - **`lenses`（可选）**：书内自定 id + 显示名；见 [阅读透镜](06-lenses.md#how)。不声明则无顶栏开关。
+- **`correspondences`（可选，有透镜时使用）**：透镜归属与跨透镜互跳；见 [阅读透镜](06-lenses.md#how)。未列出的页常显。
 - 翻页（←/→）只在**当前透镜可见的**叶子页之间按 DFS 顺序走动；组节点被跳过。
 - 组可再嵌套组；深度不限。
 - 删除叶子页：从 `contents` 移除；该页标注进入「孤立标注」面板。
 
 ## 章节文件 {#chapter-files}
 
-每个章节是一个 Markdown 文件，YAML frontmatter 必须包含 `id` 与 `title`；可选 `layer` / `pair`（见 [阅读透镜](06-lenses.md#how)）：
+每个章节是一个 Markdown 文件，YAML frontmatter **必须**包含 `id` 与 `title`。透镜归属与互跳写在 `book.json` 的 `correspondences`，**不要**在页上写 `layer` / `pair`：
 
 ```markdown
 ---
 id: structure
 title: 结构思想
-layer: scenario
-pair: format
 ---
 ```
 
-- `layer`：必须是本书 `lenses[].id` 之一，或省略（常显）。
 - `id` 是章节的稳定标识：小写 kebab-case，全书唯一，**一经使用永不修改**（文件可以改名重排，id 不可变）。
 - 正文**不要**写 `# 一级标题`，章节标题由 frontmatter 的 `title` 渲染。
 
@@ -154,6 +159,22 @@ pair: format
 - 阅读器会把内部链接转成应用内跳转（不刷新、可定位并高亮）。
 
 试一试：[细节折叠的基本用法](04-details.md#basics)、[本章内跳转到稳定 ID](#stable-ids)。
+
+## 照片与插图 {#photos}
+
+真实照片、产品截图等二进制图放在本书 `assets/` 下，用标准 Markdown 图片语法引用（路径相对书籍根目录）：
+
+```markdown
+![登录页截图](assets/screenshots/login.jpg)
+```
+
+- 允许扩展名：`jpg` / `jpeg` / `png` / `webp` / `gif`；可用子目录。
+- `alt` 文案同时作为图下说明；读者点击图片可放大预览。
+- 一组照片：同一小节里连续写多张 `![]()` 即可，不必另造相册实体。
+- 图片随书走（进该书 `.git`）；阅读器只开放 `assets/`，不会把整本目录挂成静态站。
+- **分工**：真实照片/截图用 `assets/`；架构关系与数据流用 Mermaid；界面屏示意用 wireframe。不要用照片冒充结构图，也不要用 Mermaid 画真实 UI。
+
+![样例插图：阅读器照片能力](assets/photo-demo.png)
 
 ## 图表与 UI 线框 {#diagrams}
 

@@ -103,6 +103,7 @@ shared/                   server 与 client 共用的类型、状态定义、小
 | GET | `/api/books` | 书籍列表 |
 | GET | `/api/books/:bookId` | 目录（章节 + 小节树） |
 | GET | `/api/books/:bookId/chapters/:chapterId` | 章节 Markdown |
+| GET | `/api/books/:bookId/assets/*` | 书内 `assets/` 照片（扩展名白名单） |
 | GET | `/api/books/:bookId/annotations` | 全书标注 |
 | PUT | `/api/books/:bookId/annotations/status` | 设置小节状态 `{sectionId, status}` |
 | POST | `/api/books/:bookId/annotations/notes` | 添加备注 `{sectionId, text}` |

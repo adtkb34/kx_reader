@@ -61,7 +61,7 @@ const filteredTree = computed(() => {
 async function ensureLoaded(): Promise<void> {
   loadError.value = '';
   try {
-    await Promise.all([loadToc(bookId.value), loadAnnotations(bookId.value)]);
+    await Promise.all([loadToc(bookId.value, true), loadAnnotations(bookId.value)]);
   } catch (e) {
     loadError.value = e instanceof Error ? e.message : String(e);
     return;
@@ -142,7 +142,15 @@ function onLens(lens: PageLayer): void {
 function onKey(e: KeyboardEvent): void {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   const el = e.target as HTMLElement | null;
-  if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+  if (
+    el &&
+    (el.tagName === 'INPUT' ||
+      el.tagName === 'TEXTAREA' ||
+      el.tagName === 'SELECT' ||
+      el.isContentEditable)
+  ) {
+    return;
+  }
   if (e.key === 'ArrowLeft') go(prevChapter.value);
   else if (e.key === 'ArrowRight') go(nextChapter.value);
 }
@@ -164,18 +172,18 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
         <router-link to="/" class="btn ghost">‹ 书架</router-link>
         <span class="topbar-title">{{ toc.title }}</span>
         <span class="spacer" />
-        <div v-if="toc.lenses?.length" class="lens-switch" role="group" aria-label="阅读类型">
-          <button
-            v-for="lens in toc.lenses"
-            :key="lens.id"
-            type="button"
-            class="btn ghost lens-btn"
-            :class="{ active: activeLens === lens.id }"
-            @click="onLens(lens.id)"
+        <label v-if="toc.lenses?.length" class="lens-select-wrap">
+          <span class="visually-hidden">阅读类型</span>
+          <select
+            class="lens-select"
+            :value="activeLens ?? ''"
+            @change="onLens(($event.target as HTMLSelectElement).value)"
           >
-            {{ lens.title }}
-          </button>
-        </div>
+            <option v-for="lens in toc.lenses" :key="lens.id" :value="lens.id">
+              {{ lens.title }}
+            </option>
+          </select>
+        </label>
         <button v-if="orphans.length" class="btn ghost warn" @click="ui.orphanOpen = true">
           孤立标注 {{ orphans.length }}
         </button>

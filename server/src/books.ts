@@ -8,7 +8,7 @@ import type {
   BookSummary,
   BookToc,
   ChapterContent,
-  PageLayer,
+  LensCorrespondence,
   TocChapter,
   TocTreeNode,
 } from '../../shared/types';
@@ -36,12 +36,32 @@ interface BookManifest {
   contents?: ManifestNode[];
   /** Optional reading lenses (ids are book-defined, e.g. rules/ui or scenario/impl). */
   lenses?: BookLens[];
+  /**
+   * Cross-lens page groups: lens id → chapter id.
+   * Also derives each page's layer; pages not listed are always-visible.
+   */
+  correspondences?: LensCorrespondence[];
 }
 
 /** Book id / single path segment. */
 const SAFE_SEGMENT = /^[\w][\w.-]*$/;
 /** Relative file under book root, no `..`. */
 const SAFE_REL_FILE = /^[\w][\w./-]*\.md$/;
+/** Relative asset under book `assets/`, no `..`. */
+const SAFE_ASSET_REL = /^[\w][\w./-]*\.(?:jpg|jpeg|png|webp|gif)$/i;
+
+const ASSET_CONTENT_TYPES: Record<string, string> = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+};
+
+export interface BookAsset {
+  absPath: string;
+  contentType: string;
+}
 
 function isSafeBookId(bookId: string): boolean {
   return SAFE_SEGMENT.test(bookId);
@@ -51,14 +71,8 @@ function isSafeRelFile(file: string): boolean {
   return SAFE_REL_FILE.test(file) && !file.includes('..');
 }
 
-function parseLayer(raw: unknown): PageLayer | undefined {
-  if (typeof raw !== 'string' || !raw) return undefined;
-  return SAFE_SEGMENT.test(raw) ? raw : undefined;
-}
-
-function parsePair(raw: unknown): string | undefined {
-  if (typeof raw !== 'string' || !raw) return undefined;
-  return SAFE_SEGMENT.test(raw) ? raw : undefined;
+function isSafeAssetRel(rel: string): boolean {
+  return SAFE_ASSET_REL.test(rel) && !rel.includes('..');
 }
 
 function parseLenses(raw: unknown): BookLens[] | undefined {
@@ -75,6 +89,87 @@ function parseLenses(raw: unknown): BookLens[] | undefined {
     out.push({ id, title });
   }
   return out.length > 0 ? out : undefined;
+}
+
+/**
+ * Parse correspondences from book.json. Keys must be lens ids; values are chapter ids.
+ * Invalid rows / duplicate chapter ids are dropped with warnings.
+ */
+function parseCorrespondences(
+  bookId: string,
+  raw: unknown,
+  lensIds: Set<string>,
+  pageIds: Set<string>,
+): LensCorrespondence[] | undefined {
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  const out: LensCorrespondence[] = [];
+  const claimed = new Set<string>();
+  for (let i = 0; i < raw.length; i++) {
+    const item = raw[i];
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      console.warn(`book ${bookId}: correspondences[${i}] is not an object; skipping`);
+      continue;
+    }
+    const row: LensCorrespondence = {};
+    let ok = true;
+    for (const [lens, chapterId] of Object.entries(item as Record<string, unknown>)) {
+      if (!lensIds.has(lens)) {
+        console.warn(
+          `book ${bookId}: correspondences[${i}] key "${lens}" is not a declared lens; skipping row`,
+        );
+        ok = false;
+        break;
+      }
+      if (typeof chapterId !== 'string' || !SAFE_SEGMENT.test(chapterId)) {
+        console.warn(
+          `book ${bookId}: correspondences[${i}].${lens} is not a valid chapter id; skipping row`,
+        );
+        ok = false;
+        break;
+      }
+      if (!pageIds.has(chapterId)) {
+        console.warn(
+          `book ${bookId}: correspondences[${i}].${lens}="${chapterId}" is not a page; skipping row`,
+        );
+        ok = false;
+        break;
+      }
+      if (claimed.has(chapterId)) {
+        console.warn(
+          `book ${bookId}: chapter "${chapterId}" appears in multiple correspondences; skipping later row`,
+        );
+        ok = false;
+        break;
+      }
+      row[lens] = chapterId;
+    }
+    if (!ok || Object.keys(row).length === 0) continue;
+    for (const id of Object.values(row)) claimed.add(id);
+    out.push(row);
+  }
+  return out.length > 0 ? out : undefined;
+}
+
+/** Assign chapter.layer from which lens key lists the chapter in correspondences. */
+function applyCorrespondences(
+  bookId: string,
+  pages: TocChapter[],
+  correspondences: LensCorrespondence[],
+): void {
+  const byId = new Map(pages.map((p) => [p.id, p]));
+  for (const row of correspondences) {
+    for (const [lens, chapterId] of Object.entries(row)) {
+      const page = byId.get(chapterId);
+      if (!page) continue;
+      if (page.layer && page.layer !== lens) {
+        console.warn(
+          `book ${bookId}: page "${chapterId}" claimed by lenses "${page.layer}" and "${lens}"; keeping "${page.layer}"`,
+        );
+        continue;
+      }
+      page.layer = lens;
+    }
+  }
 }
 
 async function readManifest(bookId: string): Promise<BookManifest | null> {
@@ -131,15 +226,16 @@ async function loadPage(bookId: string, file: string): Promise<TocChapter | null
   const title = typeof fm.data.title === 'string' && fm.data.title ? fm.data.title : id;
   const { sections, hasIntro } = extractSections(fm.content);
   const all = hasIntro ? [{ id: '_intro', title: '引言', level: 2 }, ...sections] : sections;
-  const layer = parseLayer(fm.data.layer);
-  const pair = parsePair(fm.data.pair);
+  if (fm.data.layer != null || fm.data.pair != null) {
+    console.warn(
+      `book ${bookId}: page "${id}" has frontmatter layer/pair; ignored — use book.json correspondences`,
+    );
+  }
   return {
     id,
     title,
     file,
     sections: all,
-    ...(layer ? { layer } : {}),
-    ...(pair ? { pair } : {}),
   };
 }
 
@@ -197,16 +293,18 @@ export async function getBookToc(bookId: string): Promise<BookToc | null> {
   }
 
   const lenses = parseLenses(manifest.lenses);
-  if (lenses) {
-    const allowed = new Set(lenses.map((l) => l.id));
-    for (const page of pages) {
-      if (page.layer && !allowed.has(page.layer)) {
-        console.warn(
-          `book ${bookId}: page "${page.id}" layer "${page.layer}" not in lenses; dropping layer`,
-        );
-        delete page.layer;
-      }
-    }
+  const pageIds = new Set(pages.map((p) => p.id));
+  const correspondences =
+    lenses && lenses.length > 0
+      ? parseCorrespondences(
+          bookId,
+          manifest.correspondences,
+          new Set(lenses.map((l) => l.id)),
+          pageIds,
+        )
+      : undefined;
+  if (correspondences) {
+    applyCorrespondences(bookId, pages, correspondences);
   }
 
   return {
@@ -214,6 +312,7 @@ export async function getBookToc(bookId: string): Promise<BookToc | null> {
     title: manifest.title ?? bookId,
     description: manifest.description,
     ...(lenses ? { lenses } : {}),
+    ...(correspondences ? { correspondences } : {}),
     tree,
     chapters: pages,
   };
@@ -231,4 +330,33 @@ export async function getChapter(
   const raw = await fs.readFile(abs, 'utf8');
   const fm = matter(raw);
   return { id: chapter.id, title: chapter.title, markdown: fm.content };
+}
+
+/**
+ * Resolve a book-local asset under `assets/`. Returns null if the book or file
+ * is missing, or if the path escapes the assets root / fails the extension allowlist.
+ */
+export async function resolveBookAsset(
+  bookId: string,
+  assetPath: string,
+): Promise<BookAsset | null> {
+  if (!isSafeBookId(bookId)) return null;
+  const normalized = assetPath.replace(/\\/g, '/').replace(/^\/+/, '');
+  if (!isSafeAssetRel(normalized)) return null;
+
+  const assetsRoot = path.resolve(BOOKS_DIR, bookId, 'assets');
+  const abs = path.resolve(assetsRoot, normalized);
+  if (!abs.startsWith(assetsRoot + path.sep) && abs !== assetsRoot) return null;
+
+  const ext = path.extname(abs).toLowerCase();
+  const contentType = ASSET_CONTENT_TYPES[ext];
+  if (!contentType) return null;
+
+  try {
+    const st = await fs.stat(abs);
+    if (!st.isFile()) return null;
+  } catch {
+    return null;
+  }
+  return { absPath: abs, contentType };
 }

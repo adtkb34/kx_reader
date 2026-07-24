@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { ElImageViewer } from 'element-plus';
 import { api } from '@/api';
 import { tocOf } from '@/stores/books';
 import { renderChapter, splitSections, type RenderedSection } from '@/markdown';
@@ -24,6 +25,9 @@ const sections = ref<RenderedSection[]>([]);
 const error = ref('');
 const loading = ref(false);
 const contentEl = ref<HTMLElement | null>(null);
+const previewVisible = ref(false);
+const previewUrlList = ref<string[]>([]);
+const previewIndex = ref(0);
 let unbindMermaid: (() => void) | null = null;
 
 async function load(): Promise<void> {
@@ -31,6 +35,7 @@ async function load(): Promise<void> {
   error.value = '';
   unbindMermaid?.();
   unbindMermaid = null;
+  previewVisible.value = false;
   try {
     const chapter = await api.chapter(props.bookId, props.chapterId);
     title.value = chapter.title;
@@ -82,6 +87,7 @@ watch(
 onBeforeUnmount(() => {
   unbindMermaid?.();
   unbindMermaid = null;
+  previewVisible.value = false;
 });
 
 function applyDetailsPref(): void {
@@ -119,8 +125,29 @@ function scrollToHash(hash: string): void {
   });
 }
 
+function openImagePreview(img: HTMLImageElement): void {
+  const root = contentEl.value;
+  if (!root) return;
+  const imgs = Array.from(root.querySelectorAll<HTMLImageElement>('.md-figure img'));
+  const urls = imgs.map((el) => el.currentSrc || el.src).filter(Boolean);
+  if (urls.length === 0) return;
+  const clicked = img.currentSrc || img.src;
+  const index = Math.max(0, urls.indexOf(clicked));
+  previewUrlList.value = urls;
+  previewIndex.value = index;
+  previewVisible.value = true;
+}
+
 function onContentClick(e: MouseEvent): void {
-  const a = (e.target as HTMLElement).closest?.('a');
+  const target = e.target as HTMLElement;
+  const img = target.closest?.('img');
+  if (img && img.closest('.md-figure')) {
+    e.preventDefault();
+    openImagePreview(img as HTMLImageElement);
+    return;
+  }
+
+  const a = target.closest?.('a');
   if (!a) return;
   const kind = a.getAttribute('data-internal');
   if (!kind) return;
@@ -178,5 +205,13 @@ function goNext(): void {
         <span class="pager-title">{{ nextChapter?.title ?? '—' }}</span>
       </button>
     </nav>
+
+    <ElImageViewer
+      v-if="previewVisible"
+      :url-list="previewUrlList"
+      :initial-index="previewIndex"
+      teleported
+      @close="previewVisible = false"
+    />
   </div>
 </template>

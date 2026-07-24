@@ -1,7 +1,6 @@
 ---
 id: navigation
 title: 书形态与导航
-layer: scenario
 ---
 本页只讲「怎么在书里走动」。标注与备注见 [审读域](07-annotations.md#statuses)。
 

@@ -1,8 +1,6 @@
 ---
 id: structure
 title: 结构思想
-layer: scenario
-pair: format
 ---
 写书先定结构，再填内容。本页是组织原则；机械格式在实现透镜的 [内容格式规范](03-format.md#layout)（可顶栏切换）。
 

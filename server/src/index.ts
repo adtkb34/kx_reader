@@ -3,7 +3,7 @@ import path from 'node:path';
 import { existsSync } from 'node:fs';
 import type { NextFunction, Request, Response } from 'express';
 import { DATA_DIR, PORT, ROOT_DIR } from './config';
-import { bookExists, getBookToc, getChapter, listBooks } from './books';
+import { bookExists, getBookToc, getChapter, listBooks, resolveBookAsset } from './books';
 import { FileAnnotationStore } from './annotationStore';
 import { SECTION_STATUS_IDS, type SectionStatus } from '../../shared/annotations';
 import {
@@ -68,6 +68,21 @@ app.get('/api/books/:bookId/chapters/:chapterId', async (req, res) => {
     return;
   }
   res.json(chapter);
+});
+
+app.get('/api/books/:bookId/assets/*assetPath', async (req, res) => {
+  const bookId = await requireBook(req, res);
+  if (!bookId) return;
+  const raw = req.params.assetPath;
+  const assetPath = Array.isArray(raw) ? raw.join('/') : String(raw ?? '');
+  const asset = await resolveBookAsset(bookId, assetPath);
+  if (!asset) {
+    res.status(404).json({ error: 'asset not found' });
+    return;
+  }
+  res.setHeader('Content-Type', asset.contentType);
+  res.setHeader('Cache-Control', 'public, max-age=300');
+  res.sendFile(asset.absPath);
 });
 
 app.get('/api/books/:bookId/chapters/:chapterId/sections/:sectionId', async (req, res) => {

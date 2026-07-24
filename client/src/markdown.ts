@@ -86,6 +86,40 @@ md.renderer.rules.link_open = (tokens, idx, options, env: RenderEnv, self) => {
   return defaultLinkOpen(tokens, idx, options, env, self);
 };
 
+function rewriteImageSrc(src: string, bookId: string): string {
+  if (!src) return src;
+  if (/^(?:https?:)?\/\//.test(src) || src.startsWith('data:')) return src;
+  if (src.startsWith('/api/books/')) return src;
+  // Strip leading ./ and normalize to assets/...
+  const cleaned = src.replace(/^\.\//, '');
+  if (cleaned.startsWith('assets/')) {
+    return `/api/books/${bookId}/${cleaned}`;
+  }
+  return src;
+}
+
+md.renderer.rules.image = (tokens, idx, options, env: RenderEnv, self) => {
+  const token = tokens[idx];
+  const rawSrc = token.attrGet('src') ?? '';
+  const src = rewriteImageSrc(rawSrc, env?.bookId ?? '');
+  token.attrSet('src', src);
+  token.attrSet('loading', 'lazy');
+
+  const alt = self.renderInlineAsText(token.children ?? [], options, env);
+  const escapedAlt = md.utils.escapeHtml(alt);
+  const escapedSrc = md.utils.escapeHtml(src);
+  // Use span (not figure) so the tag stays valid inside markdown-it's <p> wrapper.
+  const caption =
+    alt.trim().length > 0 ? `<span class="md-figcaption">${escapedAlt}</span>` : '';
+
+  return (
+    `<span class="md-figure">` +
+    `<img src="${escapedSrc}" alt="${escapedAlt}" loading="lazy" />` +
+    caption +
+    `</span>`
+  );
+};
+
 export function renderChapter(markdown: string, env: RenderEnv): string {
   return md.render(markdown, env);
 }

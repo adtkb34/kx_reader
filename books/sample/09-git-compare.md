@@ -1,7 +1,6 @@
 ---
 id: git-compare
 title: 对比变更
-layer: impl
 ---
 一书一仓时，顶栏「对比变更」可按小节 id 对齐两个 Git 版本，审读内容怎么演进。
 
@@ -12,6 +11,8 @@ layer: impl
 ## 按小节对齐的 diff {#section-diff}
 
 可选 branch / tag / hash，支持 unified 与并排。对齐键是小节 id，不是行号——因此稳定 id 同样重要。
+
+成对变更行会做**行内高亮**：相同前后缀与整词不高亮，只标出真正改动的字/词（数字整段替换，避免对上单个字符）。
 
 ## 自动 commit {#auto-commit}
 

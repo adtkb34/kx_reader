@@ -1,8 +1,6 @@
 ---
 id: persistence
 title: 持久化与孤立标注
-layer: impl
-pair: annotations
 ---
 标注挂在稳定地址上，不挂在易变正文里。这是「留得住」的根基。怎么标记与写备注，见场景透镜的 [标记与备注](07-annotations.md#statuses)。
 

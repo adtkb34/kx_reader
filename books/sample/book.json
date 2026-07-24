@@ -11,6 +11,17 @@
       "title": "实现"
     }
   ],
+  "correspondences": [
+    { "scenario": "structure", "impl": "format" },
+    { "scenario": "annotations", "impl": "persistence" },
+    { "scenario": "details-demo" },
+    { "scenario": "navigation" },
+    { "scenario": "lenses" },
+    { "impl": "git-compare" },
+    { "impl": "architecture" },
+    { "impl": "local-agent" },
+    { "impl": "checklist" }
+  ],
   "contents": [
     {
       "type": "page",

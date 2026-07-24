@@ -39,6 +39,15 @@ export function defaultLens(toc: BookToc): PageLayer | null {
   return toc.lenses[0].id;
 }
 
+/** Find the correspondence row that contains `chapterId` as any value. */
+export function findCorrespondence(
+  correspondences: BookToc['correspondences'],
+  chapterId: string,
+): Record<PageLayer, string> | undefined {
+  if (!correspondences) return undefined;
+  return correspondences.find((row) => Object.values(row).includes(chapterId));
+}
+
 export function resolveLensSwitchTarget(
   toc: BookToc,
   currentId: string,
@@ -46,8 +55,9 @@ export function resolveLensSwitchTarget(
 ): string {
   const visible = filterChapters(toc.chapters, nextLens);
   const visibleIds = new Set(visible.map((c) => c.id));
-  const current = toc.chapters.find((c) => c.id === currentId);
-  if (current?.pair && visibleIds.has(current.pair)) return current.pair;
+  const row = findCorrespondence(toc.correspondences, currentId);
+  const mapped = row?.[nextLens];
+  if (mapped && visibleIds.has(mapped)) return mapped;
   if (visibleIds.has(currentId)) return currentId;
   return visible[0]?.id ?? currentId;
 }

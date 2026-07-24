@@ -1,7 +1,6 @@
 ---
 id: architecture
 title: 系统架构
-layer: impl
 ---
 本页在 **设计** 组（仅实现透镜）。讲内容、阅读器、标注如何分离。产品动机见常显的 [概览](01-overview.md#problem)。
 

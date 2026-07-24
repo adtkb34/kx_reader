@@ -1,8 +1,6 @@
 ---
 id: annotations
 title: 标记与备注
-layer: scenario
-pair: persistence
 ---
 阅读的产出不只是「看过」，还有判断：哪些确认无误、哪些存疑待查。本章欢迎实际操作。标注如何落盘、失联如何找回，见实现透镜的 [持久化与孤立标注](08-persistence.md#storage)（可顶栏切换）。
 

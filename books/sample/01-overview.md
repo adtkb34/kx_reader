@@ -42,7 +42,7 @@ title: 项目概览
 | 域 | 场景下读什么 | 实现下另见 |
 | --- | --- | --- |
 | 写作 | [结构思想](02-structure.md#thesis) | [内容格式规范](03-format.md#layout) |
-| 阅读 | [书形态与导航](05-navigation.md#paging) | （本页透镜说明常显） |
+| 阅读 | [书形态与导航](05-navigation.md#paging)、[阅读透镜](06-lenses.md#how) | — |
 | 审读 | [标记与备注](07-annotations.md#statuses) | 持久化 / 对比变更 |
 | 设计 | — | [系统架构](10-architecture.md#separation) 等 |
 | 收束 | — | [自检清单](12-checklist.md#preflight) |

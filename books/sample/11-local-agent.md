@@ -1,7 +1,6 @@
 ---
 id: local-agent
 title: 本地 AI
-layer: impl
 ---
 可选能力：在阅读器里调用本机 CLI（Cursor Agent / Claude Code 等）改书内 Markdown。默认关闭，仅适合本机单人。
 
