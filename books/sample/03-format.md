@@ -235,4 +235,4 @@ flowchart LR
 
 - 代码块必须标注语言：`ts` / `json` / `bash` / `mermaid` 等。
 - 支持表格、引用、有序/无序列表。
-- 不支持内嵌 HTML（会被转义显示），一律用 Markdown 语法。
+- 一般用 Markdown 表；需要 **合并单元格**（如 `rowspan`）时可用 HTML `<table>`（书内容本地可信）。其它排版仍优先 Markdown，不要用 HTML 绕开合同。

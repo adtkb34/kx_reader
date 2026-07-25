@@ -20,7 +20,7 @@ export interface RenderedSection {
 }
 
 const md: MarkdownIt = new MarkdownIt({
-  html: false,
+  html: true,
   linkify: true,
   highlight(code, lang) {
     // Mermaid：交给客户端懒加载渲染，不要走 highlight.js
@@ -121,7 +121,19 @@ md.renderer.rules.image = (tokens, idx, options, env: RenderEnv, self) => {
 };
 
 export function renderChapter(markdown: string, env: RenderEnv): string {
-  return md.render(markdown, env);
+  let html = md.render(markdown, env);
+  // Raw HTML <a href="….md"> (e.g. rowspan tables) still need in-app routes.
+  html = html.replace(
+    /href="((?:[^"#?]+\.md))(#[^"]*)?"/g,
+    (full, filePath: string, hash: string = '') => {
+      if (!env?.fileToChapter) return full;
+      const file = filePath.split('/').pop() ?? filePath;
+      const chapterId = env.fileToChapter[file] ?? env.fileToChapter[filePath];
+      if (!chapterId) return full;
+      return `href="/books/${env.bookId}/${chapterId}${hash || ''}" data-internal="chapter"`;
+    },
+  );
+  return html;
 }
 
 /**
