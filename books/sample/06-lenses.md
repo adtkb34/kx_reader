@@ -46,7 +46,7 @@ title: 结构思想
 
 - 透镜只过滤导航，不改变标注键（仍是 `章节id#小节id`）。
 - 成对主题目录相邻；场景写判断与操作，实现写合同与机制，互相链接。
-- 本书：`scenario` / `impl`；其它书可自定（如 `rules` / `ui`）。
+- 本书：`scenario` / `impl`；其它书可自定（如 Now Order 的 `scenario` / `ui` / `impl`）。
 - 同一章节 id 只能出现在一行 `correspondences` 里。
 
 ## 其它活样例 {#where}
