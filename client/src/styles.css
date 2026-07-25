@@ -355,8 +355,8 @@ code {
 
 /* Same depth → same type style (group or page). */
 .toc-row--depth-0 > .toc-row-label {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--ink);
 }
 
@@ -381,7 +381,7 @@ code {
 
 .toc-chapter.active > .toc-row-label {
   background: #edeae0;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--ink);
 }
 
