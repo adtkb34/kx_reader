@@ -355,22 +355,21 @@ code {
 
 /* Same depth → same type style (group or page). */
 .toc-row--depth-0 > .toc-row-label {
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--ink);
-  letter-spacing: 0.02em;
 }
 
 .toc-row--depth-1 > .toc-row-label {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   color: #3d3a34;
 }
 
 .toc-row--depth-2 > .toc-row-label,
 .toc-row--depth-3 > .toc-row-label {
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 400;
   color: #3d3a34;
 }
 
@@ -382,7 +381,7 @@ code {
 
 .toc-chapter.active > .toc-row-label {
   background: #edeae0;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--ink);
 }
 
