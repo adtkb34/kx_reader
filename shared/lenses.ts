@@ -1,10 +1,12 @@
 import type {
   BookToc,
+  CorrespondenceTarget,
   LensAxisId,
   LensCorrespondence,
   LensSelection,
   PageLayer,
   TocChapter,
+  TocSection,
   TocTreeNode,
 } from './types';
 
@@ -26,6 +28,16 @@ export function hasLenses(toc: BookToc): boolean {
   return lensAxisIds(toc).length > 0;
 }
 
+/** Normalize layer membership to a list of option ids. */
+export function layerOptions(membership: PageLayer | PageLayer[] | undefined): PageLayer[] {
+  if (membership == null) return [];
+  return Array.isArray(membership) ? membership : [membership];
+}
+
+export function correspondencePageId(target: CorrespondenceTarget): string {
+  return typeof target === 'string' ? target : target.page;
+}
+
 export function pageVisibleInSelection(
   chapter: TocChapter,
   selection: LensSelection | null,
@@ -34,10 +46,65 @@ export function pageVisibleInSelection(
   const layers = chapter.layers;
   if (!layers) return true;
   for (const [axis, chosen] of Object.entries(selection)) {
-    const membership = layers[axis];
-    if (membership != null && membership !== chosen) return false;
+    const opts = layerOptions(layers[axis]);
+    if (opts.length > 0 && !opts.includes(chosen)) return false;
   }
   return true;
+}
+
+/**
+ * Expand an allowlist so each listed section also includes following deeper
+ * headings until the next heading at the same or higher level.
+ */
+export function expandSectionAllowlist(
+  sections: TocSection[],
+  allowlist: string[] | null,
+): string[] | null {
+  if (!allowlist) return null;
+  const byId = new Map(sections.map((s, i) => [s.id, i]));
+  const out = new Set<string>();
+  for (const id of allowlist) {
+    const start = byId.get(id);
+    if (start == null) continue;
+    const level = sections[start].level;
+    out.add(id);
+    for (let i = start + 1; i < sections.length; i++) {
+      if (sections[i].level <= level) break;
+      out.add(sections[i].id);
+    }
+  }
+  return [...out];
+}
+
+/**
+ * Section ids to show for the current selection, or null = no filter (all).
+ * Allowlists from different axes are intersected when more than one applies.
+ * Listed ids include nested deeper headings in document order.
+ */
+export function sectionAllowlistFor(
+  chapter: TocChapter,
+  selection: LensSelection | null,
+): string[] | null {
+  if (!selection || !chapter.sectionAllowlists) return null;
+  const lists: string[][] = [];
+  for (const [axis, chosen] of Object.entries(selection)) {
+    const allow = chapter.sectionAllowlists[axis]?.[chosen];
+    if (allow) lists.push(allow);
+  }
+  if (lists.length === 0) return null;
+  const expanded = lists.map((list) => expandSectionAllowlist(chapter.sections, list) ?? list);
+  if (expanded.length === 1) return expanded[0];
+  const first = new Set(expanded[0]);
+  return expanded.slice(1).reduce((acc, list) => acc.filter((id) => list.includes(id)), [...first]);
+}
+
+export function filterSectionsByAllowlist<T extends { id: string }>(
+  sections: T[],
+  allowlist: string[] | null,
+): T[] {
+  if (!allowlist) return sections;
+  const allowed = new Set(allowlist);
+  return sections.filter((s) => allowed.has(s.id));
 }
 
 export function filterChapters(
@@ -88,7 +155,9 @@ export function findCorrespondence(
   chapterId: string,
 ): LensCorrespondence | undefined {
   if (!rows) return undefined;
-  return rows.find((row) => Object.values(row).includes(chapterId));
+  return rows.find((row) =>
+    Object.values(row).some((t) => correspondencePageId(t) === chapterId),
+  );
 }
 
 /**
@@ -107,7 +176,8 @@ export function resolveAxisSwitchTarget(
   const visibleIds = new Set(visible.map((c) => c.id));
   const row = findCorrespondence(toc.correspondences?.[axisId], currentId);
   const mapped = row?.[nextOption];
-  if (mapped && visibleIds.has(mapped)) return mapped;
+  const mappedId = mapped ? correspondencePageId(mapped) : undefined;
+  if (mappedId && visibleIds.has(mappedId)) return mappedId;
   if (visibleIds.has(currentId)) return currentId;
   return visible[0]?.id ?? currentId;
 }
@@ -120,10 +190,22 @@ export function selectionFromPageLayers(
 ): LensSelection {
   const sel = { ...fallback };
   if (!chapter.layers || !toc.lenses) return sel;
-  for (const [axis, option] of Object.entries(chapter.layers)) {
-    if (toc.lenses[axis]?.some((l) => l.id === option)) {
-      sel[axis] = option;
-    }
+  for (const [axis, membership] of Object.entries(chapter.layers)) {
+    if (!toc.lenses[axis]) continue;
+    const opts = layerOptions(membership);
+    const allowed = new Set(toc.lenses[axis].map((l) => l.id));
+    const valid = opts.filter((o) => allowed.has(o));
+    if (valid.length === 0) continue;
+    if (sel[axis] && valid.includes(sel[axis])) continue;
+    sel[axis] = valid[0];
   }
   return sel;
+}
+
+/** TOC sections visible under the current lens selection. */
+export function visibleTocSections(
+  chapter: TocChapter,
+  selection: LensSelection | null,
+): TocSection[] {
+  return filterSectionsByAllowlist(chapter.sections, sectionAllowlistFor(chapter, selection));
 }

@@ -8,13 +8,15 @@ import { renderChapter, splitSections, type RenderedSection } from '@/markdown';
 import { bindMermaidDetails, renderMermaidIn } from '@/mermaid';
 import SectionBlock from '@/components/SectionBlock.vue';
 import { ui } from '@/stores/ui';
-import type { TocChapter } from '@shared/types';
+import { filterSectionsByAllowlist, sectionAllowlistFor } from '@shared/lenses';
+import type { LensSelection, TocChapter } from '@shared/types';
 
 const props = defineProps<{
   bookId: string;
   chapterId: string;
   prevChapter: TocChapter | null;
   nextChapter: TocChapter | null;
+  lensSelection?: LensSelection | null;
 }>();
 
 const route = useRoute();
@@ -47,7 +49,11 @@ async function load(): Promise<void> {
       if (base) fileToChapter[base] = c.id;
     }
     const html = renderChapter(chapter.markdown, { bookId: props.bookId, fileToChapter });
-    sections.value = splitSections(html);
+    const tocChapter = toc?.chapters.find((c) => c.id === props.chapterId);
+    const allow = tocChapter
+      ? sectionAllowlistFor(tocChapter, props.lensSelection ?? null)
+      : null;
+    sections.value = filterSectionsByAllowlist(splitSections(html), allow);
     await nextTick();
     applyDetailsPref();
     unbindMermaid = bindMermaidDetails(contentEl.value);
@@ -62,7 +68,11 @@ async function load(): Promise<void> {
   }
 }
 
-watch(() => [props.bookId, props.chapterId], load, { immediate: true });
+watch(
+  () => [props.bookId, props.chapterId, JSON.stringify(props.lensSelection ?? null)] as const,
+  load,
+  { immediate: true },
+);
 watch(
   () => ui.chapterReloadToken,
   () => {

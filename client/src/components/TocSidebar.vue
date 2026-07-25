@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { BookToc, TocChapter, TocTreeNode } from '@shared/types';
+import type { BookToc, LensSelection, TocChapter, TocTreeNode } from '@shared/types';
 import TocTreeNodes from '@/components/TocTreeNodes.vue';
 
 const props = defineProps<{
@@ -9,6 +9,7 @@ const props = defineProps<{
   currentChapterId: string;
   /** Pre-filtered tree (by reading lens). */
   tree: TocTreeNode[];
+  lensSelection?: LensSelection | null;
 }>();
 
 const pageById = computed(() => {
@@ -27,6 +28,7 @@ const pageById = computed(() => {
         :book-id="bookId"
         :current-chapter-id="currentChapterId"
         :page-by-id="pageById"
+        :lens-selection="lensSelection"
       />
     </nav>
   </aside>

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
-import type { TocChapter, TocTreeNode } from '@shared/types';
+import type { LensSelection, TocChapter, TocTreeNode } from '@shared/types';
+import { visibleTocSections } from '@shared/lenses';
 import { annotationsFor, sectionKey } from '@/stores/annotations';
 import { DEFAULT_STATUS, statusMeta } from '@shared/annotations';
 import TocTreeNodes from '@/components/TocTreeNodes.vue';
@@ -12,10 +13,11 @@ const props = withDefaults(
     bookId: string;
     currentChapterId: string;
     pageById: Record<string, TocChapter>;
+    lensSelection?: LensSelection | null;
     /** Nesting depth in the TOC tree (0 = top-level siblings). */
     depth?: number;
   }>(),
-  { depth: 0 },
+  { depth: 0, lensSelection: null },
 );
 
 const router = useRouter();
@@ -35,7 +37,7 @@ function chapterStats(pageId: string): { unread: number; question: number } {
   if (!ch) return { unread: 0, question: 0 };
   let unread = 0;
   let question = 0;
-  for (const s of ch.sections) {
+  for (const s of visibleTocSections(ch, props.lensSelection ?? null)) {
     const st = anns.value[sectionKey(ch.id, s.id)]?.status ?? DEFAULT_STATUS;
     if (st === 'unread') unread++;
     if (st === 'question') question++;
@@ -98,6 +100,7 @@ function goSection(ch: TocChapter, sectionId: string): void {
           :book-id="bookId"
           :current-chapter-id="currentChapterId"
           :page-by-id="pageById"
+          :lens-selection="lensSelection"
           :depth="depth + 1"
         />
       </div>
@@ -131,7 +134,7 @@ function goSection(ch: TocChapter, sectionId: string): void {
         class="toc-sections"
       >
         <li
-          v-for="s in pageById[node.id].sections"
+          v-for="s in visibleTocSections(pageById[node.id], lensSelection ?? null)"
           :key="s.id"
           :class="`lvl-${s.level}`"
         >

@@ -32,16 +32,29 @@ export interface TocChapter {
   sections: TocSection[];
   /**
    * Per-axis membership from correspondences.
+   * One option or several (same page under multiple options).
    * Omit an axis (or omit `layers`) = always visible on that axis.
    */
-  layers?: Record<LensAxisId, PageLayer>;
+  layers?: Record<LensAxisId, PageLayer | PageLayer[]>;
+  /**
+   * Per-axis, per-option section allowlists from correspondence object targets.
+   * Missing option = show all sections for that selection.
+   */
+  sectionAllowlists?: Record<LensAxisId, Partial<Record<PageLayer, string[]>>>;
 }
 
 /**
- * One topic across options of a single axis: option id → chapter id.
- * Multi-key rows define switch targets; single-key rows are membership only.
+ * Correspondence target: chapter id, or chapter + section allowlist.
+ * `sections` lists extracted section ids (e.g. `entry`, `_intro`); omit = whole page.
  */
-export type LensCorrespondence = Record<PageLayer, string>;
+export type CorrespondenceTarget = string | { page: string; sections?: string[] };
+
+/**
+ * One topic across options of a single axis: option id → target.
+ * Multi-key rows define switch targets; single-key rows are membership only.
+ * Multiple options may point at the same page with different `sections`.
+ */
+export type LensCorrespondence = Record<PageLayer, CorrespondenceTarget>;
 
 /** Nested TOC: groups are folders only; pages are leaves. */
 export type TocTreeNode =

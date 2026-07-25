@@ -183,6 +183,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
       :tree="filteredTree"
       :book-id="bookId"
       :current-chapter-id="chapterId"
+      :lens-selection="activeSelection"
     />
     <div class="book-main">
       <div class="topbar">
@@ -235,6 +236,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
         :chapter-id="chapterId"
         :prev-chapter="prevChapter"
         :next-chapter="nextChapter"
+        :lens-selection="activeSelection"
       />
     </div>
     <NotesPanel v-if="ui.notesTarget" />

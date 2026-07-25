@@ -8,11 +8,13 @@ import type {
   BookSummary,
   BookToc,
   ChapterContent,
+  CorrespondenceTarget,
   LensAxisId,
   LensCorrespondence,
   TocChapter,
   TocTreeNode,
 } from '../../shared/types';
+import { correspondencePageId } from '../../shared/lenses';
 
 interface ManifestPage {
   type: 'page';
@@ -128,6 +130,51 @@ function parseLenses(
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+function parseCorrespondenceTarget(
+  bookId: string,
+  axis: string,
+  rowIndex: number,
+  lens: string,
+  raw: unknown,
+  pageIds: Set<string>,
+): CorrespondenceTarget | null {
+  if (typeof raw === 'string') {
+    if (!SAFE_SEGMENT.test(raw) || !pageIds.has(raw)) {
+      console.warn(
+        `book ${bookId}: correspondences.${axis}[${rowIndex}].${lens} is not a valid page id; skipping row`,
+      );
+      return null;
+    }
+    return raw;
+  }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    console.warn(
+      `book ${bookId}: correspondences.${axis}[${rowIndex}].${lens} must be a page id or { page, sections? }; skipping row`,
+    );
+    return null;
+  }
+  const page = (raw as { page?: unknown }).page;
+  const sections = (raw as { sections?: unknown }).sections;
+  if (typeof page !== 'string' || !SAFE_SEGMENT.test(page) || !pageIds.has(page)) {
+    console.warn(
+      `book ${bookId}: correspondences.${axis}[${rowIndex}].${lens}.page is not a valid page id; skipping row`,
+    );
+    return null;
+  }
+  if (sections === undefined) return { page };
+  if (
+    !Array.isArray(sections) ||
+    sections.length === 0 ||
+    !sections.every((s) => typeof s === 'string' && s.length > 0)
+  ) {
+    console.warn(
+      `book ${bookId}: correspondences.${axis}[${rowIndex}].${lens}.sections must be a non-empty string array; skipping row`,
+    );
+    return null;
+  }
+  return { page, sections: sections as string[] };
+}
+
 function parseCorrespondenceRows(
   bookId: string,
   axis: string,
@@ -146,7 +193,8 @@ function parseCorrespondenceRows(
     }
     const row: LensCorrespondence = {};
     let ok = true;
-    for (const [lens, chapterId] of Object.entries(item as Record<string, unknown>)) {
+    const rowPages = new Set<string>();
+    for (const [lens, targetRaw] of Object.entries(item as Record<string, unknown>)) {
       if (!lensIds.has(lens)) {
         console.warn(
           `book ${bookId}: correspondences.${axis}[${i}] key "${lens}" is not a declared option; skipping row`,
@@ -154,31 +202,24 @@ function parseCorrespondenceRows(
         ok = false;
         break;
       }
-      if (typeof chapterId !== 'string' || !SAFE_SEGMENT.test(chapterId)) {
+      const target = parseCorrespondenceTarget(bookId, axis, i, lens, targetRaw, pageIds);
+      if (!target) {
+        ok = false;
+        break;
+      }
+      const pageId = correspondencePageId(target);
+      if (claimed.has(pageId)) {
         console.warn(
-          `book ${bookId}: correspondences.${axis}[${i}].${lens} is not a valid chapter id; skipping row`,
+          `book ${bookId}: chapter "${pageId}" appears twice in correspondences.${axis}; skipping later row`,
         );
         ok = false;
         break;
       }
-      if (!pageIds.has(chapterId)) {
-        console.warn(
-          `book ${bookId}: correspondences.${axis}[${i}].${lens}="${chapterId}" is not a page; skipping row`,
-        );
-        ok = false;
-        break;
-      }
-      if (claimed.has(chapterId)) {
-        console.warn(
-          `book ${bookId}: chapter "${chapterId}" appears twice in correspondences.${axis}; skipping later row`,
-        );
-        ok = false;
-        break;
-      }
-      row[lens] = chapterId;
+      row[lens] = target;
+      rowPages.add(pageId);
     }
     if (!ok || Object.keys(row).length === 0) continue;
-    for (const id of Object.values(row)) claimed.add(id);
+    for (const id of rowPages) claimed.add(id);
     out.push(row);
   }
   return out.length > 0 ? out : undefined;
@@ -241,7 +282,7 @@ function parseCorrespondences(
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
-/** Assign chapter.layers from per-axis correspondences. */
+/** Assign chapter.layers and sectionAllowlists from per-axis correspondences. */
 function applyCorrespondences(
   bookId: string,
   pages: TocChapter[],
@@ -250,17 +291,37 @@ function applyCorrespondences(
   const byId = new Map(pages.map((p) => [p.id, p]));
   for (const [axis, rows] of Object.entries(correspondences)) {
     for (const row of rows) {
-      for (const [lens, chapterId] of Object.entries(row)) {
-        const page = byId.get(chapterId);
+      for (const [lens, target] of Object.entries(row)) {
+        const pageId = correspondencePageId(target);
+        const page = byId.get(pageId);
         if (!page) continue;
         page.layers ??= {};
-        if (page.layers[axis] && page.layers[axis] !== lens) {
-          console.warn(
-            `book ${bookId}: page "${chapterId}" claimed by ${axis}="${page.layers[axis]}" and "${lens}"; keeping first`,
-          );
-          continue;
+        const existing = page.layers[axis];
+        if (existing == null) {
+          page.layers[axis] = lens;
+        } else {
+          const list = Array.isArray(existing) ? existing : [existing];
+          if (!list.includes(lens)) {
+            page.layers[axis] = [...list, lens];
+          }
         }
-        page.layers[axis] = lens;
+        if (typeof target === 'object' && target.sections) {
+          const known = new Set(page.sections.map((s) => s.id));
+          const valid: string[] = [];
+          for (const sid of target.sections) {
+            if (!known.has(sid)) {
+              console.warn(
+                `book ${bookId}: correspondences.${axis} ${lens}→${pageId} unknown section "${sid}"; dropping`,
+              );
+              continue;
+            }
+            valid.push(sid);
+          }
+          if (valid.length === 0) continue;
+          page.sectionAllowlists ??= {};
+          page.sectionAllowlists[axis] ??= {};
+          page.sectionAllowlists[axis][lens] = valid;
+        }
       }
     }
   }
