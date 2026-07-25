@@ -8,6 +8,7 @@ import type {
   BookSummary,
   BookToc,
   ChapterContent,
+  LensAxisId,
   LensCorrespondence,
   TocChapter,
   TocTreeNode,
@@ -34,13 +35,12 @@ interface BookManifest {
   chapters?: string[];
   /** Nested tree; preferred when present. */
   contents?: ManifestNode[];
-  /** Optional reading lenses (ids are book-defined, e.g. rules/ui or scenario/impl). */
-  lenses?: BookLens[];
+  /** Multi-axis lenses, or legacy flat array (normalized to `{ kind: [...] }`). */
+  lenses?: BookLens[] | Record<string, BookLens[]>;
   /**
-   * Cross-lens page groups: lens id → chapter id.
-   * Also derives each page's layer; pages not listed are always-visible.
+   * Correspondences per axis, or legacy flat array (normalized under sole/default axis).
    */
-  correspondences?: LensCorrespondence[];
+  correspondences?: LensCorrespondence[] | Record<string, LensCorrespondence[]>;
 }
 
 /** Book id / single path segment. */
@@ -75,28 +75,62 @@ function isSafeAssetRel(rel: string): boolean {
   return SAFE_ASSET_REL.test(rel) && !rel.includes('..');
 }
 
-function parseLenses(raw: unknown): BookLens[] | undefined {
+function parseLensOptions(
+  bookId: string,
+  axis: string,
+  raw: unknown,
+  seenOptionIds: Set<string>,
+): BookLens[] | undefined {
   if (!Array.isArray(raw) || raw.length === 0) return undefined;
   const out: BookLens[] = [];
-  const seen = new Set<string>();
   for (const item of raw) {
     if (!item || typeof item !== 'object') continue;
     const id = (item as { id?: unknown }).id;
     const title = (item as { title?: unknown }).title;
-    if (typeof id !== 'string' || !SAFE_SEGMENT.test(id) || seen.has(id)) continue;
+    if (typeof id !== 'string' || !SAFE_SEGMENT.test(id)) {
+      console.warn(`book ${bookId}: lenses.${axis} has invalid or empty id; skipping option`);
+      continue;
+    }
+    if (seenOptionIds.has(id)) {
+      console.warn(`book ${bookId}: lens option id "${id}" reused across axes; skipping`);
+      continue;
+    }
     if (typeof title !== 'string' || !title) continue;
-    seen.add(id);
+    seenOptionIds.add(id);
     out.push({ id, title });
   }
   return out.length > 0 ? out : undefined;
 }
 
-/**
- * Parse correspondences from book.json. Keys must be lens ids; values are chapter ids.
- * Invalid rows / duplicate chapter ids are dropped with warnings.
- */
-function parseCorrespondences(
+/** Normalize lenses to Record<axis, options>. Legacy array → `{ kind: [...] }`. */
+function parseLenses(
   bookId: string,
+  raw: unknown,
+): Record<LensAxisId, BookLens[]> | undefined {
+  if (raw == null) return undefined;
+  const seenOptionIds = new Set<string>();
+
+  if (Array.isArray(raw)) {
+    const opts = parseLensOptions(bookId, 'kind', raw, seenOptionIds);
+    return opts ? { kind: opts } : undefined;
+  }
+
+  if (typeof raw !== 'object') return undefined;
+  const out: Record<LensAxisId, BookLens[]> = {};
+  for (const [axis, options] of Object.entries(raw as Record<string, unknown>)) {
+    if (!SAFE_SEGMENT.test(axis)) {
+      console.warn(`book ${bookId}: lenses axis "${axis}" is not a valid id; skipping`);
+      continue;
+    }
+    const opts = parseLensOptions(bookId, axis, options, seenOptionIds);
+    if (opts) out[axis] = opts;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function parseCorrespondenceRows(
+  bookId: string,
+  axis: string,
   raw: unknown,
   lensIds: Set<string>,
   pageIds: Set<string>,
@@ -107,7 +141,7 @@ function parseCorrespondences(
   for (let i = 0; i < raw.length; i++) {
     const item = raw[i];
     if (!item || typeof item !== 'object' || Array.isArray(item)) {
-      console.warn(`book ${bookId}: correspondences[${i}] is not an object; skipping`);
+      console.warn(`book ${bookId}: correspondences.${axis}[${i}] is not an object; skipping`);
       continue;
     }
     const row: LensCorrespondence = {};
@@ -115,28 +149,28 @@ function parseCorrespondences(
     for (const [lens, chapterId] of Object.entries(item as Record<string, unknown>)) {
       if (!lensIds.has(lens)) {
         console.warn(
-          `book ${bookId}: correspondences[${i}] key "${lens}" is not a declared lens; skipping row`,
+          `book ${bookId}: correspondences.${axis}[${i}] key "${lens}" is not a declared option; skipping row`,
         );
         ok = false;
         break;
       }
       if (typeof chapterId !== 'string' || !SAFE_SEGMENT.test(chapterId)) {
         console.warn(
-          `book ${bookId}: correspondences[${i}].${lens} is not a valid chapter id; skipping row`,
+          `book ${bookId}: correspondences.${axis}[${i}].${lens} is not a valid chapter id; skipping row`,
         );
         ok = false;
         break;
       }
       if (!pageIds.has(chapterId)) {
         console.warn(
-          `book ${bookId}: correspondences[${i}].${lens}="${chapterId}" is not a page; skipping row`,
+          `book ${bookId}: correspondences.${axis}[${i}].${lens}="${chapterId}" is not a page; skipping row`,
         );
         ok = false;
         break;
       }
       if (claimed.has(chapterId)) {
         console.warn(
-          `book ${bookId}: chapter "${chapterId}" appears in multiple correspondences; skipping later row`,
+          `book ${bookId}: chapter "${chapterId}" appears twice in correspondences.${axis}; skipping later row`,
         );
         ok = false;
         break;
@@ -150,24 +184,84 @@ function parseCorrespondences(
   return out.length > 0 ? out : undefined;
 }
 
-/** Assign chapter.layer from which lens key lists the chapter in correspondences. */
-function applyCorrespondences(
+/**
+ * Normalize correspondences to Record<axis, rows>.
+ * Legacy flat array hangs under the sole axis (or `kind`).
+ */
+function parseCorrespondences(
   bookId: string,
-  pages: TocChapter[],
-  correspondences: LensCorrespondence[],
-): void {
-  const byId = new Map(pages.map((p) => [p.id, p]));
-  for (const row of correspondences) {
-    for (const [lens, chapterId] of Object.entries(row)) {
-      const page = byId.get(chapterId);
-      if (!page) continue;
-      if (page.layer && page.layer !== lens) {
+  raw: unknown,
+  lenses: Record<LensAxisId, BookLens[]>,
+  pageIds: Set<string>,
+): Record<LensAxisId, LensCorrespondence[]> | undefined {
+  if (raw == null) return undefined;
+  const axes = Object.keys(lenses);
+  if (axes.length === 0) return undefined;
+
+  const optionToAxis = new Map<string, LensAxisId>();
+  for (const [axis, opts] of Object.entries(lenses)) {
+    for (const o of opts) optionToAxis.set(o.id, axis);
+  }
+
+  if (Array.isArray(raw)) {
+    const defaultAxis = axes.includes('kind') ? 'kind' : axes[0];
+    const allOptionIds = new Set(optionToAxis.keys());
+    const rows = parseCorrespondenceRows(bookId, defaultAxis, raw, allOptionIds, pageIds);
+    if (!rows) return undefined;
+    // Split rows onto the axis that owns each option key.
+    const byAxis: Record<LensAxisId, LensCorrespondence[]> = {};
+    for (const row of rows) {
+      const axesInRow = new Set(
+        Object.keys(row).map((k) => optionToAxis.get(k)).filter(Boolean) as LensAxisId[],
+      );
+      if (axesInRow.size !== 1) {
         console.warn(
-          `book ${bookId}: page "${chapterId}" claimed by lenses "${page.layer}" and "${lens}"; keeping "${page.layer}"`,
+          `book ${bookId}: legacy correspondence row spans multiple axes or unknown keys; skipping`,
+          row,
         );
         continue;
       }
-      page.layer = lens;
+      const axis = [...axesInRow][0];
+      (byAxis[axis] ??= []).push(row);
+    }
+    return Object.keys(byAxis).length > 0 ? byAxis : undefined;
+  }
+
+  if (typeof raw !== 'object') return undefined;
+  const out: Record<LensAxisId, LensCorrespondence[]> = {};
+  for (const [axis, rowsRaw] of Object.entries(raw as Record<string, unknown>)) {
+    if (!lenses[axis]) {
+      console.warn(`book ${bookId}: correspondences axis "${axis}" has no lenses; skipping`);
+      continue;
+    }
+    const lensIds = new Set(lenses[axis].map((l) => l.id));
+    const rows = parseCorrespondenceRows(bookId, axis, rowsRaw, lensIds, pageIds);
+    if (rows) out[axis] = rows;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/** Assign chapter.layers from per-axis correspondences. */
+function applyCorrespondences(
+  bookId: string,
+  pages: TocChapter[],
+  correspondences: Record<LensAxisId, LensCorrespondence[]>,
+): void {
+  const byId = new Map(pages.map((p) => [p.id, p]));
+  for (const [axis, rows] of Object.entries(correspondences)) {
+    for (const row of rows) {
+      for (const [lens, chapterId] of Object.entries(row)) {
+        const page = byId.get(chapterId);
+        if (!page) continue;
+        page.layers ??= {};
+        if (page.layers[axis] && page.layers[axis] !== lens) {
+          console.warn(
+            `book ${bookId}: page "${chapterId}" claimed by ${axis}="${page.layers[axis]}" and "${lens}"; keeping first`,
+          );
+          continue;
+        }
+        page.layers[axis] = lens;
+      }
     }
   }
 }
@@ -292,17 +386,11 @@ export async function getBookToc(bookId: string): Promise<BookToc | null> {
     return null;
   }
 
-  const lenses = parseLenses(manifest.lenses);
+  const lenses = parseLenses(bookId, manifest.lenses);
   const pageIds = new Set(pages.map((p) => p.id));
-  const correspondences =
-    lenses && lenses.length > 0
-      ? parseCorrespondences(
-          bookId,
-          manifest.correspondences,
-          new Set(lenses.map((l) => l.id)),
-          pageIds,
-        )
-      : undefined;
+  const correspondences = lenses
+    ? parseCorrespondences(bookId, manifest.correspondences, lenses, pageIds)
+    : undefined;
   if (correspondences) {
     applyCorrespondences(bookId, pages, correspondences);
   }

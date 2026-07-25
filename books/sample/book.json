@@ -1,27 +1,25 @@
 {
   "title": "示例手册：文档书阅读器",
   "description": "产品说明与写书唯一规范。顶栏切换「场景 / 实现」：非技术读场景，机械规范与设计在实现。",
-  "lenses": [
-    {
-      "id": "scenario",
-      "title": "场景"
-    },
-    {
-      "id": "impl",
-      "title": "实现"
-    }
-  ],
-  "correspondences": [
-    { "scenario": "structure", "impl": "format" },
-    { "scenario": "annotations", "impl": "persistence" },
-    { "scenario": "details-demo" },
-    { "scenario": "navigation" },
-    { "scenario": "lenses" },
-    { "impl": "git-compare" },
-    { "impl": "architecture" },
-    { "impl": "local-agent" },
-    { "impl": "checklist" }
-  ],
+  "lenses": {
+    "kind": [
+      { "id": "scenario", "title": "场景" },
+      { "id": "impl", "title": "实现" }
+    ]
+  },
+  "correspondences": {
+    "kind": [
+      { "scenario": "structure", "impl": "format" },
+      { "scenario": "annotations", "impl": "persistence" },
+      { "scenario": "details-demo" },
+      { "scenario": "navigation" },
+      { "scenario": "lenses" },
+      { "impl": "git-compare" },
+      { "impl": "architecture" },
+      { "impl": "local-agent" },
+      { "impl": "checklist" }
+    ]
+  },
   "contents": [
     {
       "type": "page",

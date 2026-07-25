@@ -9,17 +9,27 @@ import ComparePanel from '@/components/ComparePanel.vue';
 import AgentPanel from '@/components/AgentPanel.vue';
 import { loadToc, tocOf } from '@/stores/books';
 import { loadAnnotations } from '@/stores/annotations';
-import { getStoredLens, setBookLens, toggleDetailsOpen, ui } from '@/stores/ui';
+import {
+  getStoredLensSelection,
+  setBookAxisLens,
+  setBookLensSelection,
+  toggleDetailsOpen,
+  ui,
+} from '@/stores/ui';
 import { useOrphans } from '@/composables/orphans';
 import {
-  defaultLens,
+  axisLabel,
+  defaultSelection,
   filterChapters,
   filterTree,
-  pageVisibleInLens,
-  resolveLensSwitchTarget,
+  hasLenses,
+  lensAxisIds,
+  pageVisibleInSelection,
+  resolveAxisSwitchTarget,
+  selectionFromPageLayers,
   visibleIdSet,
 } from '@shared/lenses';
-import type { PageLayer, TocChapter } from '@shared/types';
+import type { LensAxisId, LensSelection, PageLayer, TocChapter } from '@shared/types';
 
 const route = useRoute();
 const router = useRouter();
@@ -30,23 +40,37 @@ const toc = computed(() => tocOf(bookId.value));
 const orphans = useOrphans(bookId);
 const loadError = ref('');
 
-const activeLens = computed<PageLayer | null>(() => {
+function sanitizeSelection(sel: LensSelection | null): LensSelection | null {
   const t = toc.value;
-  if (!t?.lenses?.length) return null;
-  const allowed = new Set(t.lenses.map((l) => l.id));
-  const candidate = ui.lensByBook[bookId.value] ?? getStoredLens(bookId.value) ?? defaultLens(t);
-  if (candidate && allowed.has(candidate)) return candidate;
-  return defaultLens(t);
+  if (!t?.lenses) return null;
+  const base = sel ?? defaultSelection(t);
+  if (!base) return null;
+  const out: LensSelection = {};
+  for (const axis of lensAxisIds(t)) {
+    const allowed = new Set((t.lenses[axis] ?? []).map((l) => l.id));
+    const pick = base[axis];
+    const fallback = t.lenses[axis]?.[0]?.id;
+    if (pick && allowed.has(pick)) out[axis] = pick;
+    else if (fallback) out[axis] = fallback;
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+const activeSelection = computed<LensSelection | null>(() => {
+  const t = toc.value;
+  if (!t || !hasLenses(t)) return null;
+  const candidate = ui.lensByBook[bookId.value] ?? getStoredLensSelection(bookId.value);
+  return sanitizeSelection(candidate);
 });
 
 const filteredChapters = computed(() =>
-  toc.value ? filterChapters(toc.value.chapters, activeLens.value) : [],
+  toc.value ? filterChapters(toc.value.chapters, activeSelection.value) : [],
 );
 
 const filteredTree = computed(() => {
   const t = toc.value;
   if (!t) return [];
-  const ids = visibleIdSet(t.chapters, activeLens.value);
+  const ids = visibleIdSet(t.chapters, activeSelection.value);
   const base = t.tree?.length
     ? t.tree
     : t.chapters.map((c) => ({
@@ -57,6 +81,8 @@ const filteredTree = computed(() => {
       }));
   return filterTree(base, ids);
 });
+
+const axisIds = computed(() => (toc.value ? lensAxisIds(toc.value) : []));
 
 async function ensureLoaded(): Promise<void> {
   loadError.value = '';
@@ -69,38 +95,28 @@ async function ensureLoaded(): Promise<void> {
   const t = tocOf(bookId.value);
   if (!t || t.chapters.length === 0) return;
 
-  if (t.lenses?.length) {
-    const stored = getStoredLens(bookId.value);
-    const allowed = new Set(t.lenses.map((l) => l.id));
-    const pick =
-      (stored && allowed.has(stored) ? stored : null) ??
-      (ui.lensByBook[bookId.value] && allowed.has(ui.lensByBook[bookId.value])
-        ? ui.lensByBook[bookId.value]
-        : null) ??
-      defaultLens(t)!;
-    if (!ui.lensByBook[bookId.value] || !allowed.has(ui.lensByBook[bookId.value])) {
-      setBookLens(bookId.value, pick);
-    }
+  if (hasLenses(t)) {
+    const stored = getStoredLensSelection(bookId.value);
+    const pick = sanitizeSelection(stored ?? ui.lensByBook[bookId.value] ?? defaultSelection(t));
+    if (pick) setBookLensSelection(bookId.value, pick);
   }
 
   if (!chapterId.value) {
-    const lens = activeLens.value;
-    const visible = filterChapters(t.chapters, lens);
+    const sel = activeSelection.value;
+    const visible = filterChapters(t.chapters, sel);
     const last = localStorage.getItem(`reader.last.${bookId.value}`);
     const target =
-      visible.find((c) => c.id === last)?.id ??
-      visible[0]?.id ??
-      t.chapters[0].id;
+      visible.find((c) => c.id === last)?.id ?? visible[0]?.id ?? t.chapters[0].id;
     router.replace(`/books/${bookId.value}/${target}`);
     return;
   }
 
-  // Deep link to a page hidden by current lens → adopt that page's layer (or stay if always-visible).
+  // Deep link to a page hidden by current selection → adopt that page's layers.
   const current = t.chapters.find((c) => c.id === chapterId.value);
-  if (current && t.lenses?.length && activeLens.value) {
-    if (!pageVisibleInLens(current, activeLens.value) && current.layer) {
-      setBookLens(bookId.value, current.layer);
-    }
+  const sel = activeSelection.value;
+  if (current && hasLenses(t) && sel && !pageVisibleInSelection(current, sel)) {
+    const adopted = selectionFromPageLayers(t, current, sel);
+    setBookLensSelection(bookId.value, adopted);
   }
 }
 
@@ -129,11 +145,12 @@ function go(ch: TocChapter | null): void {
   if (ch) router.push(`/books/${bookId.value}/${ch.id}`);
 }
 
-function onLens(lens: PageLayer): void {
+function onAxisLens(axis: LensAxisId, option: PageLayer): void {
   const t = toc.value;
-  if (!t) return;
-  const target = resolveLensSwitchTarget(t, chapterId.value, lens);
-  setBookLens(bookId.value, lens);
+  const sel = activeSelection.value;
+  if (!t || !sel) return;
+  const target = resolveAxisSwitchTarget(t, chapterId.value, axis, option, sel);
+  setBookAxisLens(bookId.value, axis, option, sel);
   if (target && target !== chapterId.value) {
     router.push(`/books/${bookId.value}/${target}`);
   }
@@ -172,18 +189,30 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
         <router-link to="/" class="btn ghost">‹ 书架</router-link>
         <span class="topbar-title">{{ toc.title }}</span>
         <span class="spacer" />
-        <label v-if="toc.lenses?.length" class="lens-select-wrap">
-          <span class="visually-hidden">阅读类型</span>
-          <select
-            class="lens-select"
-            :value="activeLens ?? ''"
-            @change="onLens(($event.target as HTMLSelectElement).value)"
+        <template v-if="axisIds.length && activeSelection">
+          <label
+            v-for="axis in axisIds"
+            :key="axis"
+            class="lens-select-wrap"
           >
-            <option v-for="lens in toc.lenses" :key="lens.id" :value="lens.id">
-              {{ lens.title }}
-            </option>
-          </select>
-        </label>
+            <span class="visually-hidden">{{ axisLabel(axis) }}</span>
+            <select
+              class="lens-select"
+              :value="activeSelection[axis] ?? ''"
+              @change="
+                onAxisLens(axis, ($event.target as HTMLSelectElement).value)
+              "
+            >
+              <option
+                v-for="lens in toc.lenses![axis]"
+                :key="lens.id"
+                :value="lens.id"
+              >
+                {{ lens.title }}
+              </option>
+            </select>
+          </label>
+        </template>
         <button v-if="orphans.length" class="btn ghost warn" @click="ui.orphanOpen = true">
           孤立标注 {{ orphans.length }}
         </button>

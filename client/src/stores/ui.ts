@@ -1,5 +1,5 @@
 import { reactive } from 'vue';
-import type { PageLayer } from '@shared/types';
+import type { LensAxisId, LensSelection, PageLayer } from '@shared/types';
 
 export const ui = reactive({
   notesTarget: null as null | { bookId: string; key: string; title: string },
@@ -9,8 +9,8 @@ export const ui = reactive({
   /** Bump to force ChapterPage reload after agent writes files. */
   chapterReloadToken: 0,
   detailsOpen: localStorage.getItem('reader.detailsOpen') === '1',
-  /** Active reading lens per book; only used when the book declares lenses. */
-  lensByBook: {} as Record<string, PageLayer>,
+  /** Active multi-axis lens selection per book. */
+  lensByBook: {} as Record<string, LensSelection>,
 });
 
 export function bumpChapterReload(): void {
@@ -34,13 +34,42 @@ function lensStorageKey(bookId: string): string {
   return `reader.lens.${bookId}`;
 }
 
-export function getStoredLens(bookId: string): PageLayer | null {
-  const raw = localStorage.getItem(lensStorageKey(bookId));
-  if (typeof raw === 'string' && /^[\w][\w.-]*$/.test(raw)) return raw;
-  return null;
+function isOptionId(s: string): boolean {
+  return /^[\w][\w.-]*$/.test(s);
 }
 
-export function setBookLens(bookId: string, lens: PageLayer): void {
-  ui.lensByBook[bookId] = lens;
-  localStorage.setItem(lensStorageKey(bookId), lens);
+/** Load stored multi-axis selection; migrates legacy single-string to `{ kind: value }`. */
+export function getStoredLensSelection(bookId: string): LensSelection | null {
+  const raw = localStorage.getItem(lensStorageKey(bookId));
+  if (!raw) return null;
+  if (isOptionId(raw) && !raw.startsWith('{')) {
+    return { kind: raw };
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    const out: LensSelection = {};
+    for (const [axis, opt] of Object.entries(parsed as Record<string, unknown>)) {
+      if (typeof opt === 'string' && isOptionId(axis) && isOptionId(opt)) out[axis] = opt;
+    }
+    return Object.keys(out).length > 0 ? out : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setBookLensSelection(bookId: string, selection: LensSelection): void {
+  ui.lensByBook[bookId] = { ...selection };
+  localStorage.setItem(lensStorageKey(bookId), JSON.stringify(selection));
+}
+
+export function setBookAxisLens(
+  bookId: string,
+  axis: LensAxisId,
+  option: PageLayer,
+  base: LensSelection,
+): LensSelection {
+  const next = { ...base, [axis]: option };
+  setBookLensSelection(bookId, next);
+  return next;
 }

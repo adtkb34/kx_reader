@@ -7,8 +7,11 @@ export interface BookSummary {
   chapterCount: number;
 }
 
-/** Reading lens id; each book declares its own ids in book.json `lenses`. */
+/** Lens option id within an axis; book-defined. */
 export type PageLayer = string;
+
+/** Axis id in book.json `lenses` object keys (e.g. kind, audience). */
+export type LensAxisId = string;
 
 export interface BookLens {
   id: PageLayer;
@@ -28,14 +31,14 @@ export interface TocChapter {
   file: string;
   sections: TocSection[];
   /**
-   * Derived from book.json `correspondences` (which lens key lists this page).
-   * Omit = always visible under every lens.
+   * Per-axis membership from correspondences.
+   * Omit an axis (or omit `layers`) = always visible on that axis.
    */
-  layer?: PageLayer;
+  layers?: Record<LensAxisId, PageLayer>;
 }
 
 /**
- * One topic across lenses: lens id → chapter id.
+ * One topic across options of a single axis: option id → chapter id.
  * Multi-key rows define switch targets; single-key rows are membership only.
  */
 export type LensCorrespondence = Record<PageLayer, string>;
@@ -45,16 +48,23 @@ export type TocTreeNode =
   | { type: 'group'; id: string; title: string; children: TocTreeNode[] }
   | { type: 'page'; id: string; title: string; file: string };
 
+/** Active selection: axis id → option id. */
+export type LensSelection = Record<LensAxisId, PageLayer>;
+
 export interface BookToc {
   id: string;
   title: string;
   description?: string;
-  /** When set, reader shows a lens switcher and filters TOC / prev-next. */
-  lenses?: BookLens[];
   /**
-   * Cross-lens page groups from book.json. Also used to derive chapter.layer.
+   * Multi-axis lenses: axis id → options.
+   * Legacy single-array books are normalized to `{ kind: [...] }`.
    */
-  correspondences?: LensCorrespondence[];
+  lenses?: Record<LensAxisId, BookLens[]>;
+  /**
+   * Correspondences per axis. Also used to derive chapter.layers.
+   * Legacy flat arrays are normalized under the sole/default axis.
+   */
+  correspondences?: Record<LensAxisId, LensCorrespondence[]>;
   /** Nested sidebar tree (groups + pages). */
   tree: TocTreeNode[];
   /** Leaf pages in DFS reading / prev-next order (always flat). */

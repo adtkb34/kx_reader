@@ -53,15 +53,19 @@ flowchart TD
 {
   "title": "书名",
   "description": "一句话简介（可选）",
-  "lenses": [
-    { "id": "scenario", "title": "场景" },
-    { "id": "impl", "title": "实现" }
-  ],
-  "correspondences": [
-    { "scenario": "structure", "impl": "format" },
-    { "scenario": "navigation" },
-    { "impl": "architecture" }
-  ],
+  "lenses": {
+    "kind": [
+      { "id": "scenario", "title": "场景" },
+      { "id": "impl", "title": "实现" }
+    ]
+  },
+  "correspondences": {
+    "kind": [
+      { "scenario": "structure", "impl": "format" },
+      { "scenario": "navigation" },
+      { "impl": "architecture" }
+    ]
+  },
   "contents": [
     { "type": "page", "file": "01-overview.md" },
     {
@@ -80,8 +84,8 @@ flowchart TD
 
 - **`page`**：叶子页，对应一个 Markdown 文件；可路由、可翻页、可标注。
 - **`group`**：目录文件夹，只出现在左侧 TOC，**不是**页面；`id` 小写 kebab-case，全书唯一且稳定。
-- **`lenses`（可选）**：书内自定 id + 显示名；见 [阅读透镜](06-lenses.md#how)。不声明则无顶栏开关。
-- **`correspondences`（可选，有透镜时使用）**：透镜归属与跨透镜互跳；见 [阅读透镜](06-lenses.md#how)。未列出的页常显。
+- **`lenses`（可选）**：多轴对象 `轴 → [{ id, title }]`；见 [阅读透镜](06-lenses.md#how)。旧版数组视为单轴 `kind`。不声明则无顶栏开关。
+- **`correspondences`（可选，有透镜时使用）**：与 `lenses` 同构，按轴写归属与互跳；见 [阅读透镜](06-lenses.md#how)。某轴未列出的页在该轴常显。
 - 翻页（←/→）只在**当前透镜可见的**叶子页之间按 DFS 顺序走动；组节点被跳过。
 - 组可再嵌套组；深度不限。TOC 里**父组标题醒于子页**（与节点 type 无关，按层级）。
 - 删除叶子页：从 `contents` 移除；该页标注进入「孤立标注」面板。
