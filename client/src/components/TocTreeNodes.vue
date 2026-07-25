@@ -6,12 +6,17 @@ import { annotationsFor, sectionKey } from '@/stores/annotations';
 import { DEFAULT_STATUS, statusMeta } from '@shared/annotations';
 import TocTreeNodes from '@/components/TocTreeNodes.vue';
 
-const props = defineProps<{
-  nodes: TocTreeNode[];
-  bookId: string;
-  currentChapterId: string;
-  pageById: Record<string, TocChapter>;
-}>();
+const props = withDefaults(
+  defineProps<{
+    nodes: TocTreeNode[];
+    bookId: string;
+    currentChapterId: string;
+    pageById: Record<string, TocChapter>;
+    /** Nesting depth; groups at 0 are top-level folders. */
+    depth?: number;
+  }>(),
+  { depth: 0 },
+);
 
 const router = useRouter();
 const anns = computed(() => annotationsFor(props.bookId));
@@ -68,6 +73,7 @@ function goSection(ch: TocChapter, sectionId: string): void {
     <details
       v-if="node.type === 'group'"
       class="toc-group"
+      :class="`toc-group--depth-${depth}`"
       :key="'g-' + node.id + '-' + currentChapterId"
       :open="isActiveTrail(node)"
     >
@@ -92,6 +98,7 @@ function goSection(ch: TocChapter, sectionId: string): void {
           :book-id="bookId"
           :current-chapter-id="currentChapterId"
           :page-by-id="pageById"
+          :depth="depth + 1"
         />
       </div>
     </details>
