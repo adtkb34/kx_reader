@@ -316,23 +316,21 @@ code {
 }
 
 .toc-group {
-  margin: 4px 0 8px;
+  margin: 2px 0 4px;
 }
 
-.toc-group-summary {
+.toc-row-label {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
   border-radius: 8px;
-  cursor: pointer;
+  color: inherit;
+  text-decoration: none;
   list-style: none;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--ink);
-  letter-spacing: 0.02em;
   user-select: none;
+  cursor: pointer;
 }
 
 .toc-group-summary::-webkit-details-marker {
@@ -343,28 +341,37 @@ code {
   content: '';
 }
 
-.toc-group-summary:hover {
+.toc-row-label:hover {
   background: #f1eee6;
 }
 
-.toc-group--depth-1 > .toc-group-summary {
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.toc-group--depth-2 > .toc-group-summary,
-.toc-group--depth-3 > .toc-group-summary {
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.toc-group-title,
-.toc-chapter-title {
+.toc-row-title {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Same depth → same type style (group or page). */
+.toc-row--depth-0 > .toc-row-label {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: 0.02em;
+}
+
+.toc-row--depth-1 > .toc-row-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #3d3a34;
+}
+
+.toc-row--depth-2 > .toc-row-label,
+.toc-row--depth-3 > .toc-row-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #3d3a34;
 }
 
 .toc-group-body {
@@ -373,25 +380,7 @@ code {
   margin-left: 14px;
 }
 
-.toc-chapter-link {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
-  border-radius: 8px;
-  color: inherit;
-  text-decoration: none;
-  font-size: 13px;
-  font-weight: 500;
-  color: #3d3a34;
-}
-
-.toc-chapter-link:hover {
-  background: #f1eee6;
-}
-
-.toc-chapter.active > .toc-chapter-link {
+.toc-chapter.active > .toc-row-label {
   background: #edeae0;
   font-weight: 600;
   color: var(--ink);

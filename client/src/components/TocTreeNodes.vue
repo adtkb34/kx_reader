@@ -12,7 +12,7 @@ const props = withDefaults(
     bookId: string;
     currentChapterId: string;
     pageById: Record<string, TocChapter>;
-    /** Nesting depth; groups at 0 are top-level folders. */
+    /** Nesting depth in the TOC tree (0 = top-level siblings). */
     depth?: number;
   }>(),
   { depth: 0 },
@@ -72,13 +72,13 @@ function goSection(ch: TocChapter, sectionId: string): void {
   <template v-for="node in nodes" :key="node.type + ':' + node.id">
     <details
       v-if="node.type === 'group'"
-      class="toc-group"
-      :class="`toc-group--depth-${depth}`"
+      class="toc-group toc-row"
+      :class="`toc-row--depth-${depth}`"
       :key="'g-' + node.id + '-' + currentChapterId"
       :open="isActiveTrail(node)"
     >
-      <summary class="toc-group-summary">
-        <span class="toc-group-title">{{ node.title }}</span>
+      <summary class="toc-row-label toc-group-summary">
+        <span class="toc-row-title">{{ node.title }}</span>
         <span class="toc-badges">
           <span
             v-if="groupStats(node).question"
@@ -105,11 +105,14 @@ function goSection(ch: TocChapter, sectionId: string): void {
 
     <div
       v-else
-      class="toc-chapter"
-      :class="{ active: node.id === currentChapterId }"
+      class="toc-chapter toc-row"
+      :class="[
+        `toc-row--depth-${depth}`,
+        { active: node.id === currentChapterId },
+      ]"
     >
-      <router-link :to="`/books/${bookId}/${node.id}`" class="toc-chapter-link">
-        <span class="toc-chapter-title">{{ node.title }}</span>
+      <router-link :to="`/books/${bookId}/${node.id}`" class="toc-row-label toc-chapter-link">
+        <span class="toc-row-title">{{ node.title }}</span>
         <span class="toc-badges">
           <span
             v-if="chapterStats(node.id).question"
