@@ -206,7 +206,7 @@ flowchart LR
 
 ### Wireframe {#wireframe}
 
-界面章的屏示意用 <code>```wireframe</code>，**不要用 Mermaid 冒充线框**。默认放在 `:::details UI` 里，正文只留结构表。整壳只在布局/壳章画一次；部件页不要再画周围框架（见 [壳一次](02-structure.md#shell-once)）。
+界面章的屏示意用 <code>```wireframe</code>，**不要用 Mermaid 冒充线框**。默认放在 `:::details UI` 里，正文只留结构表。整壳只在布局/壳章画；部件页只画部件本身（见 [本义自述](02-structure.md#affirmative)）。
 
 ````markdown
 :::details UI

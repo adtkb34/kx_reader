@@ -79,4 +79,4 @@ title: 结构思想
 
 ## 其它活样例 {#where}
 
-书架上的 Now Order：顶栏两个下拉（读法 + 视角）；壳一次见 [结构思想](02-structure.md#shell-once)；系统架构在实现；运营后台在场景且仅运营视角。清单写法见 [book.json](03-format.md#manifest-tree)。
+书架上的 Now Order：顶栏两个下拉（读法 + 视角）；本义自述见 [结构思想](02-structure.md#affirmative)；系统架构在实现；运营后台在场景且仅运营视角。清单写法见 [book.json](03-format.md#manifest-tree)。
