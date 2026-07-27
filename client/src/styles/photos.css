@@ -1,0 +1,37 @@
+/* ---------- book photos ---------- */
+
+.md-body .md-figure {
+  display: block;
+  margin: 0 0 18px;
+  padding: 0;
+  text-align: center;
+}
+
+.md-body .md-figure img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #faf8f4;
+  cursor: zoom-in;
+}
+
+.md-body .md-figcaption {
+  display: block;
+  margin-top: 8px;
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.md-body p:has(> .md-figure:only-child) {
+  margin: 0;
+}
+
+.md-details-body .md-figure img {
+  background: #fff;
+}
+

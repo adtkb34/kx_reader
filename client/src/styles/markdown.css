@@ -1,0 +1,78 @@
+/* ---------- markdown body ---------- */
+
+.md-body {
+  font-family: var(--serif);
+  font-size: 16.5px;
+  line-height: 1.9;
+}
+
+.md-body > :first-child {
+  margin-top: 0;
+}
+
+.md-body h2 {
+  font-size: 22px;
+  margin: 10px 0 12px;
+}
+
+.md-body h3 {
+  font-size: 18.5px;
+  margin: 8px 0 10px;
+}
+
+.md-body h4,
+.md-body h5,
+.md-body h6 {
+  font-size: 16.5px;
+  margin: 8px 0 8px;
+}
+
+.md-body p {
+  margin: 0 0 14px;
+}
+
+.md-body ul,
+.md-body ol {
+  margin: 0 0 14px;
+  padding-left: 26px;
+}
+
+.md-body li {
+  margin-bottom: 4px;
+}
+
+.md-body a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid #bcd0f5;
+}
+
+.md-body a:hover {
+  border-bottom-color: var(--accent);
+}
+
+.md-body code {
+  font-size: 0.86em;
+  background: #f3f1ea;
+  padding: 1.5px 5px;
+  border-radius: 4px;
+}
+
+.md-body pre.hljs {
+  background: #f6f8fa;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px 16px;
+  overflow-x: auto;
+  line-height: 1.6;
+  font-size: 13.5px;
+  font-family: var(--mono);
+  margin: 0 0 14px;
+}
+
+.md-body pre code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+}
+

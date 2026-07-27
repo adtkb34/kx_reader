@@ -1,0 +1,211 @@
+/* ---------- UI wireframe (```wireframe) ---------- */
+
+.wireframe {
+  margin: 0 0 16px;
+}
+
+.wf-device {
+  max-width: 360px;
+  margin: 0 auto;
+  background: linear-gradient(180deg, #faf9f6 0%, #f3f0ea 100%);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 12px 28px rgba(31, 41, 55, 0.08);
+  overflow: hidden;
+}
+
+.wf-frame-title {
+  padding: 10px 14px 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.wf-body {
+  padding: 10px 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wf-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.wf-bar-lead {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #c7c2b8, #8b8680);
+  flex-shrink: 0;
+}
+
+.wf-menu {
+  margin: -2px 8px 0 auto;
+  width: min(220px, 100%);
+  padding: 6px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 8px 20px rgba(31, 41, 55, 0.1);
+  font-size: 12.5px;
+}
+
+.wf-menu .wf-row {
+  padding: 7px 8px;
+  border-radius: 6px;
+}
+
+.wf-menu .wf-row:hover {
+  background: #f6f4ef;
+}
+
+.wf-row-sub {
+  padding-left: 18px !important;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.wf-card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.wf-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 6px;
+}
+
+.wf-card-title {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.wf-card-action {
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.wf-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  user-select: none;
+}
+
+.wf-icon-more {
+  letter-spacing: 0.05em;
+  font-weight: 700;
+}
+
+.wf-icon-edit {
+  font-size: 15px;
+}
+
+.wf-badge-inline {
+  margin-left: auto;
+}
+
+.wf-card-body {
+  padding: 0 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wf-row {
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.wf-badge-row {
+  display: flex;
+}
+
+.wf-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #efe8dc;
+  color: #5c5346;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.wf-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.wf-chip {
+  display: inline-flex;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #f6f4ef;
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.wf-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.wf-footer .wf-btns {
+  justify-content: stretch;
+}
+
+.wf-footer .wf-chip {
+  flex: 1;
+  justify-content: center;
+  background: var(--paper);
+}
+
+.wf-divider {
+  height: 1px;
+  background: var(--line);
+  margin: 2px 0;
+}
+
+.md-details-body .wireframe {
+  margin-top: 4px;
+}
+

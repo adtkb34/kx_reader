@@ -9,6 +9,8 @@ export const ui = reactive({
   /** Bump to force ChapterPage reload after agent writes files. */
   chapterReloadToken: 0,
   detailsOpen: localStorage.getItem('reader.detailsOpen') === '1',
+  /** Sidebar TOC visible; default open. */
+  tocOpen: localStorage.getItem('reader.tocOpen') !== '0',
   /** Active multi-axis lens selection per book. */
   lensByBook: {} as Record<string, LensSelection>,
 });
@@ -28,6 +30,11 @@ export function closeNotes(): void {
 export function toggleDetailsOpen(): void {
   ui.detailsOpen = !ui.detailsOpen;
   localStorage.setItem('reader.detailsOpen', ui.detailsOpen ? '1' : '0');
+}
+
+export function toggleTocOpen(): void {
+  ui.tocOpen = !ui.tocOpen;
+  localStorage.setItem('reader.tocOpen', ui.tocOpen ? '1' : '0');
 }
 
 function lensStorageKey(bookId: string): string {

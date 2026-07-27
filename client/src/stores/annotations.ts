@@ -1,5 +1,5 @@
 import { reactive } from 'vue';
-import { api } from '@/api';
+import { api } from '@/api/client';
 import { DEFAULT_STATUS, type SectionStatus } from '@shared/annotations';
 import type { AnnotationMap, Note, SectionAnnotation } from '@shared/types';
 

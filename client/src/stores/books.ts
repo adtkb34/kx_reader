@@ -1,5 +1,5 @@
 import { reactive } from 'vue';
-import { api } from '@/api';
+import { api } from '@/api/client';
 import type { BookSummary, BookToc } from '@shared/types';
 
 export const booksState = reactive({

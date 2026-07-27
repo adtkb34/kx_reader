@@ -1,0 +1,79 @@
+/* ---------- book layout ---------- */
+
+.book-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.book-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  background: rgba(245, 242, 236, 0.88);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+}
+
+.topbar-title {
+  font-weight: 600;
+  font-size: 14.5px;
+}
+
+.lens-select-wrap {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.lens-select {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 30px;
+  min-width: 5.5rem;
+  max-width: 10rem;
+  padding: 0 28px 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background-color: var(--paper);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.lens-select:hover {
+  border-color: #d4d0c6;
+}
+
+.lens-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
+}
+

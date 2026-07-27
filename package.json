@@ -17,10 +17,17 @@
     "dev:client": "npm run dev -w client",
     "build": "npm run typecheck && npm run build -w client",
     "typecheck": "npm run typecheck -w server && npm run typecheck -w client",
+    "test": "vitest run",
     "start": "npm run start -w server"
   },
   "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
+    "@types/markdown-it-container": "^4.0.0",
     "concurrently": "^10.0.3",
-    "typescript": "^5.9.3"
+    "markdown-it": "^14.3.0",
+    "markdown-it-attrs": "^5.0.0",
+    "markdown-it-container": "^4.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
   }
 }

@@ -1,0 +1,19 @@
+/* ---------- responsive ---------- */
+
+@media (max-width: 960px) {
+  .toc {
+    display: none;
+  }
+
+  .toc-toggle {
+    display: none;
+  }
+
+  .page-card {
+    padding: 28px 24px 36px;
+  }
+
+  .notes-panel {
+    width: 100%;
+  }
+}

@@ -15,6 +15,8 @@ npm run dev
 
 单端口运行（可选）：`npm run build && npm start` 后直接访问 http://localhost:4730。
 
+自动化测试：`npm test`（Vitest，覆盖 `shared/` 切章 / 透镜 / diff）。
+
 ## 使用工作流
 
 1. 让 AI 阅读《示例手册》的「写作」域与文末自检（`books/sample`），按规范在 `books/<book-id>/` 下生成或更新一本书；
@@ -91,9 +93,10 @@ books/<book-id>/          一本书：book.json 清单 + 若干 Markdown 章节
 books/sample/             示例手册 = 产品说明 + 写书唯一规范
 data/annotations/         标注数据（阅读器写入，生成器禁止触碰）
 config/                   Agent / 行为 / prompt 模板
-server/                   Node (Express + TS) API：书籍/章节/标注
-client/                   Vue 3 + Vite 阅读器前端
-shared/                   server 与 client 共用的类型、状态定义、小节抽取逻辑
+server/                   分层 API：domain / ports / app / adapters / http
+client/                   Vue 3：features/ + api/ + styles/
+shared/                   共用类型、切章、透镜、diff（唯一真相源）
+docs/superpowers/specs/   架构等设计说明
 ```
 
 ## API 摘要

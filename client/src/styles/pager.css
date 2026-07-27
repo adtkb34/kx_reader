@@ -1,0 +1,50 @@
+/* ---------- pager ---------- */
+
+.pager {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.pager-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+  padding: 12px 16px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--sans);
+}
+
+.pager-btn:hover:not(:disabled) {
+  border-color: #c9c5ba;
+  background: #fcfbf8;
+}
+
+.pager-btn.next {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.pager-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.pager-dir {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pager-title {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+

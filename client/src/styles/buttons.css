@@ -1,0 +1,89 @@
+/* ---------- buttons ---------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: 13.5px;
+  font-family: var(--sans);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.btn:hover {
+  background: #f6f4ef;
+}
+
+.btn.ghost {
+  background: transparent;
+}
+
+.btn.ghost:hover {
+  background: #edeae2;
+}
+
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.btn.primary:hover {
+  background: #1e50c8;
+}
+
+.btn.primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.btn.warn {
+  color: #92400e;
+}
+
+.btn.small {
+  padding: 3px 10px;
+  font-size: 12.5px;
+}
+
+.link-btn {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 12.5px;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.link-btn.danger {
+  color: var(--danger);
+}
+
+.link-btn:hover {
+  text-decoration: underline;
+}
+
+.error-box {
+  padding: 14px 18px;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.loading-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+

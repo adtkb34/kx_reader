@@ -1,0 +1,96 @@
+/* ---------- mermaid diagrams ---------- */
+
+.mermaid-wrap {
+  margin: 0 0 18px;
+  padding: 18px 16px;
+  background: linear-gradient(180deg, #fcfbf8 0%, #ffffff 100%);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow-x: auto;
+  text-align: center;
+}
+
+.mermaid-wrap:not(.is-rendered) {
+  min-height: 72px;
+}
+
+.mermaid-wrap pre.mermaid {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.5;
+  text-align: left;
+  white-space: pre-wrap;
+  color: var(--muted);
+  overflow: visible;
+}
+
+/* mermaid.run 把 SVG 写进同一个 pre 节点，渲染后改成居中展示 */
+.mermaid-wrap.is-rendered pre.mermaid {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: normal;
+  text-align: center;
+  white-space: normal;
+  color: inherit;
+}
+
+.mermaid-wrap svg {
+  max-width: 100%;
+  height: auto;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.mermaid-wrap .mermaid-error,
+.mermaid-wrap pre.mermaid[data-processed='error'] {
+  display: block;
+  color: var(--danger);
+  white-space: pre-wrap;
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 12.5px;
+}
+
+.md-details-body .mermaid-wrap {
+  background: #fff;
+}
+
+.md-body blockquote {
+  margin: 0 0 14px;
+  padding: 6px 16px;
+  border-left: 3px solid #d8d4ca;
+  color: var(--muted);
+  background: #faf8f4;
+  border-radius: 0 6px 6px 0;
+}
+
+.md-body table {
+  border-collapse: collapse;
+  margin: 0 0 16px;
+  font-family: var(--sans);
+  font-size: 13.5px;
+  display: block;
+  overflow-x: auto;
+}
+
+.md-body th,
+.md-body td {
+  border: 1px solid var(--line);
+  padding: 6px 12px;
+  text-align: left;
+}
+
+.md-body th {
+  background: #f7f5f0;
+}
+
+.md-body hr {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 24px 0;
+}
+
