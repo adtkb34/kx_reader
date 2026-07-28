@@ -4,10 +4,12 @@ dist/
 .DS_Store
 data/annotations/*.tmp
 
-# Only ship the sample handbook; other books stay local
+# Ship sample handbook and selected books; others stay local
 books/*
 !books/sample/
 !books/sample/**
+!books/daydream/
+!books/daydream/**
 
 # Per-book git repos (compare feature); parent tracks content only
 books/**/.git/

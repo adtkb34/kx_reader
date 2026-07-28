@@ -1,0 +1,33 @@
+{
+  "title": "白日做梦",
+  "description": "关于选择、反馈与定义的思考札记。从本能默认路径出发，看清之后再决定顺着、约束还是改道。",
+  "contents": [
+    {
+      "type": "page",
+      "file": "01-overview.md"
+    },
+    {
+      "type": "group",
+      "id": "from-instinct",
+      "title": "从本能出发",
+      "children": [
+        {
+          "type": "page",
+          "file": "from-instinct/01-avoid-over-imitate.md"
+        },
+        {
+          "type": "page",
+          "file": "from-instinct/02-short-feedback.md"
+        },
+        {
+          "type": "page",
+          "file": "from-instinct/03-affirmative-definition.md"
+        },
+        {
+          "type": "page",
+          "file": "from-instinct/04-completeness-trap.md"
+        }
+      ]
+    }
+  ]
+}
