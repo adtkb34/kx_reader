@@ -20,9 +20,9 @@ title: 收束与自检
 - [ ] 全书结构：总分总清晰；垂直域边界清楚；同级标题同维度；本义自述（见 [结构自检](02-structure.md#checklist-structure)、[本义自述](02-structure.md#affirmative)）
 - [ ] `book.json` 的 `chapters` 或 `contents` 与实际文件一一对应；组 id / 页 id 全书唯一
 - [ ] 若声明 `lenses`：用按轴的 `correspondences` 写清归属与互跳（目标可为页 id 或 `{ page, sections }`）；页 frontmatter 不含 `layer` / `pair`；选项 id 非空且全书唯一
-- [ ] 每章 frontmatter 含 `id`、`title`，且 `id` 不与历史冲突（含不与 group id 冲突）
+- [ ] 每章 frontmatter 含 `id`、`title`，且 `id` 不与历史冲突（含不与 group id 冲突）；**新建章节** `id` 为时间戳（如 `YYYYMMDDHHmm`），不带业务含义
 - [ ] 所有 h2–h6 均有显式 `{#id}` 且章内唯一
-- [ ] 修改既有章节时，未改动任何既有 id
+- [ ] 修改既有章节时，未改动任何既有 id（含不把旧章节 id 改成时间戳）
 - [ ] 细节内容已收入 `:::details`，主干保持可速读
 - [ ] 架构/流程/目录图使用 Mermaid，无 ASCII 方框图
 - [ ] 所有内部链接的文件名与 `#id` 均真实存在

@@ -1,5 +1,6 @@
 Hard rules (must obey):
 - Preserve all existing stable section ids (`{#id}`) and page frontmatter ids unless the user explicitly asks to rename/delete.
+- New page frontmatter `id` values must be timestamps without business meaning (prefer `YYYYMMDDHHmm`); never rename an existing page id to a timestamp.
 - Do not touch any `data/` annotations directory (it is outside this book workspace anyway).
 - Keep Markdown structure compatible with the sample handbook (details blocks, mermaid, wireframes, structure rules).
 - Read and obey the authoring rules in the sample handbook at: {{authoringPath}}
