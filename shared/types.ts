@@ -16,6 +16,8 @@ export type LensAxisId = string;
 export interface BookLens {
   id: PageLayer;
   title: string;
+  /** Nested dimension options; omit or empty = leaf. */
+  children?: BookLens[];
 }
 
 export interface TocSection {
@@ -31,38 +33,25 @@ export interface TocChapter {
   file: string;
   sections: TocSection[];
   /**
-   * Per-axis membership from correspondences.
+   * Per-axis membership from page `lenses` in book.json (leaf option ids only).
    * One option or several (same page under multiple options).
    * Omit an axis (or omit `layers`) = always visible on that axis.
    */
   layers?: Record<LensAxisId, PageLayer | PageLayer[]>;
   /**
-   * Per-axis, per-option section allowlists from correspondence object targets.
-   * Missing option = show all sections for that selection.
+   * Per-axis, per-option section allowlists from page `lenses` (string[] values).
+   * Missing option = show all sections for that leaf.
    */
   sectionAllowlists?: Record<LensAxisId, Partial<Record<PageLayer, string[]>>>;
 }
-
-/**
- * Correspondence target: chapter id, or chapter + section allowlist.
- * `sections` lists extracted section ids (e.g. `entry`, `_intro`); omit = whole page.
- */
-export type CorrespondenceTarget = string | { page: string; sections?: string[] };
-
-/**
- * One topic across options of a single axis: option id → target.
- * Multi-key rows define switch targets; single-key rows are membership only.
- * Multiple options may point at the same page with different `sections`.
- */
-export type LensCorrespondence = Record<PageLayer, CorrespondenceTarget>;
 
 /** Nested TOC: groups are folders only; pages are leaves. */
 export type TocTreeNode =
   | { type: 'group'; id: string; title: string; children: TocTreeNode[] }
   | { type: 'page'; id: string; title: string; file: string };
 
-/** Active selection: axis id → option id. */
-export type LensSelection = Record<LensAxisId, PageLayer>;
+/** Active selection: axis id → selected tree node ids (multi-select; parents allowed). */
+export type LensSelection = Record<LensAxisId, PageLayer[]>;
 
 export interface BookToc {
   id: string;
@@ -73,11 +62,6 @@ export interface BookToc {
    * Legacy single-array books are normalized to `{ kind: [...] }`.
    */
   lenses?: Record<LensAxisId, BookLens[]>;
-  /**
-   * Correspondences per axis. Also used to derive chapter.layers.
-   * Legacy flat arrays are normalized under the sole/default axis.
-   */
-  correspondences?: Record<LensAxisId, LensCorrespondence[]>;
   /** Nested sidebar tree (groups + pages). */
   tree: TocTreeNode[];
   /** Leaf pages in DFS reading / prev-next order (always flat). */
@@ -100,8 +84,6 @@ export interface Note {
 export interface SectionAnnotation {
   status: SectionStatus;
   statusUpdatedAt?: string;
-  /** 标记为已读/确认时记下的小节正文 hash；内容变则刷新时打回未读 */
-  contentHash?: string;
   notes: Note[];
 }
 

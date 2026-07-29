@@ -4,14 +4,10 @@ import { randomUUID } from 'node:crypto';
 import { DEFAULT_STATUS, type SectionStatus } from '../../../../shared/annotations';
 import type { BookAnnotations, Note, SectionAnnotation } from '../../../../shared/types';
 import type { AnnotationStore } from '../../ports/annotations';
-import { getBookSectionHashes } from './contentHash';
 
 export type { AnnotationStore };
 
 const SAFE_BOOK_ID = /^[\w][\w.-]*$/;
-
-/** 内容变更时需要打回未读的状态 */
-const RESET_ON_CHANGE: ReadonlySet<SectionStatus> = new Set(['read', 'confirmed']);
 
 export class FileAnnotationStore implements AnnotationStore {
   /** 每本书一个串行队列，避免并发写坏文件 */
@@ -52,50 +48,8 @@ export class FileAnnotationStore implements AnnotationStore {
     await fs.rename(tmp, file);
   }
 
-  /**
-   * 对照全书小节正文 hash：
-   * - 已读 / 确认 且 hash 变了 → 打回未读（无备注则删条目）
-   * - 尚无 contentHash 的已读/确认 → 只补写 hash，不改状态（兼容旧数据）
-   */
-  private async reconcileHashes(bookId: string, data: BookAnnotations): Promise<boolean> {
-    const hashes = await getBookSectionHashes(bookId);
-    let changed = false;
-
-    for (const [key, entry] of Object.entries(data.sections)) {
-      const current = hashes[key];
-      if (current == null) continue; // 孤立标注：内容侧已无此小节，留给 orphan 面板
-
-      if (RESET_ON_CHANGE.has(entry.status)) {
-        if (!entry.contentHash) {
-          entry.contentHash = current;
-          changed = true;
-        } else if (entry.contentHash !== current) {
-          entry.status = DEFAULT_STATUS;
-          entry.statusUpdatedAt = new Date().toISOString();
-          entry.contentHash = current;
-          changed = true;
-          if (entry.notes.length === 0) {
-            delete data.sections[key];
-          }
-        }
-      } else if (entry.contentHash && entry.contentHash !== current) {
-        // 疑问 / 未读：只同步 hash，不改状态
-        entry.contentHash = current;
-        changed = true;
-      }
-    }
-
-    return changed;
-  }
-
   getBook(bookId: string): Promise<BookAnnotations> {
-    return this.enqueue(bookId, async () => {
-      const data = await this.load(bookId);
-      if (await this.reconcileHashes(bookId, data)) {
-        await this.save(bookId, data);
-      }
-      return data;
-    });
+    return this.enqueue(bookId, async () => this.load(bookId));
   }
 
   setStatus(
@@ -111,14 +65,6 @@ export class FileAnnotationStore implements AnnotationStore {
       };
       entry.status = status;
       entry.statusUpdatedAt = new Date().toISOString();
-
-      if (RESET_ON_CHANGE.has(status)) {
-        const hashes = await getBookSectionHashes(bookId);
-        const h = hashes[sectionId];
-        if (h) entry.contentHash = h;
-      } else if (status === DEFAULT_STATUS) {
-        delete entry.contentHash;
-      }
 
       if (status === DEFAULT_STATUS && entry.notes.length === 0) {
         delete data.sections[sectionId];

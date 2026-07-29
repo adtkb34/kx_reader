@@ -99,7 +99,7 @@ export interface SectionBody {
   id: string;
   title: string;
   level: number;
-  /** 该小节的 Markdown 原文（含标题行），用于内容 hash */
+  /** 该小节的 Markdown 原文（含标题行） */
   body: string;
 }
 

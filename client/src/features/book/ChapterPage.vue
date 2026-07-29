@@ -51,7 +51,7 @@ async function load(): Promise<void> {
     const html = renderChapter(chapter.markdown, { bookId: props.bookId, fileToChapter });
     const tocChapter = toc?.chapters.find((c) => c.id === props.chapterId);
     const allow = tocChapter
-      ? sectionAllowlistFor(tocChapter, props.lensSelection ?? null)
+      ? sectionAllowlistFor(tocChapter, props.lensSelection ?? null, toc)
       : null;
     sections.value = filterSectionsByAllowlist(splitSections(html), allow);
     await nextTick();
@@ -168,20 +168,36 @@ function onContentClick(e: MouseEvent): void {
     else router.push({ hash: href });
     return;
   }
-  const current = route.path + route.hash;
-  if (href === current) {
-    const i = href.indexOf('#');
-    if (i >= 0) scrollToHash(href.slice(i));
-  } else {
-    router.push(href);
+  const url = new URL(href, window.location.origin);
+  const lensQuery = props.lensSelection ? { ...props.lensSelection } : {};
+  const nextPath = url.pathname;
+  const nextHash = url.hash || '';
+  if (nextPath === route.path && nextHash === (route.hash || '')) {
+    if (nextHash) scrollToHash(nextHash);
+    return;
   }
+  router.push({
+    path: nextPath,
+    query: lensQuery,
+    hash: nextHash || undefined,
+  });
+}
+
+function chapterLocation(chapterId: string): {
+  path: string;
+  query: Record<string, string | string[]>;
+} {
+  return {
+    path: `/books/${props.bookId}/${chapterId}`,
+    query: props.lensSelection ? { ...props.lensSelection } : {},
+  };
 }
 
 function goPrev(): void {
-  if (props.prevChapter) router.push(`/books/${props.bookId}/${props.prevChapter.id}`);
+  if (props.prevChapter) router.push(chapterLocation(props.prevChapter.id));
 }
 function goNext(): void {
-  if (props.nextChapter) router.push(`/books/${props.bookId}/${props.nextChapter.id}`);
+  if (props.nextChapter) router.push(chapterLocation(props.nextChapter.id));
 }
 </script>
 

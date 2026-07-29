@@ -1,28 +1,22 @@
 {
   "title": "示例手册：文档书阅读器",
-  "description": "产品说明与写书唯一规范。顶栏切换「场景 / 实现」：非技术读场景，机械规范与设计在实现。",
+  "description": "产品说明与写书唯一规范。顶栏树选「读法」维度（可多选）；场景看用法，实现看规范与设计。",
   "lenses": {
     "kind": [
-      { "id": "scenario", "title": "场景" },
-      { "id": "impl", "title": "实现" }
-    ]
-  },
-  "correspondences": {
-    "kind": [
-      { "scenario": "structure", "impl": "format" },
-      { "scenario": "annotations", "impl": "persistence" },
-      { "scenario": "details-demo" },
-      { "scenario": "navigation" },
-      { "scenario": "lenses" },
-      { "impl": "git-compare" },
-      { "impl": "architecture" },
-      { "impl": "local-agent" },
-      { "impl": "checklist" }
+      {
+        "id": "read",
+        "title": "读法",
+        "children": [
+          { "id": "scenario", "title": "场景" },
+          { "id": "impl", "title": "实现" }
+        ]
+      }
     ]
   },
   "contents": [
     {
       "type": "page",
+      "id": "overview",
       "file": "01-overview.md"
     },
     {
@@ -32,15 +26,21 @@
       "children": [
         {
           "type": "page",
-          "file": "02-structure.md"
+          "id": "structure",
+          "file": "02-structure.md",
+          "lenses": { "kind": { "scenario": true } }
         },
         {
           "type": "page",
-          "file": "03-format.md"
+          "id": "format",
+          "file": "03-format.md",
+          "lenses": { "kind": { "impl": true } }
         },
         {
           "type": "page",
-          "file": "04-details.md"
+          "id": "details-demo",
+          "file": "04-details.md",
+          "lenses": { "kind": { "scenario": true } }
         }
       ]
     },
@@ -51,11 +51,15 @@
       "children": [
         {
           "type": "page",
-          "file": "05-navigation.md"
+          "id": "navigation",
+          "file": "05-navigation.md",
+          "lenses": { "kind": { "scenario": true } }
         },
         {
           "type": "page",
-          "file": "06-lenses.md"
+          "id": "lenses",
+          "file": "06-lenses.md",
+          "lenses": { "kind": { "scenario": true } }
         }
       ]
     },
@@ -66,15 +70,21 @@
       "children": [
         {
           "type": "page",
-          "file": "07-annotations.md"
+          "id": "annotations",
+          "file": "07-annotations.md",
+          "lenses": { "kind": { "scenario": true } }
         },
         {
           "type": "page",
-          "file": "08-persistence.md"
+          "id": "persistence",
+          "file": "08-persistence.md",
+          "lenses": { "kind": { "impl": true } }
         },
         {
           "type": "page",
-          "file": "09-git-compare.md"
+          "id": "git-compare",
+          "file": "09-git-compare.md",
+          "lenses": { "kind": { "impl": true } }
         }
       ]
     },
@@ -85,17 +95,23 @@
       "children": [
         {
           "type": "page",
-          "file": "10-architecture.md"
+          "id": "architecture",
+          "file": "10-architecture.md",
+          "lenses": { "kind": { "impl": true } }
         },
         {
           "type": "page",
-          "file": "11-local-agent.md"
+          "id": "local-agent",
+          "file": "11-local-agent.md",
+          "lenses": { "kind": { "impl": true } }
         }
       ]
     },
     {
       "type": "page",
-      "file": "12-checklist.md"
+      "id": "checklist",
+      "file": "12-checklist.md",
+      "lenses": { "kind": { "impl": true } }
     }
   ]
 }

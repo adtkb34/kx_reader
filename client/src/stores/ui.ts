@@ -1,5 +1,6 @@
 import { reactive } from 'vue';
 import type { LensAxisId, LensSelection, PageLayer } from '@shared/types';
+import { normalizeAxisSelection } from '@shared/lenses';
 
 export const ui = reactive({
   notesTarget: null as null | { bookId: string; key: string; title: string },
@@ -45,19 +46,21 @@ function isOptionId(s: string): boolean {
   return /^[\w][\w.-]*$/.test(s);
 }
 
-/** Load stored multi-axis selection; migrates legacy single-string to `{ kind: value }`. */
+/** Load stored multi-axis selection; migrates legacy single-string / single-value maps. */
 export function getStoredLensSelection(bookId: string): LensSelection | null {
   const raw = localStorage.getItem(lensStorageKey(bookId));
   if (!raw) return null;
   if (isOptionId(raw) && !raw.startsWith('{')) {
-    return { kind: raw };
+    return { kind: [raw] };
   }
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
     const out: LensSelection = {};
     for (const [axis, opt] of Object.entries(parsed as Record<string, unknown>)) {
-      if (typeof opt === 'string' && isOptionId(axis) && isOptionId(opt)) out[axis] = opt;
+      if (!isOptionId(axis)) continue;
+      const ids = normalizeAxisSelection(opt).filter(isOptionId);
+      if (ids.length > 0) out[axis] = ids;
     }
     return Object.keys(out).length > 0 ? out : null;
   } catch {
@@ -66,17 +69,21 @@ export function getStoredLensSelection(bookId: string): LensSelection | null {
 }
 
 export function setBookLensSelection(bookId: string, selection: LensSelection): void {
-  ui.lensByBook[bookId] = { ...selection };
-  localStorage.setItem(lensStorageKey(bookId), JSON.stringify(selection));
+  const copy: LensSelection = {};
+  for (const [axis, ids] of Object.entries(selection)) {
+    copy[axis] = [...ids];
+  }
+  ui.lensByBook[bookId] = copy;
+  localStorage.setItem(lensStorageKey(bookId), JSON.stringify(copy));
 }
 
 export function setBookAxisLens(
   bookId: string,
   axis: LensAxisId,
-  option: PageLayer,
+  options: PageLayer[],
   base: LensSelection,
 ): LensSelection {
-  const next = { ...base, [axis]: option };
+  const next = { ...base, [axis]: [...options] };
   setBookLensSelection(bookId, next);
   return next;
 }

@@ -55,55 +55,69 @@ flowchart TD
   "description": "一句话简介（可选）",
   "lenses": {
     "kind": [
-      { "id": "scenario", "title": "场景" },
-      { "id": "impl", "title": "实现" }
-    ]
-  },
-  "correspondences": {
-    "kind": [
-      { "scenario": "structure", "impl": "format" },
-      { "scenario": "navigation" },
-      { "impl": "architecture" }
+      {
+        "id": "read",
+        "title": "读法",
+        "children": [
+          { "id": "scenario", "title": "场景" },
+          { "id": "impl", "title": "实现" }
+        ]
+      }
     ]
   },
   "contents": [
-    { "type": "page", "file": "01-overview.md" },
+    { "type": "page", "id": "overview", "file": "01-overview.md" },
     {
       "type": "group",
       "id": "identity",
       "title": "身份",
       "children": [
-        { "type": "page", "file": "identity/01-auth.md" },
-        { "type": "page", "file": "identity/me.md" }
+        {
+          "type": "page",
+          "id": "auth",
+          "file": "identity/01-auth.md",
+          "lenses": {
+            "kind": {
+              "scenario": ["login", "register"],
+              "impl": ["api", "db"]
+            }
+          }
+        },
+        {
+          "type": "page",
+          "id": "me",
+          "file": "identity/me.md",
+          "lenses": { "kind": { "scenario": true } }
+        }
       ]
     },
-    { "type": "page", "file": "03-shops.md" }
+    { "type": "page", "id": "shops", "file": "03-shops.md" }
   ]
 }
 ```
 
-- **`page`**：叶子页，对应一个 Markdown 文件；可路由、可翻页、可标注。
+- **`page`**：叶子页；须含稳定 `id`（与 frontmatter `id` 一致）与 `file`（md 路径）；可路由、可翻页、可标注。
+- **`page.lenses`（可选）**：按轴声明归属，**key 必须是叶子** option id。省略该页在各轴**常显**。轴下 `option: true` = 整页属于该叶子；`option: string[]` = 该叶子下可见的小节 id（含子级展开）。同页可挂多叶子，切透镜只过滤小节、不换页。
 - **`group`**：目录文件夹，只出现在左侧 TOC，**不是**页面；`id` 小写 kebab-case，全书唯一且稳定。
-- **`lenses`（可选）**：多轴对象 `轴 → [{ id, title }]`；见 [阅读透镜](06-lenses.md#how)。旧版数组视为单轴 `kind`。不声明则无顶栏开关。
-- **`correspondences`（可选，有透镜时使用）**：与 `lenses` 同构，按轴写归属与互跳；见 [阅读透镜](06-lenses.md#how)。目标可以是页 id 字符串，或 `{ "page", "sections" }` 只显示所列小节（含子级标题）。某轴未列出的页在该轴常显。
+- **`lenses`（可选）**：多轴对象 `轴 →` 树节点数组 `{ id, title, children? }`；见 [阅读透镜](06-lenses.md#how)。顶栏为可多选的树；选中父节点 = 其下全部叶子并集。旧版扁平数组仍可用（深度为 1 的树）。不声明则无顶栏开关。
 - 翻页（←/→）只在**当前透镜可见的**叶子页之间按 DFS 顺序走动；组节点被跳过。
 - 组可再嵌套组；深度不限。TOC 里**同一深度样式相同**（组与叶子页无关）；更深一层再弱一档。
 - 删除叶子页：从 `contents` 移除；该页标注进入「孤立标注」面板。
 
 ## 章节文件 {#chapter-files}
 
-每个章节是一个 Markdown 文件，YAML frontmatter **必须**包含 `id` 与 `title`。透镜归属与互跳写在 `book.json` 的 `correspondences`，**不要**在页上写 `layer` / `pair`：
+每个章节是一个 Markdown 文件，YAML frontmatter **必须**包含 `id` 与 `title`，且与 `book.json` 中该页的 `id` 一致。透镜归属写在 `book.json` 的 `page.lenses`，**不要**在页上写 `layer` / `pair`：
 
 ```markdown
 ---
-id: 202607281805
+id: "202607281805"
 title: 结构思想
 ---
 ```
 
 - `id` 是章节的稳定标识：全书唯一，**一经使用永不修改**（文件可以改名重排，id 不可变）。
-- **新建章节**：`id` 用时间戳、**不带业务含义**（推荐 `YYYYMMDDHHmm`，如 `202607281805`），避免标题一改就想改 id。
-- **已有章节**：禁止把旧 id 改成时间戳或任何新值——一改，标注与 `correspondences` 全部失联。
+- **新建章节**：`id` 用时间戳、**不带业务含义**（推荐 `YYYYMMDDHHmm`，如 `202607281805`），避免标题一改就想改 id。纯数字时间戳在 YAML 里请加引号（`id: "202607281805"`），否则会被解析成数字。
+- **已有章节**：禁止把旧 id 改成时间戳或任何新值——一改，标注全部失联。
 - 正文**不要**写 `# 一级标题`，章节标题由 frontmatter 的 `title` 渲染。
 
 :::details 章节 id 与文件名为什么解耦
@@ -116,16 +130,18 @@ title: 结构思想
 每个 h2–h6 标题必须带显式 id：
 
 ```markdown
-## 数据流 {#data-flow}
+## 数据流 {#202607291820}
 
-### 输入校验 {#input-validation}
+### 输入校验 {#202607291821}
 ```
 
-- **小节** id 规则：小写 kebab-case（ASCII 字母、数字、连字符），**章内唯一**，建议全书唯一。也可对新小节用时间戳；与章节 id 相同铁律——已有的永不改。
+- **小节** id 与**章节** id 同一套规矩：稳定、不带业务含义、一经使用永不修改。
+- **新建小节**：`id` 用时间戳（推荐 `YYYYMMDDHHmm`，同分钟多节可再加两位序号），**不要**再用 `claim` / `data-flow` 这类语义名——标题一改就想改 id，和章节踩同一个坑。
+- **已有小节**：禁止把旧 id 改成时间戳或任何新值（标注键是 `章节id#小节id`）。
 - 铁律：
   1. 已存在的 id 永不修改、永不复用给其他内容；
   2. 重新生成/改写章节时，语义相同的小节必须保留原 id；
-  3. 新内容一律使用新 id（新建**章节** frontmatter `id` 用时间戳；新建**小节**可用 kebab 或时间戳）；
+  3. 新内容一律使用新 id（新建章节、新建小节都用时间戳）；
   4. 要删除的小节直接删除即可，读者的标注会进入「孤立标注」面板。
 - 读者的标记与备注以 `章节id#标题id` 为键持久化。id 一变，标注即失联——这是最严重的生成事故。
 

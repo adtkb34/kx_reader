@@ -4,6 +4,7 @@
   "contents": [
     {
       "type": "page",
+      "id": "overview",
       "file": "01-overview.md"
     },
     {
@@ -13,23 +14,55 @@
       "children": [
         {
           "type": "page",
+          "id": "avoid-over-imitate",
           "file": "from-instinct/01-avoid-over-imitate.md"
         },
         {
           "type": "page",
+          "id": "short-feedback",
           "file": "from-instinct/02-short-feedback.md"
         },
         {
           "type": "page",
+          "id": "affirmative-definition",
           "file": "from-instinct/03-affirmative-definition.md"
         },
         {
           "type": "page",
+          "id": "completeness-trap",
           "file": "from-instinct/04-completeness-trap.md"
         },
         {
           "type": "page",
+          "id": "202607281805",
           "file": "from-instinct/05-blessing-as-ornament.md"
+        },
+        {
+          "type": "group",
+          "id": "frame-cut",
+          "title": "坐标与切分",
+          "children": [
+            {
+              "type": "page",
+              "id": "202607291651",
+              "file": "from-instinct/06-shared-frame.md"
+            },
+            {
+              "type": "page",
+              "id": "202607291622",
+              "file": "from-instinct/07-dimension-mixup.md"
+            },
+            {
+              "type": "page",
+              "id": "202607291500",
+              "file": "from-instinct/08-hierarchy-mixup.md"
+            }
+          ]
+        },
+        {
+          "type": "page",
+          "id": "202607291558",
+          "file": "from-instinct/09-essence-first.md"
         }
       ]
     }

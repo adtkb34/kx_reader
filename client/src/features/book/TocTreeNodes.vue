@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
+import type { RouteLocationRaw } from 'vue-router';
 import type { LensSelection, TocChapter, TocTreeNode } from '@shared/types';
 import { visibleTocSections } from '@shared/lenses';
 import { annotationsFor, sectionKey } from '@/stores/annotations';
 import { DEFAULT_STATUS, statusMeta } from '@shared/annotations';
 import TocTreeNodes from '@/features/book/TocTreeNodes.vue';
+import { tocOf } from '@/stores/books';
 
 const props = withDefaults(
   defineProps<{
@@ -22,6 +24,7 @@ const props = withDefaults(
 
 const router = useRouter();
 const anns = computed(() => annotationsFor(props.bookId));
+const bookToc = computed(() => tocOf(props.bookId));
 
 function leafIdsUnder(node: TocTreeNode): string[] {
   if (node.type === 'page') return [node.id];
@@ -37,7 +40,7 @@ function chapterStats(pageId: string): { unread: number; question: number } {
   if (!ch) return { unread: 0, question: 0 };
   let unread = 0;
   let question = 0;
-  for (const s of visibleTocSections(ch, props.lensSelection ?? null)) {
+  for (const s of visibleTocSections(ch, props.lensSelection ?? null, bookToc.value)) {
     const st = anns.value[sectionKey(ch.id, s.id)]?.status ?? DEFAULT_STATUS;
     if (st === 'unread') unread++;
     if (st === 'question') question++;
@@ -65,8 +68,17 @@ function noteCount(chapterId: string, sectionId: string): number {
   return anns.value[sectionKey(chapterId, sectionId)]?.notes.length ?? 0;
 }
 
+function chapterLocation(chapterId: string, hash?: string): RouteLocationRaw {
+  const query = props.lensSelection ? { ...props.lensSelection } : {};
+  return {
+    path: `/books/${props.bookId}/${chapterId}`,
+    query,
+    ...(hash ? { hash } : {}),
+  };
+}
+
 function goSection(ch: TocChapter, sectionId: string): void {
-  router.push({ path: `/books/${props.bookId}/${ch.id}`, hash: `#${sectionId}` });
+  router.push(chapterLocation(ch.id, `#${sectionId}`));
 }
 </script>
 
@@ -114,7 +126,7 @@ function goSection(ch: TocChapter, sectionId: string): void {
         { active: node.id === currentChapterId },
       ]"
     >
-      <router-link :to="`/books/${bookId}/${node.id}`" class="toc-row-label toc-chapter-link">
+      <router-link :to="chapterLocation(node.id)" class="toc-row-label toc-chapter-link">
         <span class="toc-row-title">{{ node.title }}</span>
         <span class="toc-badges">
           <span
@@ -134,7 +146,7 @@ function goSection(ch: TocChapter, sectionId: string): void {
         class="toc-sections"
       >
         <li
-          v-for="s in visibleTocSections(pageById[node.id], lensSelection ?? null)"
+          v-for="s in visibleTocSections(pageById[node.id], lensSelection ?? null, bookToc)"
           :key="s.id"
           :class="`lvl-${s.level}`"
         >

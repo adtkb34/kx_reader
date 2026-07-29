@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import type { LocationQueryValue, RouteLocationRaw } from 'vue-router';
 import { Expand } from '@element-plus/icons-vue';
 import TocSidebar from '@/features/book/TocSidebar.vue';
 import ChapterPage from '@/features/book/ChapterPage.vue';
+import LensTreeSelect from '@/features/book/LensTreeSelect.vue';
 import NotesPanel from '@/features/notes/NotesPanel.vue';
 import OrphanPanel from '@/features/orphans/OrphanPanel.vue';
 import ComparePanel from '@/features/compare/ComparePanel.vue';
@@ -20,18 +22,23 @@ import {
 } from '@/stores/ui';
 import { useOrphans } from '@/composables/orphans';
 import {
+  allLensNodeIds,
   axisLabel,
   defaultSelection,
   filterChapters,
   filterTree,
   hasLenses,
   lensAxisIds,
+  lensQueryFromSelection,
+  lensSelectionFromQuery,
+  normalizeAxisSelection,
   pageVisibleInSelection,
-  resolveAxisSwitchTarget,
+  resolveLensSwitchChapter,
+  sameLensSelection,
   selectionFromPageLayers,
   visibleIdSet,
 } from '@shared/lenses';
-import type { LensAxisId, LensSelection, PageLayer, TocChapter } from '@shared/types';
+import type { BookToc, LensAxisId, LensSelection, PageLayer, TocChapter } from '@shared/types';
 
 const route = useRoute();
 const router = useRouter();
@@ -42,18 +49,20 @@ const toc = computed(() => tocOf(bookId.value));
 const orphans = useOrphans(bookId);
 const loadError = ref('');
 
-function sanitizeSelection(sel: LensSelection | null): LensSelection | null {
-  const t = toc.value;
+function sanitizeSelection(
+  sel: LensSelection | null,
+  t: BookToc | null | undefined = toc.value,
+): LensSelection | null {
   if (!t?.lenses) return null;
   const base = sel ?? defaultSelection(t);
   if (!base) return null;
+  const fallback = defaultSelection(t);
   const out: LensSelection = {};
   for (const axis of lensAxisIds(t)) {
-    const allowed = new Set((t.lenses[axis] ?? []).map((l) => l.id));
-    const pick = base[axis];
-    const fallback = t.lenses[axis]?.[0]?.id;
-    if (pick && allowed.has(pick)) out[axis] = pick;
-    else if (fallback) out[axis] = fallback;
+    const allowed = allLensNodeIds(t.lenses[axis] ?? []);
+    const pick = normalizeAxisSelection(base[axis]).filter((id) => allowed.has(id));
+    if (pick.length > 0) out[axis] = pick;
+    else if (fallback?.[axis]?.length) out[axis] = [...fallback[axis]];
   }
   return Object.keys(out).length > 0 ? out : null;
 }
@@ -62,17 +71,17 @@ const activeSelection = computed<LensSelection | null>(() => {
   const t = toc.value;
   if (!t || !hasLenses(t)) return null;
   const candidate = ui.lensByBook[bookId.value] ?? getStoredLensSelection(bookId.value);
-  return sanitizeSelection(candidate);
+  return sanitizeSelection(candidate, t);
 });
 
 const filteredChapters = computed(() =>
-  toc.value ? filterChapters(toc.value.chapters, activeSelection.value) : [],
+  toc.value ? filterChapters(toc.value.chapters, activeSelection.value, toc.value) : [],
 );
 
 const filteredTree = computed(() => {
   const t = toc.value;
   if (!t) return [];
-  const ids = visibleIdSet(t.chapters, activeSelection.value);
+  const ids = visibleIdSet(t.chapters, activeSelection.value, t);
   const base = t.tree?.length
     ? t.tree
     : t.chapters.map((c) => ({
@@ -86,6 +95,57 @@ const filteredTree = computed(() => {
 
 const axisIds = computed(() => (toc.value ? lensAxisIds(toc.value) : []));
 
+function queryEqual(
+  a: Record<string, string | string[]>,
+  b: Record<string, LocationQueryValue | LocationQueryValue[] | undefined>,
+): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const k of keys) {
+    const aa = normalizeAxisSelection(a[k]).slice().sort();
+    const bb = normalizeAxisSelection(b[k] as string | string[] | null | undefined)
+      .slice()
+      .sort();
+    if (aa.length !== bb.length || aa.some((id, i) => id !== bb[i])) return false;
+  }
+  return true;
+}
+
+/** Path + lens query + optional hash for in-book navigation. */
+function bookLocation(
+  nextChapterId: string,
+  opts?: { selection?: LensSelection | null; hash?: string; t?: BookToc | null },
+): RouteLocationRaw {
+  const t = opts?.t ?? toc.value;
+  const sel = opts?.selection !== undefined ? opts.selection : activeSelection.value;
+  const query = t ? lensQueryFromSelection(sel, t) : {};
+  return {
+    path: `/books/${bookId.value}/${nextChapterId}`,
+    query,
+    ...(opts?.hash ? { hash: opts.hash } : {}),
+  };
+}
+
+function syncLensQueryToRoute(
+  sel: LensSelection | null,
+  t: BookToc,
+  mode: 'replace' | 'push' = 'replace',
+  nextChapterId?: string,
+): void {
+  const chapter = nextChapterId ?? chapterId.value;
+  if (!chapter) return;
+  const nextQuery = lensQueryFromSelection(sel, t);
+  const currentFromRoute = lensSelectionFromQuery(route.query, t);
+  const sameQuery = sameLensSelection(
+    currentFromRoute ? sanitizeSelection(currentFromRoute, t) : null,
+    sel,
+  );
+  const sameChapter = chapter === chapterId.value;
+  if (sameQuery && sameChapter && queryEqual(nextQuery, route.query)) return;
+  const loc = bookLocation(chapter, { selection: sel, t, hash: route.hash || undefined });
+  if (mode === 'push') router.push(loc);
+  else router.replace(loc);
+}
+
 async function ensureLoaded(): Promise<void> {
   loadError.value = '';
   try {
@@ -98,27 +158,35 @@ async function ensureLoaded(): Promise<void> {
   if (!t || t.chapters.length === 0) return;
 
   if (hasLenses(t)) {
+    const fromQuery = lensSelectionFromQuery(route.query, t);
     const stored = getStoredLensSelection(bookId.value);
-    const pick = sanitizeSelection(stored ?? ui.lensByBook[bookId.value] ?? defaultSelection(t));
+    const pick = sanitizeSelection(
+      fromQuery ?? stored ?? ui.lensByBook[bookId.value] ?? defaultSelection(t),
+      t,
+    );
     if (pick) setBookLensSelection(bookId.value, pick);
   }
 
   if (!chapterId.value) {
     const sel = activeSelection.value;
-    const visible = filterChapters(t.chapters, sel);
+    const visible = filterChapters(t.chapters, sel, t);
     const last = localStorage.getItem(`reader.last.${bookId.value}`);
     const target =
       visible.find((c) => c.id === last)?.id ?? visible[0]?.id ?? t.chapters[0].id;
-    router.replace(`/books/${bookId.value}/${target}`);
+    router.replace(bookLocation(target, { selection: sel, t }));
     return;
   }
 
-  // Deep link to a page hidden by current selection → adopt that page's layers.
   const current = t.chapters.find((c) => c.id === chapterId.value);
-  const sel = activeSelection.value;
-  if (current && hasLenses(t) && sel && !pageVisibleInSelection(current, sel)) {
+  let sel = activeSelection.value;
+  if (current && hasLenses(t) && sel && !pageVisibleInSelection(current, sel, t)) {
     const adopted = selectionFromPageLayers(t, current, sel);
     setBookLensSelection(bookId.value, adopted);
+    sel = adopted;
+  }
+
+  if (hasLenses(t) && sel) {
+    syncLensQueryToRoute(sel, t, 'replace');
   }
 }
 
@@ -129,6 +197,20 @@ watch(
     if (id) localStorage.setItem(`reader.last.${bookId.value}`, id);
   },
   { immediate: true },
+);
+
+watch(
+  () => route.query,
+  () => {
+    const t = toc.value;
+    if (!t || !hasLenses(t)) return;
+    const fromQuery = lensSelectionFromQuery(route.query, t);
+    if (!fromQuery) return;
+    const pick = sanitizeSelection(fromQuery, t);
+    if (pick && !sameLensSelection(pick, activeSelection.value)) {
+      setBookLensSelection(bookId.value, pick);
+    }
+  },
 );
 
 const chapterIndex = computed(
@@ -144,18 +226,20 @@ const nextChapter = computed<TocChapter | null>(() =>
 );
 
 function go(ch: TocChapter | null): void {
-  if (ch) router.push(`/books/${bookId.value}/${ch.id}`);
+  if (ch) router.push(bookLocation(ch.id));
 }
 
-function onAxisLens(axis: LensAxisId, option: PageLayer): void {
+function onAxisLens(axis: LensAxisId, options: PageLayer[]): void {
   const t = toc.value;
   const sel = activeSelection.value;
   if (!t || !sel) return;
-  const target = resolveAxisSwitchTarget(t, chapterId.value, axis, option, sel);
-  setBookAxisLens(bookId.value, axis, option, sel);
-  if (target && target !== chapterId.value) {
-    router.push(`/books/${bookId.value}/${target}`);
-  }
+  const nextOpts =
+    options.length > 0 ? options : normalizeAxisSelection(sel[axis]).slice(0, 1);
+  const nextSel: LensSelection = { ...sel, [axis]: nextOpts };
+  const target = resolveLensSwitchChapter(t, chapterId.value, nextSel);
+  setBookAxisLens(bookId.value, axis, nextOpts, sel);
+  const mode = target !== chapterId.value ? 'push' : 'replace';
+  syncLensQueryToRoute(nextSel, t, mode, target);
 }
 
 function onKey(e: KeyboardEvent): void {
@@ -203,28 +287,19 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
         </button>
         <span class="spacer" />
         <template v-if="axisIds.length && activeSelection">
-          <label
+          <div
             v-for="axis in axisIds"
             :key="axis"
             class="lens-select-wrap"
           >
             <span class="visually-hidden">{{ axisLabel(axis) }}</span>
-            <select
-              class="lens-select"
-              :value="activeSelection[axis] ?? ''"
-              @change="
-                onAxisLens(axis, ($event.target as HTMLSelectElement).value)
-              "
-            >
-              <option
-                v-for="lens in toc.lenses![axis]"
-                :key="lens.id"
-                :value="lens.id"
-              >
-                {{ lens.title }}
-              </option>
-            </select>
-          </label>
+            <LensTreeSelect
+              :nodes="toc.lenses![axis]"
+              :model-value="activeSelection[axis] ?? []"
+              :placeholder="axisLabel(axis)"
+              @update:model-value="onAxisLens(axis, $event)"
+            />
+          </div>
         </template>
         <button v-if="orphans.length" class="btn ghost warn" @click="ui.orphanOpen = true">
           孤立标注 {{ orphans.length }}
