@@ -34,6 +34,16 @@
         },
         {
           "type": "page",
+          "id": "202607291914",
+          "file": "from-instinct/10-framework-first.md"
+        },
+        {
+          "type": "page",
+          "id": "202607291918",
+          "file": "from-instinct/11-responsibility-over-ability.md"
+        },
+        {
+          "type": "page",
           "id": "202607281805",
           "file": "from-instinct/05-blessing-as-ornament.md"
         },
@@ -63,6 +73,11 @@
           "type": "page",
           "id": "202607291558",
           "file": "from-instinct/09-essence-first.md"
+        },
+        {
+          "type": "page",
+          "id": "202607291942",
+          "file": "from-instinct/12-paraphrase-restatement.md"
         }
       ]
     }
