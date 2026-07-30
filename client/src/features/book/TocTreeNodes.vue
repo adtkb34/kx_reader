@@ -7,6 +7,7 @@ import { annotationsFor, sectionKey } from '@/stores/annotations';
 import { DEFAULT_STATUS } from '@shared/annotations';
 import TocTreeNodes from '@/features/book/TocTreeNodes.vue';
 import { tocOf } from '@/stores/books';
+import { setLensReadMode } from '@/stores/ui';
 
 const props = withDefaults(
   defineProps<{
@@ -64,6 +65,10 @@ function chapterLocation(chapterId: string): RouteLocationRaw {
     query,
   };
 }
+
+function onChapterClick(): void {
+  setLensReadMode('page');
+}
 </script>
 
 <template>
@@ -110,7 +115,11 @@ function chapterLocation(chapterId: string): RouteLocationRaw {
         { active: node.id === currentChapterId },
       ]"
     >
-      <router-link :to="chapterLocation(node.id)" class="toc-row-label toc-chapter-link">
+      <router-link
+        :to="chapterLocation(node.id)"
+        class="toc-row-label toc-chapter-link"
+        @click="onChapterClick"
+      >
         <span class="toc-row-title">{{ node.title }}</span>
         <span class="toc-badges">
           <span

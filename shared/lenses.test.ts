@@ -3,16 +3,19 @@ import {
   buildLensSelectTree,
   collapseEachAxisToSingle,
   defaultSelection,
+  digestAnchorId,
   effectiveAxisLeaves,
   effectiveLeaves,
   expandSectionAllowlist,
   filterChapters,
   flatIdsToSelection,
+  groupChaptersForDigest,
   leavesUnder,
   lensLeafIds,
   lensQueryFromSelection,
   lensSelectionFromQuery,
   normalizeBranchLayerSelection,
+  pageGroupPath,
   pageVisibleInSelection,
   resolveLensSwitchChapter,
   sectionAllowlistFor,
@@ -343,5 +346,54 @@ describe('sectionAllowlistFor', () => {
       sectionAllowlists: undefined,
     };
     expect(sectionAllowlistFor(whole, { kind: ['scenario'] }, tocWithLenses)).toBeNull();
+  });
+});
+
+describe('pageGroupPath / groupChaptersForDigest', () => {
+  const toc: BookToc = {
+    id: 'demo',
+    title: 'Demo',
+    chapters: [
+      { id: 'login', title: '登录', file: 'login.md', sections: [] },
+      { id: 'register', title: '注册', file: 'register.md', sections: [] },
+      { id: 'home', title: '首页壳', file: 'home.md', sections: [] },
+      { id: 'overview', title: '概览', file: 'overview.md', sections: [] },
+    ],
+    tree: [
+      {
+        type: 'group',
+        id: 'identity',
+        title: '身份',
+        children: [
+          { type: 'page', id: 'login', title: '登录', file: 'login.md' },
+          { type: 'page', id: 'register', title: '注册', file: 'register.md' },
+        ],
+      },
+      {
+        type: 'group',
+        id: 'nav',
+        title: '导航',
+        children: [{ type: 'page', id: 'home', title: '首页壳', file: 'home.md' }],
+      },
+      { type: 'page', id: 'overview', title: '概览', file: 'overview.md' },
+    ],
+  };
+
+  it('returns ancestor group titles', () => {
+    expect(pageGroupPath(toc.tree, 'login')).toEqual(['身份']);
+    expect(pageGroupPath(toc.tree, 'overview')).toEqual([]);
+  });
+
+  it('merges consecutive pages under the same group', () => {
+    const grouped = groupChaptersForDigest(toc, toc.chapters);
+    expect(grouped.map((g) => ({ title: g.groupTitle, pages: g.pages.map((p) => p.id) }))).toEqual([
+      { title: '身份', pages: ['login', 'register'] },
+      { title: '导航', pages: ['home'] },
+      { title: null, pages: ['overview'] },
+    ]);
+  });
+
+  it('builds digest anchor ids', () => {
+    expect(digestAnchorId('login', 'flow')).toBe('digest-login--flow');
   });
 });

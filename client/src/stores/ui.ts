@@ -5,12 +5,20 @@ import { normalizeAxisSelection } from '@shared/lenses';
 /** Same-axis multi-select vs single-select for the lens tree. */
 export type LensAxisPickMode = 'multi' | 'single';
 
+/** Single-page reading vs lens digest (all visible sections in one stream). */
+export type LensReadMode = 'page' | 'digest';
+
 const LENS_PICK_KEY = 'reader.lensPickMode';
+const LENS_READ_KEY = 'reader.lensReadMode';
 
 function readLensPickMode(): LensAxisPickMode {
   const raw = localStorage.getItem(LENS_PICK_KEY);
   if (raw === 'multi') return 'multi';
   return 'single';
+}
+
+function readLensReadMode(): LensReadMode {
+  return localStorage.getItem(LENS_READ_KEY) === 'digest' ? 'digest' : 'page';
 }
 
 export const ui = reactive({
@@ -27,11 +35,18 @@ export const ui = reactive({
   lensByBook: {} as Record<string, LensSelection>,
   /** 多选 = same-axis multi; 单选 = one id per axis. */
   lensPickMode: readLensPickMode() as LensAxisPickMode,
+  /** 单页 = one chapter; 汇总 = all visible sections under current lens. */
+  lensReadMode: readLensReadMode() as LensReadMode,
 });
 
 export function setLensPickMode(mode: LensAxisPickMode): void {
   ui.lensPickMode = mode;
   localStorage.setItem(LENS_PICK_KEY, mode);
+}
+
+export function setLensReadMode(mode: LensReadMode): void {
+  ui.lensReadMode = mode;
+  localStorage.setItem(LENS_READ_KEY, mode);
 }
 
 export function bumpChapterReload(): void {

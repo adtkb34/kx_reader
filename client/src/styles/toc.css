@@ -243,3 +243,38 @@
   padding: 0;
 }
 
+.digest-outline-page {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.2;
+  margin-bottom: 1px;
+}
+
+/* ---------- lens digest ---------- */
+
+.digest-group {
+  margin-bottom: 28px;
+}
+
+.digest-group-title {
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0 0 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.digest-page {
+  margin-bottom: 22px;
+}
+
+.digest-page-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 0 0 10px;
+  letter-spacing: 0.02em;
+}
+

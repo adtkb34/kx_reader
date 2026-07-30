@@ -520,3 +520,93 @@ export function visibleTocSections(
     sectionAllowlistFor(chapter, selection, toc),
   );
 }
+
+/** Ancestor group titles for a page (outer → inner). Empty if top-level page. */
+export function pageGroupPath(tree: TocTreeNode[], pageId: string): string[] {
+  function walk(nodes: TocTreeNode[], ancestors: string[]): string[] | null {
+    for (const node of nodes) {
+      if (node.type === 'page') {
+        if (node.id === pageId) return ancestors;
+        continue;
+      }
+      const found = walk(node.children, [...ancestors, node.title]);
+      if (found) return found;
+    }
+    return null;
+  }
+  return walk(tree, []) ?? [];
+}
+
+export interface DigestChapterGroup {
+  /** Stable key for consecutive same-group merging. */
+  groupKey: string;
+  /** Innermost group title, or null when page has no group. */
+  groupTitle: string | null;
+  pages: TocChapter[];
+}
+
+/** Group filtered chapters by TOC path; consecutive same group share one header. */
+export function groupChaptersForDigest(
+  toc: BookToc,
+  chapters: TocChapter[],
+): DigestChapterGroup[] {
+  const tree = toc.tree?.length
+    ? toc.tree
+    : toc.chapters.map((c) => ({
+        type: 'page' as const,
+        id: c.id,
+        title: c.title,
+        file: c.file,
+      }));
+  const out: DigestChapterGroup[] = [];
+  for (const ch of chapters) {
+    const path = pageGroupPath(tree, ch.id);
+    const groupKey = path.join('/') || '';
+    const groupTitle = path.length > 0 ? path[path.length - 1]! : null;
+    const last = out[out.length - 1];
+    if (last && last.groupKey === groupKey) {
+      last.pages.push(ch);
+    } else {
+      out.push({ groupKey, groupTitle, pages: [ch] });
+    }
+  }
+  return out;
+}
+
+/** Digest outline entries in reading order. */
+export interface DigestOutlineEntry {
+  chapterId: string;
+  chapterTitle: string;
+  groupTitle: string | null;
+  sectionId: string;
+  sectionTitle: string;
+  level: number;
+}
+
+export function digestOutlineEntries(
+  toc: BookToc,
+  selection: LensSelection | null,
+): DigestOutlineEntry[] {
+  const chapters = filterChapters(toc.chapters, selection, toc);
+  const grouped = groupChaptersForDigest(toc, chapters);
+  const out: DigestOutlineEntry[] = [];
+  for (const g of grouped) {
+    for (const ch of g.pages) {
+      for (const s of visibleTocSections(ch, selection, toc)) {
+        out.push({
+          chapterId: ch.id,
+          chapterTitle: ch.title,
+          groupTitle: g.groupTitle,
+          sectionId: s.id,
+          sectionTitle: s.title,
+          level: s.level,
+        });
+      }
+    }
+  }
+  return out;
+}
+
+export function digestAnchorId(chapterId: string, sectionId: string): string {
+  return `digest-${chapterId}--${sectionId}`;
+}

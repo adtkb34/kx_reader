@@ -1,26 +1,14 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import type { LocationQueryValue, RouteLocationRaw } from 'vue-router';
-import { Expand } from '@element-plus/icons-vue';
-import TocSidebar from '@/features/book/TocSidebar.vue';
-import ChapterPage from '@/features/book/ChapterPage.vue';
-import ChapterOutline from '@/features/book/ChapterOutline.vue';
-import LensTreeSelect from '@/features/book/LensTreeSelect.vue';
-import NotesPanel from '@/features/notes/NotesPanel.vue';
-import OrphanPanel from '@/features/orphans/OrphanPanel.vue';
-import ComparePanel from '@/features/compare/ComparePanel.vue';
-import AgentPanel from '@/features/agent/AgentPanel.vue';
-import { loadToc, tocOf } from '@/stores/books';
-import { loadAnnotations } from '@/stores/annotations';
 import {
   getStoredLensSelection,
   setBookLensSelection,
   setLensPickMode,
+  setLensReadMode,
   toggleDetailsOpen,
   toggleTocOpen,
   ui,
   type LensAxisPickMode,
+  type LensReadMode,
 } from '@/stores/ui';
 import { useOrphans } from '@/composables/orphans';
 import {
@@ -44,6 +32,22 @@ import {
   visibleIdSet,
 } from '@shared/lenses';
 import type { BookToc, LensSelection, PageLayer, TocChapter } from '@shared/types';
+import LensDigestView from '@/features/book/LensDigestView.vue';
+import DigestOutline from '@/features/book/DigestOutline.vue';
+import TocSidebar from '@/features/book/TocSidebar.vue';
+import ChapterPage from '@/features/book/ChapterPage.vue';
+import ChapterOutline from '@/features/book/ChapterOutline.vue';
+import LensTreeSelect from '@/features/book/LensTreeSelect.vue';
+import NotesPanel from '@/features/notes/NotesPanel.vue';
+import OrphanPanel from '@/features/orphans/OrphanPanel.vue';
+import ComparePanel from '@/features/compare/ComparePanel.vue';
+import AgentPanel from '@/features/agent/AgentPanel.vue';
+import { loadToc, tocOf } from '@/stores/books';
+import { loadAnnotations } from '@/stores/annotations';
+import { Expand } from '@element-plus/icons-vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import type { LocationQueryValue, RouteLocationRaw } from 'vue-router';
 
 const route = useRoute();
 const router = useRouter();
@@ -281,6 +285,18 @@ function onLensPickMode(mode: LensAxisPickMode): void {
   syncLensQueryToRoute(nextSel, t, target !== chapterId.value ? 'push' : 'replace', target);
 }
 
+function onLensReadMode(mode: LensReadMode): void {
+  setLensReadMode(mode);
+}
+
+const isDigestMode = computed(
+  () =>
+    !!toc.value &&
+    hasLenses(toc.value) &&
+    ui.lensReadMode === 'digest' &&
+    !!activeSelection.value,
+);
+
 function onKey(e: KeyboardEvent): void {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   const el = e.target as HTMLElement | null;
@@ -326,6 +342,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
         </button>
         <span class="spacer" />
         <div v-if="lensSelectTree.length && activeSelection" class="lens-controls">
+          <span class="visually-hidden">阅读模式</span>
+          <el-select
+            class="lens-mode-select"
+            :model-value="ui.lensReadMode"
+            @update:model-value="onLensReadMode($event as LensReadMode)"
+          >
+            <el-option label="单页" value="page" />
+            <el-option label="汇总" value="digest" />
+          </el-select>
           <span class="visually-hidden">透镜选择模式</span>
           <el-select
             class="lens-mode-select"
@@ -364,8 +389,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
       <div class="book-body">
         <div class="book-reading">
           <div class="book-content">
+            <LensDigestView
+              v-if="isDigestMode && toc"
+              :book-id="bookId"
+              :toc="toc"
+              :lens-selection="activeSelection"
+            />
             <ChapterPage
-              v-if="chapterId"
+              v-else-if="chapterId"
               :book-id="bookId"
               :chapter-id="chapterId"
               :prev-chapter="prevChapter"
@@ -373,8 +404,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
               :lens-selection="activeSelection"
             />
           </div>
+          <DigestOutline
+            v-if="isDigestMode && toc"
+            :toc="toc"
+            :book-id="bookId"
+            :lens-selection="activeSelection"
+          />
           <ChapterOutline
-            v-if="currentChapter"
+            v-else-if="currentChapter"
             :toc="toc"
             :book-id="bookId"
             :chapter="currentChapter"
