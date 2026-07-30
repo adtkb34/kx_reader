@@ -320,7 +320,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 <template>
   <div v-if="toc" class="book-layout">
     <TocSidebar
-      v-if="ui.tocOpen"
+      v-if="ui.tocOpen && !isDigestMode"
       :toc="toc"
       :tree="filteredTree"
       :book-id="bookId"
@@ -331,7 +331,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
       <div class="topbar">
         <router-link to="/" class="btn ghost">‹ 书架</router-link>
         <button
-          v-if="!ui.tocOpen"
+          v-if="!ui.tocOpen && !isDigestMode"
           class="btn ghost toc-toggle"
           type="button"
           title="展开目录"

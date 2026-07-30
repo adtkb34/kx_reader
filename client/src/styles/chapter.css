@@ -23,3 +23,28 @@
   border-bottom: 1px solid var(--line);
 }
 
+/* Digest group titles: largest heading in the reading column */
+.page-card.digest-card .digest-group-title {
+  display: block;
+  font-family: var(--serif);
+  font-size: 30px;
+  line-height: 1.25;
+  font-weight: 700;
+  color: #111;
+  margin: 0 0 22px;
+  padding: 0 0 14px;
+  border-bottom: 1px solid var(--line);
+  opacity: 1;
+  letter-spacing: -0.01em;
+}
+
+.page-card.digest-card .digest-page-title {
+  display: block;
+  font-size: 16px;
+  line-height: 1.4;
+  font-weight: 600;
+  color: #111;
+  margin: 0 0 14px;
+  opacity: 1;
+}
+

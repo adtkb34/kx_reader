@@ -251,30 +251,71 @@
   margin-bottom: 1px;
 }
 
+.digest-outline-group {
+  margin-bottom: 14px;
+}
+
+.digest-outline-group-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+  padding: 4px 8px 6px;
+}
+
+.digest-outline-page-block {
+  margin-bottom: 8px;
+}
+
+.digest-outline-page-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 2px 8px 4px;
+}
+
+.digest-outline .toc-sections {
+  margin: 0;
+  padding: 0;
+}
+
 /* ---------- lens digest ---------- */
 
 .digest-group {
-  margin-bottom: 28px;
+  margin-bottom: 40px;
 }
 
-.digest-group-title {
+.digest-group:not(:first-child) {
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.page-card.digest-card .digest-group-title {
+  display: block;
   font-family: var(--serif);
-  font-size: 22px;
+  font-size: 30px;
+  line-height: 1.25;
   font-weight: 700;
-  margin: 0 0 16px;
-  padding-bottom: 10px;
+  color: #111;
+  margin: 0 0 22px;
+  padding: 0 0 14px;
+  border: none;
   border-bottom: 1px solid var(--line);
+  opacity: 1;
+  letter-spacing: -0.01em;
 }
 
 .digest-page {
-  margin-bottom: 22px;
+  margin-bottom: 28px;
 }
 
-.digest-page-title {
-  font-size: 13px;
+.page-card.digest-card .digest-page-title {
+  display: block;
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.4;
   font-weight: 600;
-  color: var(--muted);
-  margin: 0 0 10px;
-  letter-spacing: 0.02em;
+  color: #111;
+  margin: 0 0 14px;
+  opacity: 1;
 }
 

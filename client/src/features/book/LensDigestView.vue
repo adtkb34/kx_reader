@@ -147,9 +147,11 @@ onBeforeUnmount(() => {
           当前透镜下没有可见小节。
         </div>
         <div v-for="(g, gi) in groups" :key="g.groupTitle ?? `ungrouped-${gi}`" class="digest-group">
-          <h2 v-if="g.groupTitle" class="digest-group-title">{{ g.groupTitle }}</h2>
+          <div v-if="g.groupTitle" class="digest-group-title">{{ g.groupTitle }}</div>
           <div v-for="page in g.pages" :key="page.chapter.id" class="digest-page">
-            <h3 class="digest-page-title">{{ page.title }}</h3>
+            <div :class="g.groupTitle ? 'digest-page-title' : 'digest-group-title'">
+              {{ page.title }}
+            </div>
             <SectionBlock
               v-for="s in page.sections"
               :id="digestAnchorId(page.chapter.id, s.id)"
