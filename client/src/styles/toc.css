@@ -181,6 +181,11 @@
   color: var(--ink);
 }
 
+.toc-sections .active > a {
+  background: #edeae0;
+  color: var(--ink);
+}
+
 .toc-sections .lvl-3 a {
   padding-left: 22px;
 }
@@ -212,5 +217,29 @@
   padding: 0 6px;
   border-radius: 999px;
   flex: none;
+}
+
+/* ---------- chapter outline (right) ---------- */
+
+/*
+ * Sticky against .book-reading (tall as the page). No spacer sibling —
+ * that used to shrink the sticky containing block so the outline scrolled away.
+ */
+.chapter-outline {
+  width: 200px;
+  flex: none;
+  align-self: flex-start;
+  position: sticky;
+  top: 53px;
+  max-height: calc(100vh - 53px);
+  overflow-y: auto;
+  background: transparent;
+  /* Match first body line: wrap + card pad + title (+ rule). */
+  padding: calc(28px + 48px + (30px * 1.25) + 16px + 28px) 0 48px;
+}
+
+.chapter-outline-nav .toc-sections {
+  margin: 0;
+  padding: 0;
 }
 

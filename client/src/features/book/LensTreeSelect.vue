@@ -32,12 +32,6 @@ const selected = computed({
   get: () => props.modelValue,
   set: (v: PageLayer[]) => {
     const next = Array.isArray(v) ? v.filter(Boolean) : [];
-    if (next.length === 0) {
-      // Keep at least one: prefer first root.
-      const fallback = props.nodes[0]?.id;
-      emit('update:modelValue', fallback ? [fallback] : props.modelValue);
-      return;
-    }
     emit('update:modelValue', next);
   },
 });
@@ -56,6 +50,6 @@ const selected = computed({
     :render-after-expand="false"
     show-checkbox
     default-expand-all
-    :placeholder="placeholder ?? '维度'"
+    :placeholder="placeholder ?? '透镜'"
   />
 </template>

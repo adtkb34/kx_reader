@@ -124,7 +124,10 @@ function scrollToHash(hash: string): void {
       if (parent instanceof HTMLDetailsElement) parent.open = true;
       parent = parent.parentElement;
     }
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Leave room under sticky topbar; plain scrollIntoView(block:start) overshoots.
+    const topbarOffset = 64;
+    const y = el.getBoundingClientRect().top + window.scrollY - topbarOffset;
+    window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
     const section = el.closest('.doc-section');
     if (section) {
       section.classList.remove('flash');

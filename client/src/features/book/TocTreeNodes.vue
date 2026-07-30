@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { useRouter } from 'vue-router';
 import type { RouteLocationRaw } from 'vue-router';
 import type { LensSelection, TocChapter, TocTreeNode } from '@shared/types';
 import { visibleTocSections } from '@shared/lenses';
 import { annotationsFor, sectionKey } from '@/stores/annotations';
-import { DEFAULT_STATUS, statusMeta } from '@shared/annotations';
+import { DEFAULT_STATUS } from '@shared/annotations';
 import TocTreeNodes from '@/features/book/TocTreeNodes.vue';
 import { tocOf } from '@/stores/books';
 
@@ -22,7 +21,6 @@ const props = withDefaults(
   { depth: 0, lensSelection: null },
 );
 
-const router = useRouter();
 const anns = computed(() => annotationsFor(props.bookId));
 const bookToc = computed(() => tocOf(props.bookId));
 
@@ -59,26 +57,12 @@ function groupStats(node: TocTreeNode): { unread: number; question: number } {
   return { unread, question };
 }
 
-function statusColor(chapterId: string, sectionId: string): string {
-  const st = anns.value[sectionKey(chapterId, sectionId)]?.status ?? DEFAULT_STATUS;
-  return statusMeta(st).color;
-}
-
-function noteCount(chapterId: string, sectionId: string): number {
-  return anns.value[sectionKey(chapterId, sectionId)]?.notes.length ?? 0;
-}
-
-function chapterLocation(chapterId: string, hash?: string): RouteLocationRaw {
+function chapterLocation(chapterId: string): RouteLocationRaw {
   const query = props.lensSelection ? { ...props.lensSelection } : {};
   return {
     path: `/books/${props.bookId}/${chapterId}`,
     query,
-    ...(hash ? { hash } : {}),
   };
-}
-
-function goSection(ch: TocChapter, sectionId: string): void {
-  router.push(chapterLocation(ch.id, `#${sectionId}`));
 }
 </script>
 
@@ -141,24 +125,6 @@ function goSection(ch: TocChapter, sectionId: string): void {
           >{{ chapterStats(node.id).unread }}</span>
         </span>
       </router-link>
-      <ul
-        v-if="node.id === currentChapterId && pageById[node.id]"
-        class="toc-sections"
-      >
-        <li
-          v-for="s in visibleTocSections(pageById[node.id], lensSelection ?? null, bookToc)"
-          :key="s.id"
-          :class="`lvl-${s.level}`"
-        >
-          <a href="#" @click.prevent="goSection(pageById[node.id], s.id)">
-            <span class="dot" :style="{ background: statusColor(node.id, s.id) }" />
-            <span class="toc-sec-title">{{ s.title }}</span>
-            <span v-if="noteCount(node.id, s.id)" class="note-count">
-              {{ noteCount(node.id, s.id) }}
-            </span>
-          </a>
-        </li>
-      </ul>
     </div>
   </template>
 </template>

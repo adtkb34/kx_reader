@@ -7,6 +7,11 @@
   border-left: 3px solid #eceae3;
   border-radius: 4px;
   transition: background 0.12s, border-color 0.12s;
+  scroll-margin-top: 64px;
+}
+
+.doc-section :is(h1, h2, h3, h4, h5, h6)[id] {
+  scroll-margin-top: 64px;
 }
 
 /* 右侧状态标签不压住标题文字 */

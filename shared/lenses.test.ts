@@ -1,15 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildLensSelectTree,
+  collapseEachAxisToSingle,
+  defaultSelection,
+  effectiveAxisLeaves,
   effectiveLeaves,
   expandSectionAllowlist,
   filterChapters,
+  flatIdsToSelection,
   leavesUnder,
   lensLeafIds,
   lensQueryFromSelection,
   lensSelectionFromQuery,
+  normalizeBranchLayerSelection,
   pageVisibleInSelection,
   resolveLensSwitchChapter,
   sectionAllowlistFor,
+  selectionToFlatIds,
 } from './lenses';
 import type { BookToc, TocChapter, TocSection } from './types';
 
@@ -65,6 +72,106 @@ describe('lens tree helpers', () => {
   it('lensLeafIds excludes parents', () => {
     expect([...lensLeafIds(tocWithLenses.lenses!.kind)].sort()).toEqual(['impl', 'scenario']);
   });
+
+  it('effectiveAxisLeaves treats axis id as whole axis', () => {
+    expect(effectiveAxisLeaves(tocWithLenses, 'audience', ['audience']).sort()).toEqual([
+      'admin',
+      'tenant',
+    ]);
+    expect(effectiveAxisLeaves(tocWithLenses, 'audience', ['tenant'])).toEqual(['tenant']);
+  });
+});
+
+describe('defaultSelection', () => {
+  it('selects the first option root on each axis', () => {
+    expect(defaultSelection(tocWithLenses)).toEqual({
+      kind: ['read'],
+      audience: ['tenant'],
+    });
+  });
+});
+
+describe('buildLensSelectTree', () => {
+  it('puts axes at L1 and options underneath', () => {
+    const tree = buildLensSelectTree(tocWithLenses);
+    expect(tree.map((n) => n.id)).toEqual(['kind', 'audience']);
+    expect(tree[0].children?.[0]?.id).toBe('read');
+    expect(tree[1].children?.map((c) => c.id)).toEqual(['tenant', 'admin']);
+  });
+});
+
+describe('normalizeBranchLayerSelection', () => {
+  const tree = buildLensSelectTree(tocWithLenses);
+
+  it('keeps same-layer siblings', () => {
+    expect(normalizeBranchLayerSelection(tree, ['tenant', 'admin']).sort()).toEqual([
+      'admin',
+      'tenant',
+    ]);
+    expect(normalizeBranchLayerSelection(tree, ['audience', 'kind']).sort()).toEqual([
+      'audience',
+      'kind',
+    ]);
+  });
+
+  it('clears ancestor when child is added', () => {
+    expect(normalizeBranchLayerSelection(tree, ['kind', 'scenario'], ['kind'])).toEqual([
+      'scenario',
+    ]);
+  });
+
+  it('clears descendants when parent is added', () => {
+    expect(normalizeBranchLayerSelection(tree, ['read', 'scenario'], ['scenario'])).toEqual([
+      'read',
+    ]);
+  });
+
+  it('without prev, keeps deepest on conflict', () => {
+    expect(normalizeBranchLayerSelection(tree, ['read', 'scenario']).sort()).toEqual(['scenario']);
+  });
+});
+
+describe('flatIdsToSelection', () => {
+  it('partitions flat ids and fills missing axes from default', () => {
+    expect(flatIdsToSelection(tocWithLenses, ['tenant', 'scenario'])).toEqual({
+      kind: ['scenario'],
+      audience: ['tenant'],
+    });
+  });
+
+  it('accepts whole-axis selection', () => {
+    expect(flatIdsToSelection(tocWithLenses, ['audience', 'kind'])).toEqual({
+      kind: ['kind'],
+      audience: ['audience'],
+    });
+  });
+});
+
+describe('collapseEachAxisToSingle', () => {
+  it('keeps preferred id when an axis has several', () => {
+    expect(
+      collapseEachAxisToSingle(
+        tocWithLenses,
+        { kind: ['scenario', 'impl'], audience: ['tenant', 'admin'] },
+        ['impl', 'admin'],
+      ),
+    ).toEqual({ kind: ['impl'], audience: ['admin'] });
+  });
+
+  it('falls back to the last id when nothing preferred', () => {
+    expect(
+      collapseEachAxisToSingle(tocWithLenses, { kind: ['scenario', 'impl'], audience: ['tenant'] }),
+    ).toEqual({ kind: ['impl'], audience: ['tenant'] });
+  });
+});
+
+describe('selectionToFlatIds', () => {
+  it('flattens in axis order', () => {
+    expect(selectionToFlatIds(tocWithLenses, { kind: ['scenario'], audience: ['tenant'] })).toEqual([
+      'scenario',
+      'tenant',
+    ]);
+  });
 });
 
 describe('expandSectionAllowlist', () => {
@@ -90,6 +197,7 @@ describe('pageVisibleInSelection', () => {
     expect(pageVisibleInSelection(chapter, { kind: ['impl'] }, tocWithLenses)).toBe(false);
     expect(pageVisibleInSelection(chapter, { kind: ['scenario'] }, tocWithLenses)).toBe(true);
     expect(pageVisibleInSelection(chapter, { kind: ['read'] }, tocWithLenses)).toBe(true);
+    expect(pageVisibleInSelection(chapter, { kind: ['kind'] }, tocWithLenses)).toBe(true);
   });
 });
 
@@ -122,6 +230,13 @@ describe('lensSelectionFromQuery', () => {
     expect(
       lensSelectionFromQuery({ kind: ['scenario', 'impl'], audience: 'admin' }, tocWithLenses),
     ).toEqual({ kind: ['scenario', 'impl'], audience: ['admin'] });
+  });
+
+  it('accepts whole-axis id in query', () => {
+    expect(lensSelectionFromQuery({ kind: 'kind', audience: 'audience' }, tocWithLenses)).toEqual({
+      kind: ['kind'],
+      audience: ['audience'],
+    });
   });
 
   it('returns null when no declared axis key is present', () => {

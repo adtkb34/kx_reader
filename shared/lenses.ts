@@ -98,6 +98,158 @@ export function effectiveLeaves(nodes: BookLens[], selected: PageLayer[]): PageL
   return [...out];
 }
 
+/**
+ * Effective leaf option ids for one axis.
+ * Selecting the axis id itself = all leaves under that axis's options.
+ */
+export function effectiveAxisLeaves(
+  toc: BookToc,
+  axis: LensAxisId,
+  selected: PageLayer[],
+): PageLayer[] {
+  const opts = toc.lenses?.[axis] ?? [];
+  const chosen = normalizeAxisSelection(selected);
+  if (chosen.includes(axis)) return [...lensLeafIds(opts)];
+  return effectiveLeaves(opts, chosen);
+}
+
+/** Toolbar tree: L1 = axes, L2+ = that axis's options. */
+export function buildLensSelectTree(toc: BookToc): BookLens[] {
+  if (!toc.lenses) return [];
+  return lensAxisIds(toc).map((axis) => ({
+    id: axis,
+    title: axisLabel(axis),
+    children: toc.lenses![axis] ?? [],
+  }));
+}
+
+/** True if `ancestorId` is a strict ancestor of `descendantId` in the tree. */
+export function isLensAncestor(
+  nodes: BookLens[],
+  ancestorId: PageLayer,
+  descendantId: PageLayer,
+): boolean {
+  if (ancestorId === descendantId) return false;
+  const ancestor = findLensNode(nodes, ancestorId);
+  if (!ancestor?.children?.length) return false;
+  return findLensNode(ancestor.children, descendantId) != null;
+}
+
+/**
+ * Same branch: only one layer at a time; siblings at that layer may multi-select.
+ * When `prev` is given, newly added ids win and clear ancestor/descendant conflicts.
+ * Without `prev`, keep the deepest conflicting layer.
+ */
+export function normalizeBranchLayerSelection(
+  nodes: BookLens[],
+  next: PageLayer[],
+  prev: PageLayer[] = [],
+): PageLayer[] {
+  const allowed = allLensNodeIds(nodes);
+  const result = new Set(normalizeAxisSelection(next).filter((id) => allowed.has(id)));
+  const prevSet = new Set(normalizeAxisSelection(prev));
+  const added = [...result].filter((id) => !prevSet.has(id));
+
+  const clearConflicts = (id: PageLayer): void => {
+    for (const other of [...result]) {
+      if (other === id) continue;
+      if (isLensAncestor(nodes, id, other) || isLensAncestor(nodes, other, id)) {
+        result.delete(other);
+      }
+    }
+  };
+
+  if (prevSet.size > 0 && added.length > 0) {
+    for (const id of added) clearConflicts(id);
+  } else {
+    // Prefer deepest: drop any id that has a selected descendant.
+    for (const id of [...result]) {
+      for (const other of result) {
+        if (other !== id && isLensAncestor(nodes, id, other)) {
+          result.delete(id);
+          break;
+        }
+      }
+    }
+  }
+
+  return [...result];
+}
+
+/** Flatten LensSelection values (axis order). */
+export function selectionToFlatIds(toc: BookToc, selection: LensSelection | null): PageLayer[] {
+  if (!selection) return [];
+  const out: PageLayer[] = [];
+  for (const axis of lensAxisIds(toc)) {
+    for (const id of normalizeAxisSelection(selection[axis])) out.push(id);
+  }
+  return out;
+}
+
+/**
+ * Map flat select-tree ids back to per-axis LensSelection.
+ * Applies branch-layer normalization on the full select tree.
+ */
+export function flatIdsToSelection(
+  toc: BookToc,
+  flatIds: PageLayer[],
+  prevFlat: PageLayer[] = [],
+): LensSelection | null {
+  if (!toc.lenses) return null;
+  const tree = buildLensSelectTree(toc);
+  const normalized = normalizeBranchLayerSelection(tree, flatIds, prevFlat);
+  const out: LensSelection = {};
+  for (const axis of lensAxisIds(toc)) {
+    out[axis] = [];
+  }
+  for (const id of normalized) {
+    if (toc.lenses[id]) {
+      out[id] = [id];
+      continue;
+    }
+    for (const axis of lensAxisIds(toc)) {
+      if (allLensNodeIds(toc.lenses[axis] ?? []).has(id)) {
+        out[axis] = [...(out[axis] ?? []), id];
+        break;
+      }
+    }
+  }
+  const fallback = defaultSelection(toc);
+  for (const axis of lensAxisIds(toc)) {
+    if (!out[axis]?.length && fallback?.[axis]?.length) {
+      out[axis] = [...fallback[axis]];
+    }
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+/** Keep at most one selected id per axis (for single-select mode). */
+export function collapseEachAxisToSingle(
+  toc: BookToc,
+  selection: LensSelection,
+  preferIds: PageLayer[] = [],
+): LensSelection {
+  const prefer = new Set(preferIds);
+  const out: LensSelection = {};
+  for (const axis of lensAxisIds(toc)) {
+    const ids = normalizeAxisSelection(selection[axis]);
+    if (ids.length <= 1) {
+      out[axis] = [...ids];
+      continue;
+    }
+    const hit = ids.find((id) => prefer.has(id));
+    out[axis] = [hit ?? ids[ids.length - 1]];
+  }
+  return out;
+}
+
+/** Node ids allowed in an axis selection (option nodes + the axis id for "whole axis"). */
+export function allowedAxisSelectionIds(toc: BookToc, axis: LensAxisId): Set<PageLayer> {
+  const out = allLensNodeIds(toc.lenses?.[axis] ?? []);
+  out.add(axis);
+  return out;
+}
+
 export function normalizeAxisSelection(raw: unknown): PageLayer[] {
   if (typeof raw === 'string' && raw) return [raw];
   if (Array.isArray(raw)) {
@@ -117,9 +269,8 @@ export function pageVisibleInSelection(
   for (const [axis, chosen] of Object.entries(selection)) {
     const opts = layerOptions(layers[axis]);
     if (opts.length === 0) continue;
-    const axisNodes = toc?.lenses?.[axis];
-    const leaves = axisNodes?.length
-      ? effectiveLeaves(axisNodes, normalizeAxisSelection(chosen))
+    const leaves = toc?.lenses?.[axis]?.length
+      ? effectiveAxisLeaves(toc, axis, normalizeAxisSelection(chosen))
       : normalizeAxisSelection(chosen);
     if (leaves.length === 0) return false;
     if (!leaves.some((leaf) => opts.includes(leaf))) return false;
@@ -165,9 +316,8 @@ export function sectionAllowlistFor(
   if (!selection || !chapter.sectionAllowlists) return null;
   const lists: string[][] = [];
   for (const [axis, chosen] of Object.entries(selection)) {
-    const axisNodes = toc?.lenses?.[axis];
-    const leaves = axisNodes?.length
-      ? effectiveLeaves(axisNodes, normalizeAxisSelection(chosen))
+    const leaves = toc?.lenses?.[axis]?.length
+      ? effectiveAxisLeaves(toc, axis, normalizeAxisSelection(chosen))
       : normalizeAxisSelection(chosen);
     if (leaves.length === 0) continue;
 
@@ -236,14 +386,14 @@ export function visibleIdSet(
   return new Set(filterChapters(chapters, selection, toc).map((c) => c.id));
 }
 
-/** Default: select every root node on each axis (see whole axis). */
+/** Default: first option root on each axis (not the axis node itself). */
 export function defaultSelection(toc: BookToc): LensSelection | null {
   const axes = lensAxisIds(toc);
   if (axes.length === 0 || !toc.lenses) return null;
   const sel: LensSelection = {};
   for (const axis of axes) {
-    const roots = (toc.lenses[axis] ?? []).map((n) => n.id);
-    if (roots.length > 0) sel[axis] = roots;
+    const first = toc.lenses[axis]?.[0]?.id;
+    if (first) sel[axis] = [first];
   }
   return Object.keys(sel).length > 0 ? sel : null;
 }
@@ -280,7 +430,7 @@ export function lensSelectionFromQuery(
     const raw = queryValues(query, axis);
     if (raw.length === 0) continue;
     found = true;
-    const allowed = allLensNodeIds(toc.lenses[axis] ?? []);
+    const allowed = allowedAxisSelectionIds(toc, axis);
     const pick = raw.filter((id) => allowed.has(id));
     if (pick.length > 0) out[axis] = pick;
   }
@@ -352,7 +502,7 @@ export function selectionFromPageLayers(
     const valid = opts.filter((o) => leafSet.has(o));
     if (valid.length === 0) continue;
     const current = normalizeAxisSelection(sel[axis]);
-    const currentLeaves = effectiveLeaves(toc.lenses[axis], current);
+    const currentLeaves = effectiveAxisLeaves(toc, axis, current);
     if (currentLeaves.some((l) => valid.includes(l))) continue;
     sel[axis] = [valid[0]];
   }

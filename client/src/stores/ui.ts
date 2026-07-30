@@ -2,6 +2,17 @@ import { reactive } from 'vue';
 import type { LensAxisId, LensSelection, PageLayer } from '@shared/types';
 import { normalizeAxisSelection } from '@shared/lenses';
 
+/** Same-axis multi-select vs single-select for the lens tree. */
+export type LensAxisPickMode = 'multi' | 'single';
+
+const LENS_PICK_KEY = 'reader.lensPickMode';
+
+function readLensPickMode(): LensAxisPickMode {
+  const raw = localStorage.getItem(LENS_PICK_KEY);
+  if (raw === 'multi') return 'multi';
+  return 'single';
+}
+
 export const ui = reactive({
   notesTarget: null as null | { bookId: string; key: string; title: string },
   orphanOpen: false,
@@ -14,7 +25,14 @@ export const ui = reactive({
   tocOpen: localStorage.getItem('reader.tocOpen') !== '0',
   /** Active multi-axis lens selection per book. */
   lensByBook: {} as Record<string, LensSelection>,
+  /** 多选 = same-axis multi; 单选 = one id per axis. */
+  lensPickMode: readLensPickMode() as LensAxisPickMode,
 });
+
+export function setLensPickMode(mode: LensAxisPickMode): void {
+  ui.lensPickMode = mode;
+  localStorage.setItem(LENS_PICK_KEY, mode);
+}
 
 export function bumpChapterReload(): void {
   ui.chapterReloadToken += 1;

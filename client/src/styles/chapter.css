@@ -1,9 +1,9 @@
 /* ---------- chapter page ---------- */
 
 .chapter-wrap {
-  max-width: 880px;
-  margin: 0 auto;
-  padding: 28px 28px 80px;
+  max-width: none;
+  margin: 0;
+  padding: 28px 0 80px;
 }
 
 .page-card {
@@ -17,6 +17,7 @@
 .chapter-title {
   font-family: var(--serif);
   font-size: 30px;
+  line-height: 1.25;
   margin: 0 0 28px;
   padding-bottom: 16px;
   border-bottom: 1px solid var(--line);

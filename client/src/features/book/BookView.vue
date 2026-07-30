@@ -5,6 +5,7 @@ import type { LocationQueryValue, RouteLocationRaw } from 'vue-router';
 import { Expand } from '@element-plus/icons-vue';
 import TocSidebar from '@/features/book/TocSidebar.vue';
 import ChapterPage from '@/features/book/ChapterPage.vue';
+import ChapterOutline from '@/features/book/ChapterOutline.vue';
 import LensTreeSelect from '@/features/book/LensTreeSelect.vue';
 import NotesPanel from '@/features/notes/NotesPanel.vue';
 import OrphanPanel from '@/features/orphans/OrphanPanel.vue';
@@ -14,19 +15,22 @@ import { loadToc, tocOf } from '@/stores/books';
 import { loadAnnotations } from '@/stores/annotations';
 import {
   getStoredLensSelection,
-  setBookAxisLens,
   setBookLensSelection,
+  setLensPickMode,
   toggleDetailsOpen,
   toggleTocOpen,
   ui,
+  type LensAxisPickMode,
 } from '@/stores/ui';
 import { useOrphans } from '@/composables/orphans';
 import {
-  allLensNodeIds,
-  axisLabel,
+  allowedAxisSelectionIds,
+  buildLensSelectTree,
+  collapseEachAxisToSingle,
   defaultSelection,
   filterChapters,
   filterTree,
+  flatIdsToSelection,
   hasLenses,
   lensAxisIds,
   lensQueryFromSelection,
@@ -36,9 +40,10 @@ import {
   resolveLensSwitchChapter,
   sameLensSelection,
   selectionFromPageLayers,
+  selectionToFlatIds,
   visibleIdSet,
 } from '@shared/lenses';
-import type { BookToc, LensAxisId, LensSelection, PageLayer, TocChapter } from '@shared/types';
+import type { BookToc, LensSelection, PageLayer, TocChapter } from '@shared/types';
 
 const route = useRoute();
 const router = useRouter();
@@ -59,12 +64,16 @@ function sanitizeSelection(
   const fallback = defaultSelection(t);
   const out: LensSelection = {};
   for (const axis of lensAxisIds(t)) {
-    const allowed = allLensNodeIds(t.lenses[axis] ?? []);
+    const allowed = allowedAxisSelectionIds(t, axis);
     const pick = normalizeAxisSelection(base[axis]).filter((id) => allowed.has(id));
     if (pick.length > 0) out[axis] = pick;
     else if (fallback?.[axis]?.length) out[axis] = [...fallback[axis]];
   }
-  return Object.keys(out).length > 0 ? out : null;
+  const flat = selectionToFlatIds(t, out);
+  const normalized = flatIdsToSelection(t, flat, flat);
+  if (!normalized) return null;
+  if (ui.lensPickMode === 'single') return collapseEachAxisToSingle(t, normalized);
+  return normalized;
 }
 
 const activeSelection = computed<LensSelection | null>(() => {
@@ -93,7 +102,11 @@ const filteredTree = computed(() => {
   return filterTree(base, ids);
 });
 
-const axisIds = computed(() => (toc.value ? lensAxisIds(toc.value) : []));
+const lensSelectTree = computed(() => (toc.value ? buildLensSelectTree(toc.value) : []));
+
+const flatLensIds = computed(() =>
+  toc.value ? selectionToFlatIds(toc.value, activeSelection.value) : [],
+);
 
 function queryEqual(
   a: Record<string, string | string[]>,
@@ -216,6 +229,9 @@ watch(
 const chapterIndex = computed(
   () => filteredChapters.value.findIndex((c) => c.id === chapterId.value) ?? -1,
 );
+const currentChapter = computed<TocChapter | null>(
+  () => toc.value?.chapters.find((c) => c.id === chapterId.value) ?? null,
+);
 const prevChapter = computed<TocChapter | null>(() =>
   chapterIndex.value > 0 ? filteredChapters.value[chapterIndex.value - 1] : null,
 );
@@ -229,17 +245,40 @@ function go(ch: TocChapter | null): void {
   if (ch) router.push(bookLocation(ch.id));
 }
 
-function onAxisLens(axis: LensAxisId, options: PageLayer[]): void {
+function finalizeSelection(
+  t: BookToc,
+  nextSel: LensSelection,
+  preferIds: PageLayer[] = [],
+): LensSelection {
+  if (ui.lensPickMode !== 'single') return nextSel;
+  return collapseEachAxisToSingle(t, nextSel, preferIds);
+}
+
+function onLensSelect(options: PageLayer[]): void {
   const t = toc.value;
   const sel = activeSelection.value;
   if (!t || !sel) return;
-  const nextOpts =
-    options.length > 0 ? options : normalizeAxisSelection(sel[axis]).slice(0, 1);
-  const nextSel: LensSelection = { ...sel, [axis]: nextOpts };
+  const prevFlat = selectionToFlatIds(t, sel);
+  const added = options.filter((id) => !prevFlat.includes(id));
+  let nextSel = flatIdsToSelection(t, options, prevFlat);
+  if (!nextSel) return;
+  nextSel = finalizeSelection(t, nextSel, added);
   const target = resolveLensSwitchChapter(t, chapterId.value, nextSel);
-  setBookAxisLens(bookId.value, axis, nextOpts, sel);
+  setBookLensSelection(bookId.value, nextSel);
   const mode = target !== chapterId.value ? 'push' : 'replace';
   syncLensQueryToRoute(nextSel, t, mode, target);
+}
+
+function onLensPickMode(mode: LensAxisPickMode): void {
+  setLensPickMode(mode);
+  const t = toc.value;
+  const sel = activeSelection.value;
+  if (!t || !sel || mode !== 'single') return;
+  const nextSel = collapseEachAxisToSingle(t, sel);
+  if (sameLensSelection(nextSel, sel)) return;
+  const target = resolveLensSwitchChapter(t, chapterId.value, nextSel);
+  setBookLensSelection(bookId.value, nextSel);
+  syncLensQueryToRoute(nextSel, t, target !== chapterId.value ? 'push' : 'replace', target);
 }
 
 function onKey(e: KeyboardEvent): void {
@@ -286,21 +325,26 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
           <el-icon :size="16"><Expand /></el-icon>
         </button>
         <span class="spacer" />
-        <template v-if="axisIds.length && activeSelection">
-          <div
-            v-for="axis in axisIds"
-            :key="axis"
-            class="lens-select-wrap"
+        <div v-if="lensSelectTree.length && activeSelection" class="lens-controls">
+          <span class="visually-hidden">透镜选择模式</span>
+          <el-select
+            class="lens-mode-select"
+            :model-value="ui.lensPickMode"
+            @update:model-value="onLensPickMode($event as LensAxisPickMode)"
           >
-            <span class="visually-hidden">{{ axisLabel(axis) }}</span>
+            <el-option label="多选" value="multi" />
+            <el-option label="单选" value="single" />
+          </el-select>
+          <div class="lens-select-wrap">
+            <span class="visually-hidden">透镜</span>
             <LensTreeSelect
-              :nodes="toc.lenses![axis]"
-              :model-value="activeSelection[axis] ?? []"
-              :placeholder="axisLabel(axis)"
-              @update:model-value="onAxisLens(axis, $event)"
+              :nodes="lensSelectTree"
+              :model-value="flatLensIds"
+              placeholder="透镜"
+              @update:model-value="onLensSelect"
             />
           </div>
-        </template>
+        </div>
         <button v-if="orphans.length" class="btn ghost warn" @click="ui.orphanOpen = true">
           孤立标注 {{ orphans.length }}
         </button>
@@ -317,14 +361,27 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
           {{ ui.detailsOpen ? '收起全部细节' : '展开全部细节' }}
         </button>
       </div>
-      <ChapterPage
-        v-if="chapterId"
-        :book-id="bookId"
-        :chapter-id="chapterId"
-        :prev-chapter="prevChapter"
-        :next-chapter="nextChapter"
-        :lens-selection="activeSelection"
-      />
+      <div class="book-body">
+        <div class="book-reading">
+          <div class="book-content">
+            <ChapterPage
+              v-if="chapterId"
+              :book-id="bookId"
+              :chapter-id="chapterId"
+              :prev-chapter="prevChapter"
+              :next-chapter="nextChapter"
+              :lens-selection="activeSelection"
+            />
+          </div>
+          <ChapterOutline
+            v-if="currentChapter"
+            :toc="toc"
+            :book-id="bookId"
+            :chapter="currentChapter"
+            :lens-selection="activeSelection"
+          />
+        </div>
+      </div>
     </div>
     <NotesPanel v-if="ui.notesTarget" />
     <OrphanPanel v-if="ui.orphanOpen" :book-id="bookId" />
