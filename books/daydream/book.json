@@ -19,8 +19,23 @@
         },
         {
           "type": "page",
+          "id": "202607301017",
+          "file": "from-instinct/13-first-principles.md"
+        },
+        {
+          "type": "page",
+          "id": "202607301537",
+          "file": "from-instinct/14-constraint-over-recipe.md"
+        },
+        {
+          "type": "page",
           "id": "short-feedback",
           "file": "from-instinct/02-short-feedback.md"
+        },
+        {
+          "type": "page",
+          "id": "202607301623",
+          "file": "from-instinct/16-attention-pivot.md"
         },
         {
           "type": "page",
@@ -73,6 +88,11 @@
           "type": "page",
           "id": "202607291558",
           "file": "from-instinct/09-essence-first.md"
+        },
+        {
+          "type": "page",
+          "id": "202607301618",
+          "file": "from-instinct/15-single-source.md"
         },
         {
           "type": "page",
