@@ -1,0 +1,153 @@
+{
+  "title": "Focus Tray：GTD 台",
+  "description": "个人与小团队的 GTD：收集、澄清、组织、回顾、执行。场景与约束分透镜；约束下再分领域与界面。",
+  "lenses": {
+    "read": [
+      { "id": "scenario", "title": "场景" },
+      {
+        "id": "constraint",
+        "title": "约束",
+        "children": [
+          { "id": "domain", "title": "领域" },
+          { "id": "ui", "title": "界面" }
+        ]
+      }
+    ]
+  },
+  "rating": {
+    "dimensions": [
+      { "id": "clarity", "title": "清晰度", "max": 10 },
+      { "id": "completeness", "title": "完备性", "max": 10 },
+      { "id": "implementability", "title": "可实现性", "max": 10 }
+    ],
+    "defaults": {
+      "expected": { "clarity": 7, "completeness": 7, "implementability": 7 }
+    },
+    "lenses": {
+      "scenario": {
+        "expected": { "clarity": 8, "completeness": 5, "implementability": 4 }
+      },
+      "ui": {
+        "expected": { "clarity": 8, "completeness": 6, "implementability": 5 }
+      },
+      "domain": {
+        "expected": { "clarity": 9, "completeness": 9, "implementability": 9 }
+      }
+    }
+  },
+  "contents": [
+    { "type": "page", "id": "202608022100", "file": "01-overview.md" },
+    {
+      "type": "group",
+      "id": "identity",
+      "title": "身份",
+      "children": [
+        {
+          "type": "page",
+          "id": "202608022180",
+          "file": "identity/01-account.md",
+          "lenses": {
+            "read": {
+              "domain": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "group",
+      "id": "capture",
+      "title": "收集",
+      "children": [
+        {
+          "type": "page",
+          "id": "202608022110",
+          "file": "capture/01-inbox.md",
+          "lenses": {
+            "read": {
+              "scenario": ["202608022111", "202608022112", "202608022113"],
+              "domain": ["202608022115"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "group",
+      "id": "clarify",
+      "title": "澄清",
+      "children": [
+        {
+          "type": "page",
+          "id": "202608022120",
+          "file": "clarify/01-process.md",
+          "lenses": {
+            "read": {
+              "scenario": ["202608022121", "202608022122", "202608022123"],
+              "domain": ["202608022125", "202608022126"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "group",
+      "id": "organize",
+      "title": "组织",
+      "children": [
+        {
+          "type": "page",
+          "id": "202608022130",
+          "file": "organize/01-projects.md",
+          "lenses": {
+            "read": {
+              "scenario": ["202608022131", "202608022132", "202608022133"],
+              "domain": [
+                "202608022135",
+                "202608022136",
+                "202608022137",
+                "202608022138",
+                "202608022139"
+              ]
+            }
+          }
+        },
+        {
+          "type": "page",
+          "id": "202608022140",
+          "file": "organize/02-contexts.md",
+          "lenses": {
+            "read": {
+              "scenario": ["202608022141", "202608022142", "202608022143"],
+              "domain": ["202608022145"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "group",
+      "id": "review",
+      "title": "回顾",
+      "children": [
+        {
+          "type": "page",
+          "id": "202608022150",
+          "file": "review/01-weekly.md",
+          "lenses": {
+            "read": {
+              "scenario": ["202608022151", "202608022152", "202608022153"],
+              "domain": ["202608022155"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "page",
+      "id": "202608022170",
+      "file": "06-screens.md",
+      "lenses": { "read": { "ui": true } }
+    }
+  ]
+}

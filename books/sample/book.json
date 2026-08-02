@@ -13,6 +13,24 @@
       }
     ]
   },
+  "rating": {
+    "dimensions": [
+      { "id": "clarity", "title": "清晰度", "max": 10 },
+      { "id": "completeness", "title": "完备性", "max": 10 },
+      { "id": "implementability", "title": "可实现性", "max": 10 }
+    ],
+    "defaults": {
+      "expected": { "clarity": 7, "completeness": 7, "implementability": 7 }
+    },
+    "lenses": {
+      "scenario": {
+        "expected": { "clarity": 8, "completeness": 5, "implementability": 4 }
+      },
+      "impl": {
+        "expected": { "clarity": 9, "completeness": 9, "implementability": 9 }
+      }
+    }
+  },
   "contents": [
     {
       "type": "page",

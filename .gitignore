@@ -10,6 +10,10 @@ books/*
 !books/sample/**
 !books/daydream/
 !books/daydream/**
+!books/kx-platform/
+!books/kx-platform/**
+!books/focus-tray/
+!books/focus-tray/**
 
 # Per-book git repos (compare feature); parent tracks content only
 books/**/.git/
