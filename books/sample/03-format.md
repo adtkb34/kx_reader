@@ -33,7 +33,7 @@ flowchart TD
 
 ## 清单文件 book.json {#manifest}
 
-`contents` 与 `lenses` 同构：都是 `{ dimensions, axes }`。
+`lenses` 与 `contents` 都是**自带 title 的树数组**（无 `kind`、无 `dimensions`/`axes` 拆分）。
 
 ### 树形 {#manifest-tree}
 
@@ -41,59 +41,50 @@ flowchart TD
 {
   "title": "书名",
   "description": "一句话简介（可选）",
-  "lenses": {
-    "dimensions": [
-      { "id": "read", "title": "读法" },
-      { "id": "scenario", "title": "场景" },
-      { "id": "impl", "title": "实现" }
-    ],
-    "axes": [
-      {
-        "id": "read",
-        "children": [{ "id": "scenario" }, { "id": "impl" }]
-      }
-    ]
-  },
-  "contents": {
-    "dimensions": [
-      { "id": "overview", "file": "01-overview.md" },
-      { "id": "identity", "title": "身份" },
-      {
-        "id": "auth",
-        "file": "identity/01-auth.md",
-        "lenses": {
-          "read": {
-            "scenario": ["login", "register"],
-            "impl": ["api", "db"]
+  "lenses": [
+    {
+      "id": "read",
+      "title": "读法",
+      "children": [
+        { "id": "scenario", "title": "场景" },
+        { "id": "impl", "title": "实现" }
+      ]
+    }
+  ],
+  "contents": [
+    { "id": "overview", "file": "01-overview.md" },
+    {
+      "id": "identity",
+      "title": "身份",
+      "children": [
+        {
+          "id": "auth",
+          "file": "identity/01-auth.md",
+          "lenses": {
+            "read": {
+              "scenario": ["login", "register"],
+              "impl": ["api", "db"]
+            }
           }
-        }
-      },
-      { "id": "me", "file": "identity/me.md", "lenses": { "read": { "scenario": true } } },
-      { "id": "shops", "file": "03-shops.md" }
-    ],
-    "axes": [
-      { "id": "overview" },
-      {
-        "id": "identity",
-        "children": [{ "id": "auth" }, { "id": "me" }]
-      },
-      { "id": "shops" }
-    ]
-  }
+        },
+        { "id": "me", "file": "identity/me.md", "lenses": { "read": { "scenario": true } } }
+      ]
+    },
+    { "id": "shops", "file": "03-shops.md" }
+  ]
 }
 ```
 
-- **`contents.dimensions`**：扁平词表。有 `file` = 页（`id` 须与 frontmatter 一致；可选 `lenses`）；无 `file` 有 `title` = 目录组。
-- **`contents.axes`**：目录树，只写 `id` + `children`；组标题 / 页路径一律从 `dimensions` 取。
-- **`dimensions[].lenses`（可选，仅页项）**：按轴声明归属，**key 必须是叶子** option id。省略该页在各轴**常显**。轴下 `option: true` = 整页属于该叶子；`option: string[]` = 该叶子下可见的小节 id（含子级展开）。同页可挂多叶子，切透镜只过滤小节、不换页。
-- **`lenses`（可选）**：与 contents 同构——`dimensions` 词表 + `axes` 树；见 [阅读透镜](06-lenses.md#how)。顶栏为可多选的树；选中父节点 = 其下全部叶子并集。不声明则无顶栏开关。
+- **`lenses`（可选）**：顶层每一项是一条轴（`id` + `title`）；`children` 为选项树。轴标题写在节点上，代码不写死。见 [阅读透镜](06-lenses.md#how)。
+- **`contents`**：有 `file` = 页（`id` 须与 frontmatter 一致；可选 `lenses`）；有 `title` + `children` = 目录组。
+- **页项 `lenses`**：按轴声明归属，**key 必须是叶子** option id。省略则各轴常显。`true` = 整页；`string[]` = 可见小节 id。
 - 翻页（←/→）只在**当前透镜可见的**叶子页之间按 DFS 顺序走动；组节点被跳过。
 - 组可再嵌套组；深度不限。TOC 里**同一深度样式相同**（组与叶子页无关）；更深一层再弱一档。
-- 删除叶子页：从 `contents.dimensions` / `contents.axes` 移除；该页标注进入「孤立标注」面板。
+- 删除叶子页：从 `contents` 树移除；该页标注进入「孤立标注」面板。
 
 ## 章节文件 {#chapter-files}
 
-每个章节是一个 Markdown 文件，YAML frontmatter **必须**包含 `id` 与 `title`，且与 `book.json` 中该页的 `id` 一致。透镜归属写在 `book.json` 的 `contents.dimensions` 页项 `lenses`，**不要**在页上写 `layer` / `pair`：
+每个章节是一个 Markdown 文件，YAML frontmatter **必须**包含 `id` 与 `title`，且与 `book.json` 中该页的 `id` 一致。透镜归属写在 `book.json` 的 contents 页项 `lenses`，**不要**在页上写 `layer` / `pair`：
 
 ```markdown
 ---

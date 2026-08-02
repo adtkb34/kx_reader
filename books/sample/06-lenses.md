@@ -2,58 +2,48 @@
 id: lenses
 title: 阅读透镜
 ---
-本书顶栏的 **透镜树**（可多选）就是透镜：同一本书、在一棵树里按轴勾选维度节点，目录与翻页只展示当前选择下可见的页与小节。透镜的 **轴与树由每本书自己声明**（`dimensions` 词表 + `axes` 结构）。选中写入 URL query（如 `?read=scenario&read=impl`），刷新与分享可还原。
+本书顶栏的 **透镜树**（可多选）就是透镜：同一本书、在一棵树里按轴勾选维度节点，目录与翻页只展示当前选择下可见的页与小节。透镜由 `book.json` 的 `lenses` **数组**声明（每节点自带 `title`）。选中写入 URL query（如 `?read=scenario&read=impl`），刷新与分享可还原。
 
 ## 为何需要透镜 {#why}
 
-两类读者、两类任务常描述同一主题，但心智不同。同坐标内容应写在**同一页**，用 `contents.dimensions[].lenses` 标哪些小节属于哪个**叶子**维度；切换透镜只过滤小节，**不换页**。
+两类读者、两类任务常描述同一主题，但心智不同。同坐标内容应写在**同一页**，用 contents 页项上的 `lenses` 标哪些小节属于哪个**叶子**维度；切换透镜只过滤小节，**不换页**。
 
 维度可有层级：选中父节点 = 展示其下全部叶子内容的并集；也可多选若干同层叶/父，并集去重。**同一分支同时只能选一层**（父与子不可并存）；跨轴 / 不同分支互不影响。多轴时页要**同时**满足各轴归属才可见。
 
 ## 怎么声明 {#how}
 
-在 `book.json` 声明 `lenses.dimensions`（所有节点的 `id` / `title`）与 `lenses.axes`（树，只写 `id` 与 `children`），并在 `contents.dimensions` 页项上用 `lenses` 挂**叶子**归属。页 frontmatter **只写** `id` / `title`（须与 manifest `id` 一致）。顶栏把各轴合成 **一棵** 选择树：第一层是轴（如 `read` / `audience`），其下是该轴选项。轴标题取自 `dimensions`，代码里不再写死 `kind` / `audience`。
+在 `book.json` 用 `lenses: [...]` 声明轴树（顶层 = 轴，节点含 `id` / `title` / 可选 `children`），并在 `contents` 页项上用 `lenses` 挂**叶子**归属。页 frontmatter **只写** `id` / `title`（须与 manifest `id` 一致）。顶栏把各轴合成 **一棵** 选择树。轴标题写在配置里，代码不写死 `kind` / `audience`。
 
 ```json
 {
-  "lenses": {
-    "dimensions": [
-      { "id": "read", "title": "读法" },
-      { "id": "scenario", "title": "场景" },
-      { "id": "impl", "title": "实现" }
-    ],
-    "axes": [
-      {
-        "id": "read",
-        "children": [{ "id": "scenario" }, { "id": "impl" }]
-      }
-    ]
-  },
-  "contents": {
-    "dimensions": [
-      { "id": "overview", "file": "01-overview.md" },
-      {
-        "id": "auth",
-        "file": "identity/01-auth.md",
-        "lenses": {
-          "read": {
-            "scenario": ["login", "register"],
-            "impl": ["api", "db"]
-          }
+  "lenses": [
+    {
+      "id": "read",
+      "title": "读法",
+      "children": [
+        { "id": "scenario", "title": "场景" },
+        { "id": "impl", "title": "实现" }
+      ]
+    }
+  ],
+  "contents": [
+    { "id": "overview", "file": "01-overview.md" },
+    {
+      "id": "auth",
+      "file": "identity/01-auth.md",
+      "lenses": {
+        "read": {
+          "scenario": ["login", "register"],
+          "impl": ["api", "db"]
         }
-      },
-      {
-        "id": "navigation",
-        "file": "05-navigation.md",
-        "lenses": { "read": { "scenario": true } }
       }
-    ],
-    "axes": [
-      { "id": "overview" },
-      { "id": "auth" },
-      { "id": "navigation" }
-    ]
-  }
+    },
+    {
+      "id": "navigation",
+      "file": "05-navigation.md",
+      "lenses": { "read": { "scenario": true } }
+    }
+  ]
 }
 ```
 
@@ -74,8 +64,7 @@ title: 阅读透镜
 约定：
 
 - 透镜只过滤导航与小节显示，不改变标注键（仍是 `章节id#小节id`）；汇总模式同样复用该键。
-- 节点 `id` 全书唯一、非空，且必须先出现在 `lenses.dimensions`。
-- `dimensions` 只写 `id` / `title`；树形只写在 `axes`（可嵌套 `children`）。
+- 节点 `id` 全书唯一、非空；每个透镜节点必须自带 `title`。
 - 同坐标多维度写一页；已无 `correspondences`。
 - 汇总模式下点左侧目录某页会切回「单页」并打开该页。
 - 汇总模式不显示左侧书目录；右侧大纲按「组 → 页 → 小节」分层，组名/页名各只出现一次。

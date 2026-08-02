@@ -10,7 +10,7 @@ export interface BookSummary {
 /** Lens option id within an axis; book-defined. */
 export type PageLayer = string;
 
-/** Node / axis id from book.json `lenses.dimensions[].id`. */
+/** Axis id = top-level `lenses[].id`. */
 export type LensAxisId = string;
 
 export interface BookLens {
@@ -18,18 +18,6 @@ export interface BookLens {
   title: string;
   /** Nested options; omit or empty = leaf. */
   children?: BookLens[];
-}
-
-/** Flat catalog entry: id + display title (no tree). */
-export interface LensDimension {
-  id: string;
-  title: string;
-}
-
-/** Axis tree node in `lenses.axes` — structure only; titles come from dimensions. */
-export interface LensAxisNode {
-  id: string;
-  children?: LensAxisNode[];
 }
 
 export interface TocSection {
@@ -70,13 +58,13 @@ export interface BookToc {
   title: string;
   description?: string;
   /**
-   * Multi-axis lenses: axis id → option tree (from `lenses.axes`, titles from `lenses.dimensions`).
+   * Multi-axis lenses: axis id → option tree (from top-level `lenses[]`).
    * Axis display titles live in `lensAxisTitles`.
    */
   lenses?: Record<LensAxisId, BookLens[]>;
-  /** Axis id → title from `lenses.dimensions` (ordered via `lensAxisOrder`). */
+  /** Axis id → title from `lenses[].title` (ordered via `lensAxisOrder`). */
   lensAxisTitles?: Record<LensAxisId, string>;
-  /** Axis ids from `lenses.axes` in declaration order. */
+  /** Axis ids from `lenses[]` in declaration order. */
   lensAxisOrder?: LensAxisId[];
   /** Nested sidebar tree (groups + pages). */
   tree: TocTreeNode[];

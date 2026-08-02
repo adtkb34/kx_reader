@@ -1,51 +1,32 @@
 {
   "title": "Focus Tray：GTD 台",
   "description": "个人与小团队的 GTD：收集、澄清、组织、回顾、执行。场景与约束分透镜；约束下再分领域与界面。",
-  "lenses": {
-    "dimensions": [
-      {
-        "id": "read",
-        "title": "读法"
-      },
-      {
-        "id": "scenario",
-        "title": "场景"
-      },
-      {
-        "id": "constraint",
-        "title": "约束"
-      },
-      {
-        "id": "domain",
-        "title": "领域"
-      },
-      {
-        "id": "ui",
-        "title": "界面"
-      }
-    ],
-    "axes": [
-      {
-        "id": "read",
-        "children": [
-          {
-            "id": "scenario"
-          },
-          {
-            "id": "constraint",
-            "children": [
-              {
-                "id": "domain"
-              },
-              {
-                "id": "ui"
-              }
-            ]
-          }
-        ]
-      }
-    ]
-  },
+  "lenses": [
+    {
+      "id": "read",
+      "title": "读法",
+      "children": [
+        {
+          "id": "scenario",
+          "title": "场景"
+        },
+        {
+          "id": "constraint",
+          "title": "约束",
+          "children": [
+            {
+              "id": "domain",
+              "title": "领域"
+            },
+            {
+              "id": "ui",
+              "title": "界面"
+            }
+          ]
+        }
+      ]
+    }
+  ],
   "rating": {
     "dimensions": [
       {
@@ -95,186 +76,143 @@
       }
     }
   },
-  "contents": {
-    "dimensions": [
-      {
-        "id": "202608022100",
-        "file": "01-overview.md"
-      },
-      {
-        "id": "identity",
-        "title": "身份"
-      },
-      {
-        "id": "202608022180",
-        "file": "identity/01-account.md",
-        "lenses": {
-          "read": {
-            "domain": true
+  "contents": [
+    {
+      "id": "202608022100",
+      "file": "01-overview.md"
+    },
+    {
+      "id": "identity",
+      "title": "身份",
+      "children": [
+        {
+          "id": "202608022180",
+          "file": "identity/01-account.md",
+          "lenses": {
+            "read": {
+              "domain": true
+            }
           }
         }
-      },
-      {
-        "id": "capture",
-        "title": "收集"
-      },
-      {
-        "id": "202608022110",
-        "file": "capture/01-inbox.md",
-        "lenses": {
-          "read": {
-            "scenario": [
-              "202608022111",
-              "202608022112",
-              "202608022113"
-            ],
-            "domain": [
-              "202608022115"
-            ]
+      ]
+    },
+    {
+      "id": "capture",
+      "title": "收集",
+      "children": [
+        {
+          "id": "202608022110",
+          "file": "capture/01-inbox.md",
+          "lenses": {
+            "read": {
+              "scenario": [
+                "202608022111",
+                "202608022112",
+                "202608022113"
+              ],
+              "domain": [
+                "202608022115"
+              ]
+            }
           }
         }
-      },
-      {
-        "id": "clarify",
-        "title": "澄清"
-      },
-      {
-        "id": "202608022120",
-        "file": "clarify/01-process.md",
-        "lenses": {
-          "read": {
-            "scenario": [
-              "202608022121",
-              "202608022122",
-              "202608022123"
-            ],
-            "domain": [
-              "202608022125",
-              "202608022126"
-            ]
+      ]
+    },
+    {
+      "id": "clarify",
+      "title": "澄清",
+      "children": [
+        {
+          "id": "202608022120",
+          "file": "clarify/01-process.md",
+          "lenses": {
+            "read": {
+              "scenario": [
+                "202608022121",
+                "202608022122",
+                "202608022123"
+              ],
+              "domain": [
+                "202608022125",
+                "202608022126"
+              ]
+            }
           }
         }
-      },
-      {
-        "id": "organize",
-        "title": "组织"
-      },
-      {
-        "id": "202608022130",
-        "file": "organize/01-projects.md",
-        "lenses": {
-          "read": {
-            "scenario": [
-              "202608022131",
-              "202608022132",
-              "202608022133"
-            ],
-            "domain": [
-              "202608022135",
-              "202608022136",
-              "202608022137",
-              "202608022138",
-              "202608022139"
-            ]
+      ]
+    },
+    {
+      "id": "organize",
+      "title": "组织",
+      "children": [
+        {
+          "id": "202608022130",
+          "file": "organize/01-projects.md",
+          "lenses": {
+            "read": {
+              "scenario": [
+                "202608022131",
+                "202608022132",
+                "202608022133"
+              ],
+              "domain": [
+                "202608022135",
+                "202608022136",
+                "202608022137",
+                "202608022138",
+                "202608022139"
+              ]
+            }
+          }
+        },
+        {
+          "id": "202608022140",
+          "file": "organize/02-contexts.md",
+          "lenses": {
+            "read": {
+              "scenario": [
+                "202608022141",
+                "202608022142",
+                "202608022143"
+              ],
+              "domain": [
+                "202608022145"
+              ]
+            }
           }
         }
-      },
-      {
-        "id": "202608022140",
-        "file": "organize/02-contexts.md",
-        "lenses": {
-          "read": {
-            "scenario": [
-              "202608022141",
-              "202608022142",
-              "202608022143"
-            ],
-            "domain": [
-              "202608022145"
-            ]
+      ]
+    },
+    {
+      "id": "review",
+      "title": "回顾",
+      "children": [
+        {
+          "id": "202608022150",
+          "file": "review/01-weekly.md",
+          "lenses": {
+            "read": {
+              "scenario": [
+                "202608022151",
+                "202608022152",
+                "202608022153"
+              ],
+              "domain": [
+                "202608022155"
+              ]
+            }
           }
         }
-      },
-      {
-        "id": "review",
-        "title": "回顾"
-      },
-      {
-        "id": "202608022150",
-        "file": "review/01-weekly.md",
-        "lenses": {
-          "read": {
-            "scenario": [
-              "202608022151",
-              "202608022152",
-              "202608022153"
-            ],
-            "domain": [
-              "202608022155"
-            ]
-          }
-        }
-      },
-      {
-        "id": "202608022170",
-        "file": "06-screens.md",
-        "lenses": {
-          "read": {
-            "ui": true
-          }
+      ]
+    },
+    {
+      "id": "202608022170",
+      "file": "06-screens.md",
+      "lenses": {
+        "read": {
+          "ui": true
         }
       }
-    ],
-    "axes": [
-      {
-        "id": "202608022100"
-      },
-      {
-        "id": "identity",
-        "children": [
-          {
-            "id": "202608022180"
-          }
-        ]
-      },
-      {
-        "id": "capture",
-        "children": [
-          {
-            "id": "202608022110"
-          }
-        ]
-      },
-      {
-        "id": "clarify",
-        "children": [
-          {
-            "id": "202608022120"
-          }
-        ]
-      },
-      {
-        "id": "organize",
-        "children": [
-          {
-            "id": "202608022130"
-          },
-          {
-            "id": "202608022140"
-          }
-        ]
-      },
-      {
-        "id": "review",
-        "children": [
-          {
-            "id": "202608022150"
-          }
-        ]
-      },
-      {
-        "id": "202608022170"
-      }
-    ]
-  }
+    }
+  ]
 }

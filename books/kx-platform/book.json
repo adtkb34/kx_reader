@@ -1,42 +1,26 @@
 {
   "title": "阅读器平台",
   "description": "阅读器自身的多用户能力：账号、项目归属、组与共享、标注、agent 凭据。也是编译器的第一个真实输入。",
-  "lenses": {
-    "dimensions": [
-      {
-        "id": "read",
-        "title": "读法"
-      },
-      {
-        "id": "scenario",
-        "title": "场景"
-      },
-      {
-        "id": "ui",
-        "title": "界面"
-      },
-      {
-        "id": "impl",
-        "title": "实现"
-      }
-    ],
-    "axes": [
-      {
-        "id": "read",
-        "children": [
-          {
-            "id": "scenario"
-          },
-          {
-            "id": "ui"
-          },
-          {
-            "id": "impl"
-          }
-        ]
-      }
-    ]
-  },
+  "lenses": [
+    {
+      "id": "read",
+      "title": "读法",
+      "children": [
+        {
+          "id": "scenario",
+          "title": "场景"
+        },
+        {
+          "id": "ui",
+          "title": "界面"
+        },
+        {
+          "id": "impl",
+          "title": "实现"
+        }
+      ]
+    }
+  ],
   "rating": {
     "dimensions": [
       {
@@ -86,107 +70,76 @@
       }
     }
   },
-  "contents": {
-    "dimensions": [
-      {
-        "id": "202608020300",
-        "file": "01-overview.md"
-      },
-      {
-        "id": "identity",
-        "title": "身份"
-      },
-      {
-        "id": "202608020310",
-        "file": "identity/01-account.md",
-        "lenses": {
-          "read": {
-            "impl": true
+  "contents": [
+    {
+      "id": "202608020300",
+      "file": "01-overview.md"
+    },
+    {
+      "id": "identity",
+      "title": "身份",
+      "children": [
+        {
+          "id": "202608020310",
+          "file": "identity/01-account.md",
+          "lenses": {
+            "read": {
+              "impl": true
+            }
           }
         }
-      },
-      {
-        "id": "projects",
-        "title": "项目"
-      },
-      {
-        "id": "202608020320",
-        "file": "projects/01-project.md",
-        "lenses": {
-          "read": {
-            "impl": true
+      ]
+    },
+    {
+      "id": "projects",
+      "title": "项目",
+      "children": [
+        {
+          "id": "202608020320",
+          "file": "projects/01-project.md",
+          "lenses": {
+            "read": {
+              "impl": true
+            }
+          }
+        },
+        {
+          "id": "202608020330",
+          "file": "projects/02-group.md",
+          "lenses": {
+            "read": {
+              "impl": true
+            }
           }
         }
-      },
-      {
-        "id": "202608020330",
-        "file": "projects/02-group.md",
-        "lenses": {
-          "read": {
-            "impl": true
-          }
-        }
-      },
-      {
-        "id": "202608020340",
-        "file": "03-annotation.md",
-        "lenses": {
-          "read": {
-            "impl": true
-          }
-        }
-      },
-      {
-        "id": "202608020350",
-        "file": "04-agent.md",
-        "lenses": {
-          "read": {
-            "impl": true
-          }
-        }
-      },
-      {
-        "id": "202608020360",
-        "file": "05-screens.md",
-        "lenses": {
-          "read": {
-            "ui": true
-          }
+      ]
+    },
+    {
+      "id": "202608020340",
+      "file": "03-annotation.md",
+      "lenses": {
+        "read": {
+          "impl": true
         }
       }
-    ],
-    "axes": [
-      {
-        "id": "202608020300"
-      },
-      {
-        "id": "identity",
-        "children": [
-          {
-            "id": "202608020310"
-          }
-        ]
-      },
-      {
-        "id": "projects",
-        "children": [
-          {
-            "id": "202608020320"
-          },
-          {
-            "id": "202608020330"
-          }
-        ]
-      },
-      {
-        "id": "202608020340"
-      },
-      {
-        "id": "202608020350"
-      },
-      {
-        "id": "202608020360"
+    },
+    {
+      "id": "202608020350",
+      "file": "04-agent.md",
+      "lenses": {
+        "read": {
+          "impl": true
+        }
       }
-    ]
-  }
+    },
+    {
+      "id": "202608020360",
+      "file": "05-screens.md",
+      "lenses": {
+        "read": {
+          "ui": true
+        }
+      }
+    }
+  ]
 }
