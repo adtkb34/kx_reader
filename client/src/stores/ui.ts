@@ -79,13 +79,10 @@ function isOptionId(s: string): boolean {
   return /^[\w][\w.-]*$/.test(s);
 }
 
-/** Load stored multi-axis selection; migrates legacy single-string / single-value maps. */
+/** Load stored multi-axis selection (JSON object only). */
 export function getStoredLensSelection(bookId: string): LensSelection | null {
   const raw = localStorage.getItem(lensStorageKey(bookId));
-  if (!raw) return null;
-  if (isOptionId(raw) && !raw.startsWith('{')) {
-    return { kind: [raw] };
-  }
+  if (!raw || !raw.startsWith('{')) return null;
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;

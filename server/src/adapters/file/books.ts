@@ -9,6 +9,8 @@ import type {
   BookToc,
   ChapterContent,
   LensAxisId,
+  LensAxisNode,
+  LensDimension,
   PageLayer,
   TocChapter,
   TocTreeNode,
@@ -21,31 +23,31 @@ export type { BookAsset, BookRepository };
 /** Per-axis: option id → true (whole page) or section id allowlist. */
 type ManifestPageLenses = Record<LensAxisId, Record<string, true | string[]>>;
 
-interface ManifestPage {
-  type: 'page';
-  id?: string;
-  file: string;
+/** Catalog entry for contents.dimensions: page (file) or group (title). */
+interface ContentDimension {
+  id: string;
+  title?: string;
+  file?: string;
   lenses?: ManifestPageLenses;
 }
-
-interface ManifestGroup {
-  type: 'group';
-  id: string;
-  title: string;
-  children: ManifestNode[];
-}
-
-type ManifestNode = ManifestPage | ManifestGroup;
 
 interface BookManifest {
   title?: string;
   description?: string;
-  /** Legacy flat list of markdown files. */
-  chapters?: string[];
-  /** Nested tree; preferred when present. */
-  contents?: ManifestNode[];
-  /** Multi-axis lenses, or legacy flat array (normalized to `{ kind: [...] }`). */
-  lenses?: BookLens[] | Record<string, BookLens[]>;
+  /** Required: `{ dimensions, axes }` — same shape as lenses. */
+  contents?: {
+    dimensions?: ContentDimension[];
+    axes?: LensAxisNode[];
+  };
+  /**
+   * Optional lens config:
+   * - `dimensions`: flat `{ id, title }[]` catalog
+   * - `axes`: trees of `{ id, children? }` (titles from dimensions)
+   */
+  lenses?: {
+    dimensions?: LensDimension[];
+    axes?: LensAxisNode[];
+  };
 }
 
 /** Book id / single path segment. */
@@ -75,32 +77,81 @@ function isSafeAssetRel(rel: string): boolean {
   return SAFE_ASSET_REL.test(rel) && !rel.includes('..');
 }
 
-function parseLensNode(
+function parseDimensionCatalog(
+  bookId: string,
+  raw: unknown,
+): Map<string, string> | undefined {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    console.warn(`book ${bookId}: lenses.dimensions must be a non-empty array`);
+    return undefined;
+  }
+  const titles = new Map<string, string>();
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const id = (item as { id?: unknown }).id;
+    const title = (item as { title?: unknown }).title;
+    if (typeof id !== 'string' || !SAFE_SEGMENT.test(id)) {
+      console.warn(`book ${bookId}: lenses.dimensions entry has invalid id; skipping`);
+      continue;
+    }
+    if (typeof title !== 'string' || !title) {
+      console.warn(`book ${bookId}: lenses.dimensions "${id}" missing title; skipping`);
+      continue;
+    }
+    if (titles.has(id)) {
+      console.warn(`book ${bookId}: lenses.dimensions id "${id}" duplicated; skipping`);
+      continue;
+    }
+    if ((item as { children?: unknown }).children != null) {
+      console.warn(
+        `book ${bookId}: lenses.dimensions "${id}" must not have children; put tree under lenses.axes`,
+      );
+    }
+    titles.set(id, title);
+  }
+  return titles.size > 0 ? titles : undefined;
+}
+
+/** Axis / tree node: `{ id, children? }` only (no bare string ids). */
+function readAxisNode(item: unknown): { id: string; children?: unknown } | null {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
+  const id = (item as { id?: unknown }).id;
+  if (typeof id !== 'string' || !SAFE_SEGMENT.test(id)) return null;
+  return { id, children: (item as { children?: unknown }).children };
+}
+
+/** Resolve an axes tree node; titles come from the dimensions catalog. */
+function parseAxisTreeNode(
   bookId: string,
   axis: string,
   item: unknown,
+  titles: Map<string, string>,
   seenOptionIds: Set<string>,
 ): BookLens | null {
-  if (!item || typeof item !== 'object') return null;
-  const id = (item as { id?: unknown }).id;
-  const title = (item as { title?: unknown }).title;
-  if (typeof id !== 'string' || !SAFE_SEGMENT.test(id)) {
-    console.warn(`book ${bookId}: lenses.${axis} has invalid or empty id; skipping option`);
+  const node = readAxisNode(item);
+  if (!node) {
+    console.warn(`book ${bookId}: lenses.axes.${axis} has invalid node; skipping option`);
+    return null;
+  }
+  const { id } = node;
+  const title = titles.get(id);
+  if (!title) {
+    console.warn(
+      `book ${bookId}: lenses.axes.${axis} node "${id}" missing from lenses.dimensions; skipping`,
+    );
     return null;
   }
   if (seenOptionIds.has(id)) {
     console.warn(`book ${bookId}: lens option id "${id}" reused across axes; skipping`);
     return null;
   }
-  if (typeof title !== 'string' || !title) return null;
   seenOptionIds.add(id);
 
-  const rawChildren = (item as { children?: unknown }).children;
   let children: BookLens[] | undefined;
-  if (Array.isArray(rawChildren) && rawChildren.length > 0) {
+  if (Array.isArray(node.children) && node.children.length > 0) {
     children = [];
-    for (const child of rawChildren) {
-      const parsed = parseLensNode(bookId, axis, child, seenOptionIds);
+    for (const child of node.children) {
+      const parsed = parseAxisTreeNode(bookId, axis, child, titles, seenOptionIds);
       if (parsed) children.push(parsed);
     }
     if (children.length === 0) children = undefined;
@@ -109,49 +160,79 @@ function parseLensNode(
   return children ? { id, title, children } : { id, title };
 }
 
-function parseLensOptions(
-  bookId: string,
-  axis: string,
-  raw: unknown,
-  seenOptionIds: Set<string>,
-): BookLens[] | undefined {
-  if (!Array.isArray(raw) || raw.length === 0) return undefined;
-  const out: BookLens[] = [];
-  for (const item of raw) {
-    const node = parseLensNode(bookId, axis, item, seenOptionIds);
-    if (node) out.push(node);
-  }
-  return out.length > 0 ? out : undefined;
-}
-
-/** Normalize lenses to Record<axis, options>. Legacy array → `{ kind: [...] }`. */
-function parseLenses(
-  bookId: string,
-  raw: unknown,
-): Record<LensAxisId, BookLens[]> | undefined {
-  if (raw == null) return undefined;
-  const seenOptionIds = new Set<string>();
-
-  if (Array.isArray(raw)) {
-    const opts = parseLensOptions(bookId, 'kind', raw, seenOptionIds);
-    return opts ? { kind: opts } : undefined;
-  }
-
-  if (typeof raw !== 'object') return undefined;
-  const out: Record<LensAxisId, BookLens[]> = {};
-  for (const [axis, options] of Object.entries(raw as Record<string, unknown>)) {
-    if (!SAFE_SEGMENT.test(axis)) {
-      console.warn(`book ${bookId}: lenses axis "${axis}" is not a valid id; skipping`);
-      continue;
-    }
-    const opts = parseLensOptions(bookId, axis, options, seenOptionIds);
-    if (opts) out[axis] = opts;
-  }
-  return Object.keys(out).length > 0 ? out : undefined;
+interface ParsedLenses {
+  lenses: Record<LensAxisId, BookLens[]>;
+  lensAxisTitles: Record<LensAxisId, string>;
+  lensAxisOrder: LensAxisId[];
 }
 
 /**
- * Apply page.lenses from the manifest onto TocChapter.layers / sectionAllowlists.
+ * Parse `lenses.dimensions` (titles) + `lenses.axes` (trees).
+ * No hardcoded axis labels (kind/audience removed).
+ */
+function parseLenses(bookId: string, raw: unknown): ParsedLenses | undefined {
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const titles = parseDimensionCatalog(bookId, (raw as { dimensions?: unknown }).dimensions);
+  if (!titles) return undefined;
+
+  const axesRaw = (raw as { axes?: unknown }).axes;
+  if (!Array.isArray(axesRaw) || axesRaw.length === 0) {
+    console.warn(`book ${bookId}: lenses.axes must be a non-empty array`);
+    return undefined;
+  }
+
+  const seenOptionIds = new Set<string>();
+  const lenses: Record<LensAxisId, BookLens[]> = {};
+  const lensAxisTitles: Record<LensAxisId, string> = {};
+  const lensAxisOrder: LensAxisId[] = [];
+
+  for (const item of axesRaw) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    const id = (item as { id?: unknown }).id;
+    if (typeof id !== 'string' || !SAFE_SEGMENT.test(id)) {
+      console.warn(`book ${bookId}: lenses.axes entry has invalid id; skipping`);
+      continue;
+    }
+    const title = titles.get(id);
+    if (!title) {
+      console.warn(`book ${bookId}: lenses.axes "${id}" missing from lenses.dimensions; skipping`);
+      continue;
+    }
+    if (lensAxisTitles[id]) {
+      console.warn(`book ${bookId}: lenses.axes id "${id}" duplicated; skipping`);
+      continue;
+    }
+
+    const rawChildren = (item as { children?: unknown }).children;
+    let options: BookLens[] | undefined;
+    if (Array.isArray(rawChildren) && rawChildren.length > 0) {
+      options = [];
+      for (const child of rawChildren) {
+        const parsed = parseAxisTreeNode(bookId, id, child, titles, seenOptionIds);
+        if (parsed) options.push(parsed);
+      }
+      if (options.length === 0) options = undefined;
+    }
+
+    if (options?.length) {
+      lenses[id] = options;
+    } else {
+      if (seenOptionIds.has(id)) {
+        console.warn(`book ${bookId}: lens option id "${id}" reused across axes; skipping`);
+        continue;
+      }
+      seenOptionIds.add(id);
+      lenses[id] = [{ id, title }];
+    }
+    lensAxisTitles[id] = title;
+    lensAxisOrder.push(id);
+  }
+
+  return lensAxisOrder.length > 0 ? { lenses, lensAxisTitles, lensAxisOrder } : undefined;
+}
+
+/**
+ * Apply contents.dimensions[].lenses onto TocChapter.layers / sectionAllowlists.
  */
 function applyPageLenses(
   bookId: string,
@@ -300,7 +381,7 @@ async function loadPage(
   const all = hasIntro ? [{ id: '_intro', title: '引言', level: 2 }, ...sections] : sections;
   if (fm.data.layer != null || fm.data.pair != null) {
     console.warn(
-      `book ${bookId}: page "${id}" has frontmatter layer/pair; ignored — use book.json page.lenses`,
+      `book ${bookId}: page "${id}" has frontmatter layer/pair; ignored — use contents.dimensions[].lenses`,
     );
   }
   return {
@@ -311,63 +392,135 @@ async function loadPage(
   };
 }
 
-async function walkContents(
+async function walkContentAxis(
   bookId: string,
-  nodes: ManifestNode[],
+  item: unknown,
+  catalog: Map<string, ContentDimension>,
   tree: TocTreeNode[],
   pages: TocChapter[],
   seenIds: Set<string>,
   bookLenses: Record<LensAxisId, BookLens[]> | undefined,
 ): Promise<void> {
-  for (const node of nodes) {
-    if (node.type === 'page') {
-      if (!node.file) continue;
-      if (!node.id) {
-        console.warn(
-          `book ${bookId}: page file "${node.file}" missing id in book.json; using frontmatter id`,
-        );
-      }
-      const page = await loadPage(bookId, node.file, node.id);
-      if (!page) continue;
-      if (seenIds.has(page.id)) {
-        throw new Error(`duplicate page id "${page.id}" in book ${bookId}`);
-      }
-      seenIds.add(page.id);
-      applyPageLenses(bookId, page, node.lenses, bookLenses);
-      pages.push(page);
-      tree.push({ type: 'page', id: page.id, title: page.title, file: page.file });
-      continue;
-    }
-    if (node.type === 'group') {
-      if (!node.id || !SAFE_SEGMENT.test(node.id)) continue;
-      if (seenIds.has(node.id)) {
-        throw new Error(`duplicate group/page id "${node.id}" in book ${bookId}`);
-      }
-      seenIds.add(node.id);
-      const children: TocTreeNode[] = [];
-      await walkContents(bookId, node.children ?? [], children, pages, seenIds, bookLenses);
-      tree.push({ type: 'group', id: node.id, title: node.title || node.id, children });
-    }
+  const node = readAxisNode(item);
+  if (!node) {
+    console.warn(`book ${bookId}: contents.axes has invalid node; skipping`);
+    return;
   }
+  const dim = catalog.get(node.id);
+  if (!dim) {
+    console.warn(
+      `book ${bookId}: contents.axes "${node.id}" missing from contents.dimensions; skipping`,
+    );
+    return;
+  }
+  if (seenIds.has(node.id)) {
+    throw new Error(`duplicate contents id "${node.id}" in book ${bookId}`);
+  }
+  seenIds.add(node.id);
+
+  const childItems = Array.isArray(node.children) ? node.children : [];
+
+  if (typeof dim.file === 'string' && dim.file) {
+    if (childItems.length > 0) {
+      console.warn(
+        `book ${bookId}: contents page "${node.id}" cannot have children; ignoring children`,
+      );
+    }
+    const page = await loadPage(bookId, dim.file, node.id);
+    if (!page) return;
+    applyPageLenses(bookId, page, dim.lenses, bookLenses);
+    pages.push(page);
+    tree.push({ type: 'page', id: page.id, title: page.title, file: page.file });
+    return;
+  }
+
+  const title = typeof dim.title === 'string' && dim.title ? dim.title : node.id;
+  const children: TocTreeNode[] = [];
+  for (const child of childItems) {
+    await walkContentAxis(bookId, child, catalog, children, pages, seenIds, bookLenses);
+  }
+  tree.push({ type: 'group', id: node.id, title, children });
 }
 
-function legacyContents(manifest: BookManifest): ManifestNode[] {
-  if (Array.isArray(manifest.contents) && manifest.contents.length > 0) {
-    return manifest.contents;
+function parseContentsCatalog(
+  bookId: string,
+  raw: unknown,
+): Map<string, ContentDimension> | undefined {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    console.warn(`book ${bookId}: contents.dimensions must be a non-empty array`);
+    return undefined;
   }
-  return (manifest.chapters ?? []).map((file) => ({ type: 'page' as const, file }));
+  const catalog = new Map<string, ContentDimension>();
+  for (const item of raw) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    const id = (item as { id?: unknown }).id;
+    if (typeof id !== 'string' || !SAFE_SEGMENT.test(id)) {
+      console.warn(`book ${bookId}: contents.dimensions entry has invalid id; skipping`);
+      continue;
+    }
+    if (catalog.has(id)) {
+      console.warn(`book ${bookId}: contents.dimensions id "${id}" duplicated; skipping`);
+      continue;
+    }
+    if ((item as { children?: unknown }).children != null) {
+      console.warn(
+        `book ${bookId}: contents.dimensions "${id}" must not have children; put tree under contents.axes`,
+      );
+    }
+    const file = (item as { file?: unknown }).file;
+    const title = (item as { title?: unknown }).title;
+    const lenses = (item as { lenses?: ManifestPageLenses }).lenses;
+    const dim: ContentDimension = { id };
+    if (typeof file === 'string' && file) dim.file = file;
+    if (typeof title === 'string' && title) dim.title = title;
+    if (lenses && typeof lenses === 'object' && !Array.isArray(lenses)) dim.lenses = lenses;
+    if (!dim.file && !dim.title) {
+      console.warn(
+        `book ${bookId}: contents.dimensions "${id}" needs file (page) or title (group); skipping`,
+      );
+      continue;
+    }
+    catalog.set(id, dim);
+  }
+  return catalog.size > 0 ? catalog : undefined;
+}
+
+async function loadContents(
+  bookId: string,
+  raw: unknown,
+  tree: TocTreeNode[],
+  pages: TocChapter[],
+  bookLenses: Record<LensAxisId, BookLens[]> | undefined,
+): Promise<boolean> {
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
+    console.warn(`book ${bookId}: contents must be { dimensions, axes }`);
+    return false;
+  }
+  const catalog = parseContentsCatalog(bookId, (raw as { dimensions?: unknown }).dimensions);
+  if (!catalog) return false;
+  const axes = (raw as { axes?: unknown }).axes;
+  if (!Array.isArray(axes) || axes.length === 0) {
+    console.warn(`book ${bookId}: contents.axes must be a non-empty array`);
+    return false;
+  }
+  const seenIds = new Set<string>();
+  for (const axis of axes) {
+    await walkContentAxis(bookId, axis, catalog, tree, pages, seenIds, bookLenses);
+  }
+  return true;
 }
 
 export async function getBookToc(bookId: string): Promise<BookToc | null> {
   const manifest = await readManifest(bookId);
   if (!manifest) return null;
 
-  const lenses = parseLenses(bookId, manifest.lenses);
+  const parsed = parseLenses(bookId, manifest.lenses);
+  const bookLenses = parsed?.lenses;
   const tree: TocTreeNode[] = [];
   const pages: TocChapter[] = [];
-  const seenIds = new Set<string>();
   try {
-    await walkContents(bookId, legacyContents(manifest), tree, pages, seenIds, lenses);
+    const ok = await loadContents(bookId, manifest.contents, tree, pages, bookLenses);
+    if (!ok) return null;
   } catch (e) {
     console.error(e);
     return null;
@@ -377,7 +530,13 @@ export async function getBookToc(bookId: string): Promise<BookToc | null> {
     id: bookId,
     title: manifest.title ?? bookId,
     description: manifest.description,
-    ...(lenses ? { lenses } : {}),
+    ...(parsed
+      ? {
+          lenses: parsed.lenses,
+          lensAxisTitles: parsed.lensAxisTitles,
+          lensAxisOrder: parsed.lensAxisOrder,
+        }
+      : {}),
     tree,
     chapters: pages,
   };

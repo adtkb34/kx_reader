@@ -2,90 +2,191 @@
   "title": "阅读器平台",
   "description": "阅读器自身的多用户能力：账号、项目归属、组与共享、标注、agent 凭据。也是编译器的第一个真实输入。",
   "lenses": {
-    "kind": [
+    "dimensions": [
       {
         "id": "read",
-        "title": "读法",
+        "title": "读法"
+      },
+      {
+        "id": "scenario",
+        "title": "场景"
+      },
+      {
+        "id": "ui",
+        "title": "界面"
+      },
+      {
+        "id": "impl",
+        "title": "实现"
+      }
+    ],
+    "axes": [
+      {
+        "id": "read",
         "children": [
-          { "id": "scenario", "title": "场景" },
-          { "id": "ui", "title": "界面" },
-          { "id": "impl", "title": "实现" }
+          {
+            "id": "scenario"
+          },
+          {
+            "id": "ui"
+          },
+          {
+            "id": "impl"
+          }
         ]
       }
     ]
   },
   "rating": {
     "dimensions": [
-      { "id": "clarity", "title": "清晰度", "max": 10 },
-      { "id": "completeness", "title": "完备性", "max": 10 },
-      { "id": "implementability", "title": "可实现性", "max": 10 }
+      {
+        "id": "clarity",
+        "title": "清晰度",
+        "max": 10
+      },
+      {
+        "id": "completeness",
+        "title": "完备性",
+        "max": 10
+      },
+      {
+        "id": "implementability",
+        "title": "可实现性",
+        "max": 10
+      }
     ],
     "defaults": {
-      "expected": { "clarity": 7, "completeness": 7, "implementability": 7 }
+      "expected": {
+        "clarity": 7,
+        "completeness": 7,
+        "implementability": 7
+      }
     },
     "lenses": {
       "scenario": {
-        "expected": { "clarity": 8, "completeness": 5, "implementability": 4 }
+        "expected": {
+          "clarity": 8,
+          "completeness": 5,
+          "implementability": 4
+        }
       },
       "ui": {
-        "expected": { "clarity": 8, "completeness": 6, "implementability": 5 }
+        "expected": {
+          "clarity": 8,
+          "completeness": 6,
+          "implementability": 5
+        }
       },
       "impl": {
-        "expected": { "clarity": 9, "completeness": 9, "implementability": 9 }
+        "expected": {
+          "clarity": 9,
+          "completeness": 9,
+          "implementability": 9
+        }
       }
     }
   },
-  "contents": [
-    { "type": "page", "id": "202608020300", "file": "01-overview.md" },
-    {
-      "type": "group",
-      "id": "identity",
-      "title": "身份",
-      "children": [
-        {
-          "type": "page",
-          "id": "202608020310",
-          "file": "identity/01-account.md",
-          "lenses": { "kind": { "impl": true } }
+  "contents": {
+    "dimensions": [
+      {
+        "id": "202608020300",
+        "file": "01-overview.md"
+      },
+      {
+        "id": "identity",
+        "title": "身份"
+      },
+      {
+        "id": "202608020310",
+        "file": "identity/01-account.md",
+        "lenses": {
+          "read": {
+            "impl": true
+          }
         }
-      ]
-    },
-    {
-      "type": "group",
-      "id": "projects",
-      "title": "项目",
-      "children": [
-        {
-          "type": "page",
-          "id": "202608020320",
-          "file": "projects/01-project.md",
-          "lenses": { "kind": { "impl": true } }
-        },
-        {
-          "type": "page",
-          "id": "202608020330",
-          "file": "projects/02-group.md",
-          "lenses": { "kind": { "impl": true } }
+      },
+      {
+        "id": "projects",
+        "title": "项目"
+      },
+      {
+        "id": "202608020320",
+        "file": "projects/01-project.md",
+        "lenses": {
+          "read": {
+            "impl": true
+          }
         }
-      ]
-    },
-    {
-      "type": "page",
-      "id": "202608020340",
-      "file": "03-annotation.md",
-      "lenses": { "kind": { "impl": true } }
-    },
-    {
-      "type": "page",
-      "id": "202608020350",
-      "file": "04-agent.md",
-      "lenses": { "kind": { "impl": true } }
-    },
-    {
-      "type": "page",
-      "id": "202608020360",
-      "file": "05-screens.md",
-      "lenses": { "kind": { "ui": true } }
-    }
-  ]
+      },
+      {
+        "id": "202608020330",
+        "file": "projects/02-group.md",
+        "lenses": {
+          "read": {
+            "impl": true
+          }
+        }
+      },
+      {
+        "id": "202608020340",
+        "file": "03-annotation.md",
+        "lenses": {
+          "read": {
+            "impl": true
+          }
+        }
+      },
+      {
+        "id": "202608020350",
+        "file": "04-agent.md",
+        "lenses": {
+          "read": {
+            "impl": true
+          }
+        }
+      },
+      {
+        "id": "202608020360",
+        "file": "05-screens.md",
+        "lenses": {
+          "read": {
+            "ui": true
+          }
+        }
+      }
+    ],
+    "axes": [
+      {
+        "id": "202608020300"
+      },
+      {
+        "id": "identity",
+        "children": [
+          {
+            "id": "202608020310"
+          }
+        ]
+      },
+      {
+        "id": "projects",
+        "children": [
+          {
+            "id": "202608020320"
+          },
+          {
+            "id": "202608020330"
+          }
+        ]
+      },
+      {
+        "id": "202608020340"
+      },
+      {
+        "id": "202608020350"
+      },
+      {
+        "id": "202608020360"
+      }
+    ]
+  }
 }

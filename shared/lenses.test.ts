@@ -28,16 +28,12 @@ const tocWithLenses: BookToc = {
   title: 'Demo',
   chapters: [],
   tree: [],
+  lensAxisOrder: ['read', 'audience'],
+  lensAxisTitles: { read: '读法', audience: '视角' },
   lenses: {
-    kind: [
-      {
-        id: 'read',
-        title: '读法',
-        children: [
-          { id: 'scenario', title: '场景' },
-          { id: 'impl', title: '实现' },
-        ],
-      },
+    read: [
+      { id: 'scenario', title: '场景' },
+      { id: 'impl', title: '实现' },
     ],
     audience: [
       { id: 'tenant', title: '租户端' },
@@ -54,29 +50,26 @@ const sections: TocSection[] = [
 
 describe('lens tree helpers', () => {
   it('lists leaf ids under a parent', () => {
-    expect(leavesUnder(tocWithLenses.lenses!.kind, 'read').sort()).toEqual([
-      'impl',
-      'scenario',
-    ]);
-    expect(leavesUnder(tocWithLenses.lenses!.kind, 'scenario')).toEqual(['scenario']);
+    expect(leavesUnder(tocWithLenses.lenses!.read, 'scenario')).toEqual(['scenario']);
+    expect(leavesUnder(tocWithLenses.lenses!.read, 'impl')).toEqual(['impl']);
   });
 
   it('unions leaves for multi-select', () => {
-    expect(effectiveLeaves(tocWithLenses.lenses!.kind, ['scenario', 'impl']).sort()).toEqual([
-      'impl',
-      'scenario',
-    ]);
-    expect(effectiveLeaves(tocWithLenses.lenses!.kind, ['read']).sort()).toEqual([
+    expect(effectiveLeaves(tocWithLenses.lenses!.read, ['scenario', 'impl']).sort()).toEqual([
       'impl',
       'scenario',
     ]);
   });
 
   it('lensLeafIds excludes parents', () => {
-    expect([...lensLeafIds(tocWithLenses.lenses!.kind)].sort()).toEqual(['impl', 'scenario']);
+    expect([...lensLeafIds(tocWithLenses.lenses!.read)].sort()).toEqual(['impl', 'scenario']);
   });
 
   it('effectiveAxisLeaves treats axis id as whole axis', () => {
+    expect(effectiveAxisLeaves(tocWithLenses, 'read', ['read']).sort()).toEqual([
+      'impl',
+      'scenario',
+    ]);
     expect(effectiveAxisLeaves(tocWithLenses, 'audience', ['audience']).sort()).toEqual([
       'admin',
       'tenant',
@@ -88,7 +81,7 @@ describe('lens tree helpers', () => {
 describe('defaultSelection', () => {
   it('selects the first option root on each axis', () => {
     expect(defaultSelection(tocWithLenses)).toEqual({
-      kind: ['read'],
+      read: ['scenario'],
       audience: ['tenant'],
     });
   });
@@ -97,8 +90,10 @@ describe('defaultSelection', () => {
 describe('buildLensSelectTree', () => {
   it('puts axes at L1 and options underneath', () => {
     const tree = buildLensSelectTree(tocWithLenses);
-    expect(tree.map((n) => n.id)).toEqual(['kind', 'audience']);
-    expect(tree[0].children?.[0]?.id).toBe('read');
+    expect(tree.map((n) => n.id)).toEqual(['read', 'audience']);
+    expect(tree[0].title).toBe('读法');
+    expect(tree[0].children?.map((c) => c.id)).toEqual(['scenario', 'impl']);
+    expect(tree[1].title).toBe('视角');
     expect(tree[1].children?.map((c) => c.id)).toEqual(['tenant', 'admin']);
   });
 });
@@ -111,14 +106,14 @@ describe('normalizeBranchLayerSelection', () => {
       'admin',
       'tenant',
     ]);
-    expect(normalizeBranchLayerSelection(tree, ['audience', 'kind']).sort()).toEqual([
+    expect(normalizeBranchLayerSelection(tree, ['audience', 'read']).sort()).toEqual([
       'audience',
-      'kind',
+      'read',
     ]);
   });
 
   it('clears ancestor when child is added', () => {
-    expect(normalizeBranchLayerSelection(tree, ['kind', 'scenario'], ['kind'])).toEqual([
+    expect(normalizeBranchLayerSelection(tree, ['read', 'scenario'], ['read'])).toEqual([
       'scenario',
     ]);
   });
@@ -137,14 +132,14 @@ describe('normalizeBranchLayerSelection', () => {
 describe('flatIdsToSelection', () => {
   it('partitions flat ids and fills missing axes from default', () => {
     expect(flatIdsToSelection(tocWithLenses, ['tenant', 'scenario'])).toEqual({
-      kind: ['scenario'],
+      read: ['scenario'],
       audience: ['tenant'],
     });
   });
 
   it('accepts whole-axis selection', () => {
-    expect(flatIdsToSelection(tocWithLenses, ['audience', 'kind'])).toEqual({
-      kind: ['kind'],
+    expect(flatIdsToSelection(tocWithLenses, ['audience', 'read'])).toEqual({
+      read: ['read'],
       audience: ['audience'],
     });
   });
@@ -155,22 +150,22 @@ describe('collapseEachAxisToSingle', () => {
     expect(
       collapseEachAxisToSingle(
         tocWithLenses,
-        { kind: ['scenario', 'impl'], audience: ['tenant', 'admin'] },
+        { read: ['scenario', 'impl'], audience: ['tenant', 'admin'] },
         ['impl', 'admin'],
       ),
-    ).toEqual({ kind: ['impl'], audience: ['admin'] });
+    ).toEqual({ read: ['impl'], audience: ['admin'] });
   });
 
   it('falls back to the last id when nothing preferred', () => {
     expect(
-      collapseEachAxisToSingle(tocWithLenses, { kind: ['scenario', 'impl'], audience: ['tenant'] }),
-    ).toEqual({ kind: ['impl'], audience: ['tenant'] });
+      collapseEachAxisToSingle(tocWithLenses, { read: ['scenario', 'impl'], audience: ['tenant'] }),
+    ).toEqual({ read: ['impl'], audience: ['tenant'] });
   });
 });
 
 describe('selectionToFlatIds', () => {
   it('flattens in axis order', () => {
-    expect(selectionToFlatIds(tocWithLenses, { kind: ['scenario'], audience: ['tenant'] })).toEqual([
+    expect(selectionToFlatIds(tocWithLenses, { read: ['scenario'], audience: ['tenant'] })).toEqual([
       'scenario',
       'tenant',
     ]);
@@ -192,15 +187,15 @@ describe('pageVisibleInSelection', () => {
     id: 'p1',
     title: 'P1',
     file: 'p1.md',
-    layers: { kind: ['scenario'] },
+    layers: { read: ['scenario'] },
     sections: [],
   };
 
   it('hides pages whose layer does not match effective leaves', () => {
-    expect(pageVisibleInSelection(chapter, { kind: ['impl'] }, tocWithLenses)).toBe(false);
-    expect(pageVisibleInSelection(chapter, { kind: ['scenario'] }, tocWithLenses)).toBe(true);
-    expect(pageVisibleInSelection(chapter, { kind: ['read'] }, tocWithLenses)).toBe(true);
-    expect(pageVisibleInSelection(chapter, { kind: ['kind'] }, tocWithLenses)).toBe(true);
+    expect(pageVisibleInSelection(chapter, { read: ['impl'] }, tocWithLenses)).toBe(false);
+    expect(pageVisibleInSelection(chapter, { read: ['scenario'] }, tocWithLenses)).toBe(true);
+    expect(pageVisibleInSelection(chapter, { read: ['scenario'] }, tocWithLenses)).toBe(true);
+    expect(pageVisibleInSelection(chapter, { read: ['read'] }, tocWithLenses)).toBe(true);
   });
 });
 
@@ -211,19 +206,19 @@ describe('filterChapters', () => {
         id: 'rules-page',
         title: 'R',
         file: 'r.md',
-        layers: { kind: ['scenario'] },
+        layers: { read: ['scenario'] },
         sections: [],
       },
       {
         id: 'ui-page',
         title: 'U',
         file: 'u.md',
-        layers: { kind: ['impl'] },
+        layers: { read: ['impl'] },
         sections: [],
       },
     ];
     expect(
-      filterChapters(chapters, { kind: ['impl'] }, tocWithLenses).map((c) => c.id),
+      filterChapters(chapters, { read: ['impl'] }, tocWithLenses).map((c) => c.id),
     ).toEqual(['ui-page']);
   });
 });
@@ -231,13 +226,13 @@ describe('filterChapters', () => {
 describe('lensSelectionFromQuery', () => {
   it('reads multi-value axis from query', () => {
     expect(
-      lensSelectionFromQuery({ kind: ['scenario', 'impl'], audience: 'admin' }, tocWithLenses),
-    ).toEqual({ kind: ['scenario', 'impl'], audience: ['admin'] });
+      lensSelectionFromQuery({ read: ['scenario', 'impl'], audience: 'admin' }, tocWithLenses),
+    ).toEqual({ read: ['scenario', 'impl'], audience: ['admin'] });
   });
 
   it('accepts whole-axis id in query', () => {
-    expect(lensSelectionFromQuery({ kind: 'kind', audience: 'audience' }, tocWithLenses)).toEqual({
-      kind: ['kind'],
+    expect(lensSelectionFromQuery({ read: 'read', audience: 'audience' }, tocWithLenses)).toEqual({
+      read: ['read'],
       audience: ['audience'],
     });
   });
@@ -249,32 +244,32 @@ describe('lensSelectionFromQuery', () => {
 
   it('accepts URLSearchParams repeated keys', () => {
     const q = new URLSearchParams();
-    q.append('kind', 'impl');
-    q.append('kind', 'scenario');
+    q.append('read', 'impl');
+    q.append('read', 'scenario');
     q.append('audience', 'tenant');
     expect(lensSelectionFromQuery(q, tocWithLenses)).toEqual({
-      kind: ['impl', 'scenario'],
+      read: ['impl', 'scenario'],
       audience: ['tenant'],
     });
   });
 
   it('returns null for books without lenses', () => {
     const bare: BookToc = { id: 'x', title: 'X', chapters: [], tree: [] };
-    expect(lensSelectionFromQuery({ kind: 'scenario' }, bare)).toBeNull();
+    expect(lensSelectionFromQuery({ read: 'scenario' }, bare)).toBeNull();
   });
 });
 
 describe('lensQueryFromSelection', () => {
   it('serializes multi-select as array', () => {
     expect(
-      lensQueryFromSelection({ kind: ['scenario', 'impl'], audience: ['tenant'] }, tocWithLenses),
-    ).toEqual({ kind: ['scenario', 'impl'], audience: 'tenant' });
+      lensQueryFromSelection({ read: ['scenario', 'impl'], audience: ['tenant'] }, tocWithLenses),
+    ).toEqual({ read: ['scenario', 'impl'], audience: 'tenant' });
   });
 
   it('returns empty object without selection or lenses', () => {
     expect(lensQueryFromSelection(null, tocWithLenses)).toEqual({});
     const bare: BookToc = { id: 'x', title: 'X', chapters: [], tree: [] };
-    expect(lensQueryFromSelection({ kind: ['scenario'] }, bare)).toEqual({});
+    expect(lensQueryFromSelection({ read: ['scenario'] }, bare)).toEqual({});
   });
 });
 
@@ -284,30 +279,32 @@ describe('resolveLensSwitchChapter', () => {
     title: 'Demo',
     tree: [],
     lenses: tocWithLenses.lenses,
+    lensAxisTitles: tocWithLenses.lensAxisTitles,
+    lensAxisOrder: tocWithLenses.lensAxisOrder,
     chapters: [
       {
         id: 'auth',
         title: 'Auth',
         file: 'auth.md',
-        layers: { kind: ['scenario', 'impl'] },
+        layers: { read: ['scenario', 'impl'] },
         sections: [],
       },
       {
         id: 'only-scenario',
         title: 'S',
         file: 's.md',
-        layers: { kind: 'scenario' },
+        layers: { read: 'scenario' },
         sections: [],
       },
     ],
   };
 
   it('stays on the same page when still visible under next selection', () => {
-    expect(resolveLensSwitchChapter(toc, 'auth', { kind: ['impl'] })).toBe('auth');
+    expect(resolveLensSwitchChapter(toc, 'auth', { read: ['impl'] })).toBe('auth');
   });
 
   it('falls back to the first visible page when current is hidden', () => {
-    expect(resolveLensSwitchChapter(toc, 'only-scenario', { kind: ['impl'] })).toBe('auth');
+    expect(resolveLensSwitchChapter(toc, 'only-scenario', { read: ['impl'] })).toBe('auth');
   });
 });
 
@@ -316,10 +313,10 @@ describe('sectionAllowlistFor', () => {
     id: 'auth',
     title: 'Auth',
     file: 'auth.md',
-    layers: { kind: ['scenario', 'impl'] },
+    layers: { read: ['scenario', 'impl'] },
     sections,
     sectionAllowlists: {
-      kind: {
+      read: {
         scenario: ['a'],
         impl: ['b'],
       },
@@ -327,13 +324,13 @@ describe('sectionAllowlistFor', () => {
   };
 
   it('unions allowlists for multi-selected leaves', () => {
-    expect(sectionAllowlistFor(chapter, { kind: ['scenario', 'impl'] }, tocWithLenses)?.sort()).toEqual(
+    expect(sectionAllowlistFor(chapter, { read: ['scenario', 'impl'] }, tocWithLenses)?.sort()).toEqual(
       ['a', 'a1', 'b'],
     );
   });
 
   it('expands parent selection to leaf union', () => {
-    expect(sectionAllowlistFor(chapter, { kind: ['read'] }, tocWithLenses)?.sort()).toEqual([
+    expect(sectionAllowlistFor(chapter, { read: ['read'] }, tocWithLenses)?.sort()).toEqual([
       'a',
       'a1',
       'b',
@@ -345,7 +342,7 @@ describe('sectionAllowlistFor', () => {
       ...chapter,
       sectionAllowlists: undefined,
     };
-    expect(sectionAllowlistFor(whole, { kind: ['scenario'] }, tocWithLenses)).toBeNull();
+    expect(sectionAllowlistFor(whole, { read: ['scenario'] }, tocWithLenses)).toBeNull();
   });
 });
 

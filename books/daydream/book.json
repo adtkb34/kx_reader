@@ -1,105 +1,147 @@
 {
   "title": "白日做梦",
   "description": "关于选择、反馈与定义的思考札记。从本能默认路径出发，看清之后再决定顺着、约束还是改道。",
-  "contents": [
-    {
-      "type": "page",
-      "id": "overview",
-      "file": "01-overview.md"
-    },
-    {
-      "type": "group",
-      "id": "from-instinct",
-      "title": "从本能出发",
-      "children": [
-        {
-          "type": "page",
-          "id": "avoid-over-imitate",
-          "file": "from-instinct/01-avoid-over-imitate.md"
-        },
-        {
-          "type": "page",
-          "id": "202607301017",
-          "file": "from-instinct/13-first-principles.md"
-        },
-        {
-          "type": "page",
-          "id": "202607301537",
-          "file": "from-instinct/14-constraint-over-recipe.md"
-        },
-        {
-          "type": "page",
-          "id": "short-feedback",
-          "file": "from-instinct/02-short-feedback.md"
-        },
-        {
-          "type": "page",
-          "id": "202607301623",
-          "file": "from-instinct/16-attention-pivot.md"
-        },
-        {
-          "type": "page",
-          "id": "affirmative-definition",
-          "file": "from-instinct/03-affirmative-definition.md"
-        },
-        {
-          "type": "page",
-          "id": "completeness-trap",
-          "file": "from-instinct/04-completeness-trap.md"
-        },
-        {
-          "type": "page",
-          "id": "202607291914",
-          "file": "from-instinct/10-framework-first.md"
-        },
-        {
-          "type": "page",
-          "id": "202607291918",
-          "file": "from-instinct/11-responsibility-over-ability.md"
-        },
-        {
-          "type": "page",
-          "id": "202607281805",
-          "file": "from-instinct/05-blessing-as-ornament.md"
-        },
-        {
-          "type": "group",
-          "id": "frame-cut",
-          "title": "坐标与切分",
-          "children": [
-            {
-              "type": "page",
-              "id": "202607291651",
-              "file": "from-instinct/06-shared-frame.md"
-            },
-            {
-              "type": "page",
-              "id": "202607291622",
-              "file": "from-instinct/07-dimension-mixup.md"
-            },
-            {
-              "type": "page",
-              "id": "202607291500",
-              "file": "from-instinct/08-hierarchy-mixup.md"
-            }
-          ]
-        },
-        {
-          "type": "page",
-          "id": "202607291558",
-          "file": "from-instinct/09-essence-first.md"
-        },
-        {
-          "type": "page",
-          "id": "202607301618",
-          "file": "from-instinct/15-single-source.md"
-        },
-        {
-          "type": "page",
-          "id": "202607291942",
-          "file": "from-instinct/12-paraphrase-restatement.md"
-        }
-      ]
-    }
-  ]
+  "contents": {
+    "dimensions": [
+      {
+        "id": "overview",
+        "file": "01-overview.md"
+      },
+      {
+        "id": "from-instinct",
+        "title": "从本能出发"
+      },
+      {
+        "id": "avoid-over-imitate",
+        "file": "from-instinct/01-avoid-over-imitate.md"
+      },
+      {
+        "id": "202607301017",
+        "file": "from-instinct/13-first-principles.md"
+      },
+      {
+        "id": "202607301537",
+        "file": "from-instinct/14-constraint-over-recipe.md"
+      },
+      {
+        "id": "short-feedback",
+        "file": "from-instinct/02-short-feedback.md"
+      },
+      {
+        "id": "202607301623",
+        "file": "from-instinct/16-attention-pivot.md"
+      },
+      {
+        "id": "affirmative-definition",
+        "file": "from-instinct/03-affirmative-definition.md"
+      },
+      {
+        "id": "completeness-trap",
+        "file": "from-instinct/04-completeness-trap.md"
+      },
+      {
+        "id": "202607291914",
+        "file": "from-instinct/10-framework-first.md"
+      },
+      {
+        "id": "202607291918",
+        "file": "from-instinct/11-responsibility-over-ability.md"
+      },
+      {
+        "id": "202607281805",
+        "file": "from-instinct/05-blessing-as-ornament.md"
+      },
+      {
+        "id": "frame-cut",
+        "title": "坐标与切分"
+      },
+      {
+        "id": "202607291651",
+        "file": "from-instinct/06-shared-frame.md"
+      },
+      {
+        "id": "202607291622",
+        "file": "from-instinct/07-dimension-mixup.md"
+      },
+      {
+        "id": "202607291500",
+        "file": "from-instinct/08-hierarchy-mixup.md"
+      },
+      {
+        "id": "202607291558",
+        "file": "from-instinct/09-essence-first.md"
+      },
+      {
+        "id": "202607301618",
+        "file": "from-instinct/15-single-source.md"
+      },
+      {
+        "id": "202607291942",
+        "file": "from-instinct/12-paraphrase-restatement.md"
+      }
+    ],
+    "axes": [
+      {
+        "id": "overview"
+      },
+      {
+        "id": "from-instinct",
+        "children": [
+          {
+            "id": "avoid-over-imitate"
+          },
+          {
+            "id": "202607301017"
+          },
+          {
+            "id": "202607301537"
+          },
+          {
+            "id": "short-feedback"
+          },
+          {
+            "id": "202607301623"
+          },
+          {
+            "id": "affirmative-definition"
+          },
+          {
+            "id": "completeness-trap"
+          },
+          {
+            "id": "202607291914"
+          },
+          {
+            "id": "202607291918"
+          },
+          {
+            "id": "202607281805"
+          },
+          {
+            "id": "frame-cut",
+            "children": [
+              {
+                "id": "202607291651"
+              },
+              {
+                "id": "202607291622"
+              },
+              {
+                "id": "202607291500"
+              }
+            ]
+          },
+          {
+            "id": "202607291558"
+          },
+          {
+            "id": "202607301618"
+          },
+          {
+            "id": "202607291942"
+          }
+        ]
+      }
+    ]
+  }
 }

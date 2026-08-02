@@ -9,17 +9,13 @@ import type {
   TocTreeNode,
 } from './types';
 
-/** Display labels for known axis keys in the toolbar. */
-export const AXIS_LABELS: Record<string, string> = {
-  kind: '读法',
-  audience: '视角',
-};
-
-export function axisLabel(axisId: LensAxisId): string {
-  return AXIS_LABELS[axisId] ?? axisId;
+/** Axis title from book config; falls back to the id. */
+export function axisLabel(toc: BookToc, axisId: LensAxisId): string {
+  return toc.lensAxisTitles?.[axisId] ?? axisId;
 }
 
 export function lensAxisIds(toc: BookToc): LensAxisId[] {
+  if (toc.lensAxisOrder?.length) return [...toc.lensAxisOrder];
   return toc.lenses ? Object.keys(toc.lenses) : [];
 }
 
@@ -116,11 +112,19 @@ export function effectiveAxisLeaves(
 /** Toolbar tree: L1 = axes, L2+ = that axis's options. */
 export function buildLensSelectTree(toc: BookToc): BookLens[] {
   if (!toc.lenses) return [];
-  return lensAxisIds(toc).map((axis) => ({
-    id: axis,
-    title: axisLabel(axis),
-    children: toc.lenses![axis] ?? [],
-  }));
+  return lensAxisIds(toc).map((axis) => {
+    const opts = toc.lenses![axis] ?? [];
+    // Leaf axis (dimension with no children): option tree is [itself].
+    const children =
+      opts.length === 1 && opts[0]?.id === axis && !opts[0].children?.length
+        ? undefined
+        : opts;
+    return {
+      id: axis,
+      title: axisLabel(toc, axis),
+      ...(children?.length ? { children } : {}),
+    };
+  });
 }
 
 /** True if `ancestorId` is a strict ancestor of `descendantId` in the tree. */

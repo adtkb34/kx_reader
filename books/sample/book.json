@@ -2,134 +2,255 @@
   "title": "示例手册：文档书阅读器",
   "description": "产品说明与写书唯一规范。顶栏树选「读法」维度（可多选）；场景看用法，实现看规范与设计。",
   "lenses": {
-    "kind": [
+    "dimensions": [
       {
         "id": "read",
-        "title": "读法",
+        "title": "读法"
+      },
+      {
+        "id": "scenario",
+        "title": "场景"
+      },
+      {
+        "id": "impl",
+        "title": "实现"
+      }
+    ],
+    "axes": [
+      {
+        "id": "read",
         "children": [
-          { "id": "scenario", "title": "场景" },
-          { "id": "impl", "title": "实现" }
+          {
+            "id": "scenario"
+          },
+          {
+            "id": "impl"
+          }
         ]
       }
     ]
   },
   "rating": {
     "dimensions": [
-      { "id": "clarity", "title": "清晰度", "max": 10 },
-      { "id": "completeness", "title": "完备性", "max": 10 },
-      { "id": "implementability", "title": "可实现性", "max": 10 }
+      {
+        "id": "clarity",
+        "title": "清晰度",
+        "max": 10
+      },
+      {
+        "id": "completeness",
+        "title": "完备性",
+        "max": 10
+      },
+      {
+        "id": "implementability",
+        "title": "可实现性",
+        "max": 10
+      }
     ],
     "defaults": {
-      "expected": { "clarity": 7, "completeness": 7, "implementability": 7 }
+      "expected": {
+        "clarity": 7,
+        "completeness": 7,
+        "implementability": 7
+      }
     },
     "lenses": {
       "scenario": {
-        "expected": { "clarity": 8, "completeness": 5, "implementability": 4 }
+        "expected": {
+          "clarity": 8,
+          "completeness": 5,
+          "implementability": 4
+        }
       },
       "impl": {
-        "expected": { "clarity": 9, "completeness": 9, "implementability": 9 }
+        "expected": {
+          "clarity": 9,
+          "completeness": 9,
+          "implementability": 9
+        }
       }
     }
   },
-  "contents": [
-    {
-      "type": "page",
-      "id": "overview",
-      "file": "01-overview.md"
-    },
-    {
-      "type": "group",
-      "id": "writing",
-      "title": "写作",
-      "children": [
-        {
-          "type": "page",
-          "id": "structure",
-          "file": "02-structure.md",
-          "lenses": { "kind": { "scenario": true } }
-        },
-        {
-          "type": "page",
-          "id": "format",
-          "file": "03-format.md",
-          "lenses": { "kind": { "impl": true } }
-        },
-        {
-          "type": "page",
-          "id": "details-demo",
-          "file": "04-details.md",
-          "lenses": { "kind": { "scenario": true } }
+  "contents": {
+    "dimensions": [
+      {
+        "id": "overview",
+        "file": "01-overview.md"
+      },
+      {
+        "id": "writing",
+        "title": "写作"
+      },
+      {
+        "id": "structure",
+        "file": "02-structure.md",
+        "lenses": {
+          "read": {
+            "scenario": true
+          }
         }
-      ]
-    },
-    {
-      "type": "group",
-      "id": "reading",
-      "title": "阅读",
-      "children": [
-        {
-          "type": "page",
-          "id": "navigation",
-          "file": "05-navigation.md",
-          "lenses": { "kind": { "scenario": true } }
-        },
-        {
-          "type": "page",
-          "id": "lenses",
-          "file": "06-lenses.md",
-          "lenses": { "kind": { "scenario": true } }
+      },
+      {
+        "id": "format",
+        "file": "03-format.md",
+        "lenses": {
+          "read": {
+            "impl": true
+          }
         }
-      ]
-    },
-    {
-      "type": "group",
-      "id": "review",
-      "title": "审读",
-      "children": [
-        {
-          "type": "page",
-          "id": "annotations",
-          "file": "07-annotations.md",
-          "lenses": { "kind": { "scenario": true } }
-        },
-        {
-          "type": "page",
-          "id": "persistence",
-          "file": "08-persistence.md",
-          "lenses": { "kind": { "impl": true } }
-        },
-        {
-          "type": "page",
-          "id": "git-compare",
-          "file": "09-git-compare.md",
-          "lenses": { "kind": { "impl": true } }
+      },
+      {
+        "id": "details-demo",
+        "file": "04-details.md",
+        "lenses": {
+          "read": {
+            "scenario": true
+          }
         }
-      ]
-    },
-    {
-      "type": "group",
-      "id": "design",
-      "title": "设计",
-      "children": [
-        {
-          "type": "page",
-          "id": "architecture",
-          "file": "10-architecture.md",
-          "lenses": { "kind": { "impl": true } }
-        },
-        {
-          "type": "page",
-          "id": "local-agent",
-          "file": "11-local-agent.md",
-          "lenses": { "kind": { "impl": true } }
+      },
+      {
+        "id": "reading",
+        "title": "阅读"
+      },
+      {
+        "id": "navigation",
+        "file": "05-navigation.md",
+        "lenses": {
+          "read": {
+            "scenario": true
+          }
         }
-      ]
-    },
-    {
-      "type": "page",
-      "id": "checklist",
-      "file": "12-checklist.md",
-      "lenses": { "kind": { "impl": true } }
-    }
-  ]
+      },
+      {
+        "id": "lenses",
+        "file": "06-lenses.md",
+        "lenses": {
+          "read": {
+            "scenario": true
+          }
+        }
+      },
+      {
+        "id": "review",
+        "title": "审读"
+      },
+      {
+        "id": "annotations",
+        "file": "07-annotations.md",
+        "lenses": {
+          "read": {
+            "scenario": true
+          }
+        }
+      },
+      {
+        "id": "persistence",
+        "file": "08-persistence.md",
+        "lenses": {
+          "read": {
+            "impl": true
+          }
+        }
+      },
+      {
+        "id": "git-compare",
+        "file": "09-git-compare.md",
+        "lenses": {
+          "read": {
+            "impl": true
+          }
+        }
+      },
+      {
+        "id": "design",
+        "title": "设计"
+      },
+      {
+        "id": "architecture",
+        "file": "10-architecture.md",
+        "lenses": {
+          "read": {
+            "impl": true
+          }
+        }
+      },
+      {
+        "id": "local-agent",
+        "file": "11-local-agent.md",
+        "lenses": {
+          "read": {
+            "impl": true
+          }
+        }
+      },
+      {
+        "id": "checklist",
+        "file": "12-checklist.md",
+        "lenses": {
+          "read": {
+            "impl": true
+          }
+        }
+      }
+    ],
+    "axes": [
+      {
+        "id": "overview"
+      },
+      {
+        "id": "writing",
+        "children": [
+          {
+            "id": "structure"
+          },
+          {
+            "id": "format"
+          },
+          {
+            "id": "details-demo"
+          }
+        ]
+      },
+      {
+        "id": "reading",
+        "children": [
+          {
+            "id": "navigation"
+          },
+          {
+            "id": "lenses"
+          }
+        ]
+      },
+      {
+        "id": "review",
+        "children": [
+          {
+            "id": "annotations"
+          },
+          {
+            "id": "persistence"
+          },
+          {
+            "id": "git-compare"
+          }
+        ]
+      },
+      {
+        "id": "design",
+        "children": [
+          {
+            "id": "architecture"
+          },
+          {
+            "id": "local-agent"
+          }
+        ]
+      },
+      {
+        "id": "checklist"
+      }
+    ]
+  }
 }
