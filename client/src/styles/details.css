@@ -7,6 +7,11 @@
   background: #fbf9f5;
 }
 
+.doc-section.has-lens .md-details {
+  border-left: 2px solid
+    color-mix(in srgb, var(--section-lens, var(--lens-default)) 55%, var(--line));
+}
+
 .md-details > summary {
   cursor: pointer;
   padding: 9px 14px;
@@ -34,4 +39,3 @@
 .md-details .md-details {
   background: #f6f3ec;
 }
-

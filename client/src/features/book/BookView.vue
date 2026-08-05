@@ -28,6 +28,7 @@ import {
   resolveLensSwitchChapter,
   sameLensSelection,
   selectionFromPageLayers,
+  selectionLegendLeaves,
   selectionToFlatIds,
   visibleIdSet,
 } from '@shared/lenses';
@@ -110,6 +111,10 @@ const lensSelectTree = computed(() => (toc.value ? buildLensSelectTree(toc.value
 
 const flatLensIds = computed(() =>
   toc.value ? selectionToFlatIds(toc.value, activeSelection.value) : [],
+);
+
+const lensLegend = computed(() =>
+  toc.value ? selectionLegendLeaves(toc.value, activeSelection.value) : [],
 );
 
 function queryEqual(
@@ -369,6 +374,22 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
               @update:model-value="onLensSelect"
             />
           </div>
+          <ul
+            v-if="lensLegend.length > 1"
+            class="lens-legend"
+            aria-label="当前透镜维度"
+          >
+            <li
+              v-for="item in lensLegend"
+              :key="item.id"
+              class="lens-legend-item"
+              :data-lens="item.id"
+              :style="{ '--legend-lens': `var(--lens-${item.id}, var(--lens-default))` }"
+            >
+              <span class="lens-legend-dot" aria-hidden="true" />
+              <span class="lens-legend-label">{{ item.title }}</span>
+            </li>
+          </ul>
         </div>
         <button v-if="orphans.length" class="btn ghost warn" @click="ui.orphanOpen = true">
           孤立标注 {{ orphans.length }}

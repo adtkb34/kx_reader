@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { nextTick, onBeforeUnmount, ref, watch, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElImageViewer } from 'element-plus';
 import { api } from '@/api/client';
@@ -8,8 +8,15 @@ import { renderChapter, splitSections, type RenderedSection } from '@/markdown';
 import { bindMermaidDetails, renderMermaidIn } from '@/mermaid';
 import SectionBlock from '@/features/book/SectionBlock.vue';
 import { ui } from '@/stores/ui';
-import { filterSectionsByAllowlist, sectionAllowlistFor } from '@shared/lenses';
-import type { LensSelection, TocChapter } from '@shared/types';
+import {
+  filterSectionsByAllowlist,
+  lensNodeTitle,
+  sectionAllowlistFor,
+  sectionClusterRole,
+  sectionLensLeaves,
+  selectionLegendLeaves,
+} from '@shared/lenses';
+import type { LensSelection, PageLayer, TocChapter } from '@shared/types';
 
 const props = defineProps<{
   bookId: string;
@@ -31,6 +38,43 @@ const previewVisible = ref(false);
 const previewUrlList = ref<string[]>([]);
 const previewIndex = ref(0);
 let unbindMermaid: (() => void) | null = null;
+
+const tocChapter = computed(() =>
+  tocOf(props.bookId)?.chapters.find((c) => c.id === props.chapterId),
+);
+
+const activeLeaves = computed(() => {
+  const toc = tocOf(props.bookId);
+  if (!toc) return new Set<PageLayer>();
+  return new Set(selectionLegendLeaves(toc, props.lensSelection ?? null).map((i) => i.id));
+});
+
+const lensChrome = computed(() => activeLeaves.value.size > 1);
+
+const lensTitleMap = computed(() => {
+  const toc = tocOf(props.bookId);
+  const ch = tocChapter.value;
+  if (!toc || !ch?.sectionAllowlists) return {} as Record<string, string>;
+  const map: Record<string, string> = {};
+  for (const byLeaf of Object.values(ch.sectionAllowlists)) {
+    for (const leaf of Object.keys(byLeaf ?? {})) {
+      map[leaf] = lensNodeTitle(toc, leaf);
+    }
+  }
+  return map;
+});
+
+function leavesFor(sectionId: string): PageLayer[] {
+  const toc = tocOf(props.bookId);
+  const ch = tocChapter.value;
+  if (!toc || !ch) return [];
+  return sectionLensLeaves(ch, sectionId, toc);
+}
+
+function clusterFor(section: RenderedSection, index: number) {
+  if (!lensChrome.value) return null;
+  return sectionClusterRole(section, index, leavesFor(section.id));
+}
 
 async function load(): Promise<void> {
   loading.value = true;
@@ -214,11 +258,15 @@ function goNext(): void {
       <template v-else>
         <h1 class="chapter-title">{{ title }}</h1>
         <SectionBlock
-          v-for="s in sections"
+          v-for="(s, i) in sections"
           :key="chapterId + '#' + s.id"
           :book-id="bookId"
           :chapter-id="chapterId"
           :section="s"
+          :lens-leaves="leavesFor(s.id)"
+          :lens-titles="lensTitleMap"
+          :lens-chrome="lensChrome"
+          :cluster="clusterFor(s, i)"
         />
         <div v-if="!loading && sections.length === 0" class="muted">（本章暂无内容）</div>
       </template>

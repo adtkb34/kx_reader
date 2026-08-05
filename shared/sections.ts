@@ -2,6 +2,7 @@ import MarkdownIt from 'markdown-it';
 import markdownItAttrs from 'markdown-it-attrs';
 import markdownItContainer from 'markdown-it-container';
 import type { TocSection } from './types';
+import { sectionMarkerPlugin } from './sectionMarker';
 
 /**
  * 与客户端 markdown-it-anchor 使用同一个 slugify，
@@ -17,6 +18,7 @@ export function slugify(text: string): string {
 }
 
 const md = new MarkdownIt()
+  .use(sectionMarkerPlugin)
   .use(markdownItAttrs, { allowedAttributes: ['id', 'class'] })
   .use(markdownItContainer, 'details');
 
@@ -39,58 +41,109 @@ export interface ExtractedSections {
   hasIntro: boolean;
 }
 
-interface HeadingHit {
+interface MarkerHit {
   id: string;
-  title: string;
-  level: number;
-  /** 0-based start line in source */
+  /** 0-based start line of the `{#id}` marker */
   startLine: number;
 }
 
-function collectHeadings(markdown: string): { headings: HeadingHit[]; hasIntro: boolean } {
+function collectMarkers(markdown: string): { markers: MarkerHit[]; hasIntro: boolean } {
   const tokens = md.parse(markdown, {});
-  const headings: HeadingHit[] = [];
-  const seen = new Map<string, number>();
-  let sawSection = false;
+  const markers: MarkerHit[] = [];
+  let sawMarker = false;
   let hasIntro = false;
 
+  for (const t of tokens) {
+    if (t.type === 'section_marker' && t.level === 0) {
+      const id = t.attrGet('id');
+      if (id) {
+        markers.push({ id, startLine: t.map?.[0] ?? 0 });
+        sawMarker = true;
+      }
+      continue;
+    }
+    if (!sawMarker && t.level === 0 && t.type !== 'section_marker') {
+      // Any top-level content token before the first marker counts as intro signal.
+      // Skip purely structural closes.
+      if (
+        t.type.endsWith('_close') ||
+        t.type === 'heading_close' ||
+        t.type === 'inline'
+      ) {
+        continue;
+      }
+      if (t.type.endsWith('_open') || t.type === 'html_block' || t.type === 'fence' || t.type === 'code_block' || t.type === 'hr') {
+        hasIntro = true;
+      }
+    }
+  }
+
+  return { markers, hasIntro };
+}
+
+/** First top-level h2–h6 in markdown fragment (not inside details). */
+function firstHeadingMeta(fragment: string): { title: string; level: number } | null {
+  if (!fragment.trim()) return null;
+  const tokens = md.parse(fragment, {});
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
     if (t.type === 'heading_open' && t.level === 0) {
       const level = Number(t.tag.slice(1));
       if (level >= 2) {
-        sawSection = true;
-        const title = inlineText(tokens[i + 1]) || '(无标题)';
-        let id = t.attrGet('id');
-        if (!id) {
-          const base = slugify(title);
-          const n = seen.get(base) ?? 0;
-          seen.set(base, n + 1);
-          id = n === 0 ? base : `${base}-${n}`;
-        } else {
-          seen.set(id, (seen.get(id) ?? 0) + 1);
-        }
-        const startLine = t.map?.[0] ?? 0;
-        headings.push({ id, title, level, startLine });
-        i += 2;
-        continue;
+        const title = inlineText(tokens[i + 1]);
+        return { title, level };
       }
     }
-    if (!sawSection && t.level === 0 && t.type !== 'heading_close') hasIntro = true;
+  }
+  return null;
+}
+
+function assignSectionMetas(
+  markers: MarkerHit[],
+  lines: string[],
+): TocSection[] {
+  const sections: TocSection[] = [];
+  let lastTitledLevel = 1;
+
+  for (let i = 0; i < markers.length; i++) {
+    const m = markers[i];
+    const end = i + 1 < markers.length ? markers[i + 1].startLine : lines.length;
+    // Content after the marker line
+    const fragment = lines.slice(m.startLine + 1, end).join('\n');
+    const heading = firstHeadingMeta(fragment);
+    let title: string;
+    let level: number;
+    if (heading && heading.title) {
+      title = heading.title;
+      level = heading.level;
+      lastTitledLevel = level;
+    } else if (heading) {
+      // Empty heading text — treat as untitled
+      title = '';
+      // Same level as preceding titled section so lens siblings are not
+      // swallowed by expandSectionAllowlist when the shared parent is listed.
+      level = Math.max(lastTitledLevel, 2);
+    } else {
+      title = '';
+      level = Math.max(lastTitledLevel, 2);
+    }
+    sections.push({ id: m.id, title, level });
   }
 
-  return { headings, hasIntro };
+  return sections;
 }
 
 /**
- * 抽取章节里的可标记小节（顶层 h2–h6）。
- * - 折叠块 / 引用块内部的标题 token.level > 0，不算小节（与客户端 DOM 分组规则一致）。
- * - 第一个小节标题之前若存在正文，则记 hasIntro，前端会归入 `_intro` 小节。
+ * 抽取章节里的可标记小节（独占行 `{#id}` 为边界）。
+ * - 折叠块内部的标记不算小节（block level > 0）。
+ * - 第一个标记之前若存在正文，则记 hasIntro。
+ * - 节标题/层级取节内第一个 h2–h6；无标题则 title 为空、level = 最近有标题节 level+1。
  */
 export function extractSections(markdown: string): ExtractedSections {
-  const { headings, hasIntro } = collectHeadings(markdown);
+  const lines = markdown.split('\n');
+  const { markers, hasIntro } = collectMarkers(markdown);
   return {
-    sections: headings.map(({ id, title, level }) => ({ id, title, level })),
+    sections: assignSectionMetas(markers, lines),
     hasIntro,
   };
 }
@@ -99,12 +152,12 @@ export interface SectionBody {
   id: string;
   title: string;
   level: number;
-  /** 该小节的 Markdown 原文（含标题行） */
+  /** 该小节的 Markdown 原文（含开头 `{#id}` 行） */
   body: string;
 }
 
 export interface ExtractedSectionBodies {
-  /** 首个 h2 之前的引言正文；无引言则为 null */
+  /** 首个小节标记之前的引言正文；无引言则为 null */
   intro: string | null;
   sections: SectionBody[];
 }
@@ -116,23 +169,25 @@ function sliceLines(lines: string[], start: number, endExclusive: number): strin
 /** 按与阅读器一致的小节切分，返回每段 Markdown 原文。 */
 export function extractSectionBodies(markdown: string): ExtractedSectionBodies {
   const lines = markdown.split('\n');
-  const { headings, hasIntro } = collectHeadings(markdown);
+  const { markers, hasIntro } = collectMarkers(markdown);
+  const metas = assignSectionMetas(markers, lines);
   const sections: SectionBody[] = [];
 
-  for (let i = 0; i < headings.length; i++) {
-    const h = headings[i];
-    const end = i + 1 < headings.length ? headings[i + 1].startLine : lines.length;
+  for (let i = 0; i < markers.length; i++) {
+    const m = markers[i];
+    const end = i + 1 < markers.length ? markers[i + 1].startLine : lines.length;
+    const meta = metas[i];
     sections.push({
-      id: h.id,
-      title: h.title,
-      level: h.level,
-      body: sliceLines(lines, h.startLine, end),
+      id: m.id,
+      title: meta.title,
+      level: meta.level,
+      body: sliceLines(lines, m.startLine, end),
     });
   }
 
   let intro: string | null = null;
   if (hasIntro) {
-    const end = headings.length > 0 ? headings[0].startLine : lines.length;
+    const end = markers.length > 0 ? markers[0].startLine : lines.length;
     const body = sliceLines(lines, 0, end);
     intro = body.length > 0 ? body : null;
   }

@@ -9,19 +9,23 @@ describe('tokenize', () => {
 
 describe('compareMarkdownBySectionId', () => {
   it('aligns sections by id across versions', () => {
-    const from = `## Same {#same}
+    const from = `{#same}
+## Same
 
 old
 
-## Gone {#gone}
+{#gone}
+## Gone
 
 x
 `;
-    const to = `## Same {#same}
+    const to = `{#same}
+## Same
 
 new
 
-## Added {#added}
+{#added}
+## Added
 
 y
 `;

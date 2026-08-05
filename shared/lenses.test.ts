@@ -19,6 +19,9 @@ import {
   pageVisibleInSelection,
   resolveLensSwitchChapter,
   sectionAllowlistFor,
+  sectionClusterRole,
+  sectionLensLeaves,
+  selectionLegendLeaves,
   selectionToFlatIds,
 } from './lenses';
 import type { BookToc, TocChapter, TocSection } from './types';
@@ -179,6 +182,15 @@ describe('expandSectionAllowlist', () => {
 
   it('returns null when allowlist is null', () => {
     expect(expandSectionAllowlist(sections, null)).toBeNull();
+  });
+
+  it('does not expand untitled sections into later deeper headings', () => {
+    const mixed: TocSection[] = [
+      { id: 'parent', title: 'Parent', level: 2 },
+      { id: 'flow', title: '', level: 2 },
+      { id: 'entity', title: 'Entity', level: 3 },
+    ];
+    expect(expandSectionAllowlist(mixed, ['flow'])).toEqual(['flow']);
   });
 });
 
@@ -343,6 +355,63 @@ describe('sectionAllowlistFor', () => {
       sectionAllowlists: undefined,
     };
     expect(sectionAllowlistFor(whole, { read: ['scenario'] }, tocWithLenses)).toBeNull();
+  });
+});
+
+describe('sectionLensLeaves', () => {
+  const chapter: TocChapter = {
+    id: 'auth',
+    title: 'Auth',
+    file: 'auth.md',
+    sections,
+    sectionAllowlists: {
+      read: {
+        scenario: ['a'],
+        impl: ['b', 'shared'],
+      },
+    },
+  };
+
+  it('returns leaves that list the section (expanded)', () => {
+    expect(sectionLensLeaves(chapter, 'a', tocWithLenses)).toEqual(['scenario']);
+    expect(sectionLensLeaves(chapter, 'a1', tocWithLenses)).toEqual(['scenario']);
+    expect(sectionLensLeaves(chapter, 'b', tocWithLenses)).toEqual(['impl']);
+  });
+
+  it('returns multiple leaves for shared sections', () => {
+    const multi: TocChapter = {
+      ...chapter,
+      sections: [...sections, { id: 'shared', title: 'Shared', level: 2 }],
+      sectionAllowlists: {
+        read: {
+          scenario: ['shared'],
+          impl: ['shared'],
+        },
+      },
+    };
+    expect(sectionLensLeaves(multi, 'shared', tocWithLenses)).toEqual(['scenario', 'impl']);
+  });
+
+  it('returns empty when section is not listed', () => {
+    expect(sectionLensLeaves(chapter, 'missing', tocWithLenses)).toEqual([]);
+  });
+});
+
+describe('selectionLegendLeaves / sectionClusterRole', () => {
+  it('lists effective leaves with titles', () => {
+    expect(selectionLegendLeaves(tocWithLenses, { read: ['scenario', 'impl'] })).toEqual([
+      { id: 'scenario', title: '场景' },
+      { id: 'impl', title: '实现' },
+    ]);
+  });
+
+  it('assigns cluster roles from title, index, and leaves', () => {
+    expect(sectionClusterRole({ title: '账号密码' }, 0)).toBeNull();
+    expect(sectionClusterRole({ title: '账号密码' }, 1)).toBe('start');
+    expect(sectionClusterRole({ title: '' }, 1, ['flow'])).toBe('child');
+    expect(sectionClusterRole({ title: '' }, 1, ['ui', 'fallback'])).toBe('child');
+    expect(sectionClusterRole({ title: '' }, 1, ['entity'])).toBeNull();
+    expect(sectionClusterRole({ title: '' }, 1, [])).toBeNull();
   });
 });
 

@@ -14,6 +14,15 @@
   --read: #22c55e;
   --question: #f59e0b;
   --confirmed: #3b82f6;
+  /* Lens dimension accents — soft edge tints only (multi-select chrome) */
+  --lens-default: #9a958c;
+  --lens-scenario: #7a8a9a;
+  --lens-flow: #6d86a0;
+  --lens-entity: #6a9478;
+  --lens-permission: #5f9090;
+  --lens-ui: #a88b55;
+  --lens-fallback: #9a7482;
+  --lens-impl: #7a8a9a;
   --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
     'Microsoft YaHei', sans-serif;
   --serif: Georgia, 'Times New Roman', 'Songti SC', 'STSong', 'SimSun', serif;

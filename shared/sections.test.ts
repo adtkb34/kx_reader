@@ -8,27 +8,69 @@ describe('slugify', () => {
 });
 
 describe('extractSections', () => {
-  it('reads explicit heading ids and detects intro', () => {
+  it('splits on bare {#id} markers and reads title from following heading', () => {
     const md = `Preface text.
 
-## First {#first}
+{#first}
+## First
 
 Body.
 
-## Second {#second}
+{#second}
+## Second
 
 More.
 `;
     const { sections, hasIntro } = extractSections(md);
     expect(hasIntro).toBe(true);
-    expect(sections.map((s) => s.id)).toEqual(['first', 'second']);
+    expect(sections.map((s) => ({ id: s.id, title: s.title, level: s.level }))).toEqual([
+      { id: 'first', title: 'First', level: 2 },
+      { id: 'second', title: 'Second', level: 2 },
+    ]);
   });
 
-  it('ignores headings inside details containers', () => {
-    const md = `## Outer {#outer}
+  it('allows untitled blocks nested under the preceding titled section', () => {
+    const md = `{#parent}
+## Parent
 
-::: details
-## Inner {#inner}
+{#child-a}
+Scenario body.
+
+{#child-b}
+Flow body.
+`;
+    const { sections, hasIntro } = extractSections(md);
+    expect(hasIntro).toBe(false);
+    expect(sections.map((s) => ({ id: s.id, title: s.title, level: s.level }))).toEqual([
+      { id: 'parent', title: 'Parent', level: 2 },
+      { id: 'child-a', title: '', level: 2 },
+      { id: 'child-b', title: '', level: 2 },
+    ]);
+  });
+
+  it('does not treat heading-trailing {#id} as a section boundary', () => {
+    const md = `## Old Style {#old-style}
+
+Still intro / unmarked body.
+
+{#real}
+## Real
+
+Body.
+`;
+    const { sections, hasIntro } = extractSections(md);
+    expect(hasIntro).toBe(true);
+    expect(sections.map((s) => s.id)).toEqual(['real']);
+    expect(sections[0].title).toBe('Real');
+  });
+
+  it('ignores markers inside details containers', () => {
+    const md = `{#outer}
+## Outer
+
+:::details
+{#inner}
+## Inner
 :::
 `;
     const { sections } = extractSections(md);
@@ -37,22 +79,26 @@ More.
 });
 
 describe('extractSectionBodies', () => {
-  it('slices bodies by heading start lines', () => {
+  it('slices bodies including the leading {#id} line', () => {
     const md = `Intro
 
-## A {#a}
+{#a}
+## A
 
 aaa
 
-## B {#b}
+{#b}
+## B
 
 bbb
 `;
     const { intro, sections } = extractSectionBodies(md);
     expect(intro).toContain('Intro');
     expect(sections).toHaveLength(2);
+    expect(sections[0].body.startsWith('{#a}')).toBe(true);
     expect(sections[0].body).toContain('## A');
     expect(sections[0].body).toContain('aaa');
+    expect(sections[1].body.startsWith('{#b}')).toBe(true);
     expect(sections[1].body).toContain('## B');
   });
 });

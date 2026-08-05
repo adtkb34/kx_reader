@@ -52,12 +52,12 @@ export function assertSectionIdPreserved(sectionId: string, markdown: string): v
   const { sections } = extractSectionBodies(markdown);
   if (sections.length === 0) {
     throw new SectionWriteError(
-      '小节正文须包含带 {#id} 的标题，且 id 与原小节一致',
+      '小节正文须以独占行 {#id} 开头，且 id 与原小节一致',
     );
   }
   if (sections[0].id !== sectionId) {
     throw new SectionWriteError(
-      `不可更改小节 id：须保持 {#${sectionId}}，当前为 {#${sections[0].id}}`,
+      `不可更改小节 id：须保持开头 {#${sectionId}}，当前为 {#${sections[0].id}}`,
     );
   }
 }

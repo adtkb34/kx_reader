@@ -11,7 +11,27 @@ import { notesOf, sectionKey, setStatus, statusOf } from '@/stores/annotations';
 import { bumpChapterReload, openNotes } from '@/stores/ui';
 import { api } from '@/api/client';
 
-const props = defineProps<{ bookId: string; chapterId: string; section: RenderedSection }>();
+const props = withDefaults(
+  defineProps<{
+    bookId: string;
+    chapterId: string;
+    section: RenderedSection;
+    /** Leaf lens ids this section belongs to (intersected with current selection). */
+    lensLeaves?: string[];
+    /** leaf id → display title for tags. */
+    lensTitles?: Record<string, string>;
+    /** When true (multi-lens), tint the left edge by dimension. */
+    lensChrome?: boolean;
+    /** Step-cluster visual role. */
+    cluster?: 'start' | 'child' | null;
+  }>(),
+  {
+    lensLeaves: () => [],
+    lensTitles: () => ({}),
+    lensChrome: false,
+    cluster: null,
+  },
+);
 
 const key = computed(() => sectionKey(props.chapterId, props.section.id));
 const status = computed(() => statusOf(props.bookId, key.value));
@@ -21,6 +41,27 @@ const saving = ref(false);
 const menuOpen = ref(false);
 /** 正在划选正文时隐藏工具条，避免挡住选区 */
 const selecting = ref(false);
+
+const primaryLens = computed(() =>
+  props.lensLeaves.length === 1 ? props.lensLeaves[0]! : '',
+);
+const lensAttr = computed(() => props.lensLeaves.join(' '));
+const tintLens = computed(() => props.lensChrome && props.lensLeaves.length > 0);
+const sectionStyle = computed(() => {
+  if (!tintLens.value) return undefined;
+  const color =
+    props.lensLeaves.length === 1
+      ? `var(--lens-${props.lensLeaves[0]}, var(--lens-default))`
+      : 'var(--lens-default)';
+  return { '--section-lens': color } as Record<string, string>;
+});
+const lensTags = computed(() =>
+  props.lensLeaves.map((id) => ({
+    id,
+    title: props.lensTitles[id] ?? id,
+  })),
+);
+
 
 const editing = ref(false);
 const draft = ref('');
@@ -113,8 +154,21 @@ onBeforeUnmount(() => {
 <template>
   <section
     class="doc-section"
-    :class="[`status-${status}`, { selecting: selecting, editing: editing }]"
+    :class="[
+      `status-${status}`,
+      {
+        selecting: selecting,
+        editing: editing,
+        'has-lens': tintLens,
+        'has-lens-tags': lensTags.length > 0,
+        'section-cluster-start': cluster === 'start',
+        'section-cluster-child': cluster === 'child',
+      },
+    ]"
     :data-section-id="section.id"
+    :data-lenses="lensAttr || undefined"
+    :data-primary-lens="primaryLens || undefined"
+    :style="sectionStyle"
   >
     <div v-if="!editing" class="section-tools">
       <el-popover
@@ -201,10 +255,25 @@ onBeforeUnmount(() => {
         <button class="btn ghost small" type="button" :disabled="editBusy" @click="cancelEdit">
           取消
         </button>
-        <span class="muted section-edit-hint">⌘+Enter 保存 · 请保持标题 {#id} 不变</span>
+        <span class="muted section-edit-hint">⌘+Enter 保存 · 请保持开头 {#id} 不变</span>
       </div>
     </div>
     <div v-else class="section-body md-body" v-html="section.html" />
+    <div
+      v-if="!editing && lensTags.length"
+      class="section-lens-tags"
+      aria-hidden="true"
+    >
+      <span
+        v-for="tag in lensTags"
+        :key="tag.id"
+        class="section-lens-tag"
+        :data-lens="tag.id"
+        :style="{ '--tag-lens': `var(--lens-${tag.id}, var(--lens-default))` }"
+      >
+        {{ tag.title }}
+      </span>
+    </div>
     <p v-if="!editing && editError" class="section-edit-error">{{ editError }}</p>
   </section>
 </template>

@@ -4,6 +4,7 @@ import anchor from 'markdown-it-anchor';
 import container from 'markdown-it-container';
 import hljs from 'highlight.js/lib/common';
 import { slugify } from '@shared/sections';
+import { SECTION_MARKER_CLASS, sectionMarkerPlugin } from '@shared/sectionMarker';
 import { renderWireframe } from '@/wireframe';
 
 export interface RenderEnv {
@@ -46,6 +47,7 @@ const md: MarkdownIt = new MarkdownIt({
   },
 });
 
+md.use(sectionMarkerPlugin);
 md.use(attrs, { allowedAttributes: ['id', 'class'] });
 md.use(anchor, { slugify });
 md.use(container, 'details', {
@@ -136,45 +138,96 @@ export function renderChapter(markdown: string, env: RenderEnv): string {
   return html;
 }
 
+function isSectionMarker(node: Node): node is Element {
+  return (
+    node.nodeType === Node.ELEMENT_NODE &&
+    (node as Element).tagName === 'DIV' &&
+    (node as Element).classList.contains(SECTION_MARKER_CLASS) &&
+    !!(node as Element).id
+  );
+}
+
+function firstHeadingInHtml(html: string): { title: string; level: number } | null {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  for (const node of Array.from(doc.body.querySelectorAll('h2, h3, h4, h5, h6'))) {
+    // Skip headings nested inside details / blockquote-like wrappers that are not top-level.
+    let parent = node.parentElement;
+    let topLevel = true;
+    while (parent && parent !== doc.body) {
+      const tag = parent.tagName;
+      if (tag === 'DETAILS' || tag === 'BLOCKQUOTE') {
+        topLevel = false;
+        break;
+      }
+      parent = parent.parentElement;
+    }
+    if (!topLevel) continue;
+    const title = node.textContent?.trim() ?? '';
+    if (!title) continue;
+    return { title, level: Number(node.tagName.slice(1)) };
+  }
+  return null;
+}
+
 /**
- * 把整章 HTML 按顶层 h2–h6 切成可标记小节。
- * 第一个标题之前的内容归入 `_intro`；折叠块内部的标题不会出现在顶层，天然不参与切分。
- * 该规则与服务端 shared/sections.ts 的目录抽取严格一致。
+ * 把整章 HTML 按 `.section-marker` 切成可标记小节。
+ * 第一个标记之前的内容归入 `_intro`；折叠块内部的标记不会出现在顶层。
+ * 与服务端 shared/sections.ts 的目录抽取严格一致。
  */
 export function splitSections(html: string): RenderedSection[] {
   const doc = new DOMParser().parseFromString(html, 'text/html');
-  const out: RenderedSection[] = [];
-  let current: RenderedSection | null = null;
+  const raw: { id: string; html: string }[] = [];
+  let current: { id: string; html: string } | null = null;
 
   const flush = () => {
-    if (current && current.html.trim()) out.push(current);
+    if (current && current.html.trim()) raw.push(current);
     current = null;
   };
 
   for (const node of Array.from(doc.body.childNodes)) {
-    const isHeading =
-      node.nodeType === Node.ELEMENT_NODE && /^H[2-6]$/.test((node as Element).tagName);
-    if (isHeading) {
-      const el = node as Element;
+    if (isSectionMarker(node)) {
       flush();
-      current = {
-        id: el.id || `sec-${out.length}`,
-        title: el.textContent?.trim() || '(无标题)',
-        level: Number(el.tagName.slice(1)),
-        html: el.outerHTML,
-      };
-    } else {
-      const chunk =
-        node.nodeType === Node.ELEMENT_NODE
-          ? (node as Element).outerHTML
-          : (node.textContent ?? '');
-      if (!current) {
-        if (!chunk.trim()) continue;
-        current = { id: '_intro', title: '引言', level: 2, html: '' };
-      }
-      current.html += chunk;
+      current = { id: node.id, html: node.outerHTML };
+      continue;
     }
+    const chunk =
+      node.nodeType === Node.ELEMENT_NODE
+        ? (node as Element).outerHTML
+        : (node.textContent ?? '');
+    if (!current) {
+      if (!chunk.trim()) continue;
+      current = { id: '_intro', html: '' };
+    }
+    current.html += chunk;
   }
   flush();
+
+  const out: RenderedSection[] = [];
+  let lastTitledLevel = 1;
+  for (const sec of raw) {
+    if (sec.id === '_intro') {
+      out.push({ id: '_intro', title: '引言', level: 2, html: sec.html });
+      continue;
+    }
+    // Title comes from body after the marker element
+    const withoutMarker = sec.html.replace(
+      new RegExp(`^<div class="${SECTION_MARKER_CLASS}" id="[^"]*"></div>\\n?`),
+      '',
+    );
+    const heading = firstHeadingInHtml(withoutMarker);
+    let title: string;
+    let level: number;
+    if (heading) {
+      title = heading.title;
+      level = heading.level;
+      lastTitledLevel = level;
+    } else {
+      title = '';
+      // Match server: untitled shares level with preceding titled section
+      // so expandSectionAllowlist does not pull in lens sibling blocks.
+      level = Math.max(lastTitledLevel, 2);
+    }
+    out.push({ id: sec.id, title, level, html: sec.html });
+  }
   return out;
 }

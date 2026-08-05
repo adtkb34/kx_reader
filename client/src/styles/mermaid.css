@@ -1,17 +1,21 @@
 /* ---------- mermaid diagrams ---------- */
 
 .mermaid-wrap {
-  margin: 0 0 18px;
-  padding: 18px 16px;
-  background: linear-gradient(180deg, #fcfbf8 0%, #ffffff 100%);
+  margin: 0 auto 18px;
+  padding: 12px 14px;
+  background: #faf9f6;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 10px;
   overflow-x: auto;
-  text-align: center;
+  max-width: 100%;
+  width: fit-content;
+  box-sizing: border-box;
 }
 
 .mermaid-wrap:not(.is-rendered) {
   min-height: 72px;
+  width: 100%;
+  text-align: left;
 }
 
 .mermaid-wrap pre.mermaid {
@@ -28,7 +32,7 @@
   overflow: visible;
 }
 
-/* mermaid.run 把 SVG 写进同一个 pre 节点，渲染后改成居中展示 */
+/* mermaid.run 把 SVG 写进同一个 pre 节点；按内容收缩，避免 width:100% 撑出大空框 */
 .mermaid-wrap.is-rendered pre.mermaid {
   font-family: inherit;
   font-size: inherit;
@@ -36,13 +40,14 @@
   text-align: center;
   white-space: normal;
   color: inherit;
+  display: block;
 }
 
 .mermaid-wrap svg {
+  display: block;
   max-width: 100%;
   height: auto;
-  display: inline-block;
-  vertical-align: middle;
+  margin: 0 auto;
 }
 
 .mermaid-wrap .mermaid-error,
@@ -93,4 +98,3 @@
   border-top: 1px solid var(--line);
   margin: 24px 0;
 }
-

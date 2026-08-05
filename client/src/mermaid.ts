@@ -60,6 +60,25 @@ function isVisible(el: HTMLElement): boolean {
   return !details || details.open;
 }
 
+/** Prefer intrinsic size over mermaid's width="100%" (avoids huge empty frames). */
+function normalizeMermaidSvg(svg: SVGElement): void {
+  const raw = svg.getAttribute('viewBox')?.trim().split(/[\s,]+/).map(Number);
+  // viewBox may use a negative origin (e.g. "-4 -4 152 509"); only width/height must be > 0
+  if (raw && raw.length === 4 && raw.every((n) => Number.isFinite(n))) {
+    const w = raw[2]!;
+    const h = raw[3]!;
+    if (w > 0 && h > 0) {
+      svg.setAttribute('width', String(w));
+      svg.setAttribute('height', String(h));
+    }
+  } else if (svg.getAttribute('width') === '100%') {
+    svg.removeAttribute('width');
+  }
+  svg.style.maxWidth = '100%';
+  svg.style.height = 'auto';
+  svg.style.width = 'auto';
+}
+
 /**
  * 渲染 root 内尚未处理的 Mermaid 图。
  * 折叠块内的图只在展开后渲染，避免尺寸为 0。
@@ -79,7 +98,9 @@ export async function renderMermaidIn(root: HTMLElement | null): Promise<void> {
   try {
     await mermaid.run({ nodes: candidates });
     for (const node of candidates) {
-      if (node.querySelector('svg')) {
+      const svg = node.querySelector('svg');
+      if (svg) {
+        normalizeMermaidSvg(svg);
         node.closest('.mermaid-wrap')?.classList.add('is-rendered');
       }
     }

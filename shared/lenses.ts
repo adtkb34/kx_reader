@@ -285,6 +285,8 @@ export function pageVisibleInSelection(
 /**
  * Expand an allowlist so each listed section also includes following deeper
  * headings until the next heading at the same or higher level.
+ * Untitled sections (no heading title) do not expand — their inherited level
+ * must not swallow later titled sections that happen to use a deeper heading.
  */
 export function expandSectionAllowlist(
   sections: TocSection[],
@@ -296,8 +298,10 @@ export function expandSectionAllowlist(
   for (const id of allowlist) {
     const start = byId.get(id);
     if (start == null) continue;
-    const level = sections[start].level;
     out.add(id);
+    const sec = sections[start];
+    if (!sec.title) continue;
+    const level = sec.level;
     for (let i = start + 1; i < sections.length; i++) {
       if (sections[i].level <= level) break;
       out.add(sections[i].id);
@@ -355,6 +359,98 @@ export function filterSectionsByAllowlist<T extends { id: string }>(
   if (!allowlist) return sections;
   const allowed = new Set(allowlist);
   return sections.filter((s) => allowed.has(s.id));
+}
+
+/**
+ * Leaves whose section allowlist (after expand) includes `sectionId`.
+ * Ordered by lens tree walk when `toc` is provided.
+ */
+export function sectionLensLeaves(
+  chapter: TocChapter,
+  sectionId: string,
+  toc?: BookToc | null,
+): PageLayer[] {
+  if (!chapter.sectionAllowlists) return [];
+  const found = new Set<PageLayer>();
+  for (const byLeaf of Object.values(chapter.sectionAllowlists)) {
+    if (!byLeaf) continue;
+    for (const [leaf, list] of Object.entries(byLeaf)) {
+      if (!list?.length) continue;
+      const expanded = expandSectionAllowlist(chapter.sections, list) ?? list;
+      if (expanded.includes(sectionId)) found.add(leaf);
+    }
+  }
+  if (found.size === 0) return [];
+  if (!toc?.lenses) return [...found];
+  const ordered: PageLayer[] = [];
+  for (const axis of lensAxisIds(toc)) {
+    for (const leaf of lensLeafIds(toc.lenses[axis] ?? [])) {
+      if (found.has(leaf)) ordered.push(leaf);
+    }
+  }
+  for (const id of found) {
+    if (!ordered.includes(id)) ordered.push(id);
+  }
+  return ordered;
+}
+
+/** Display title for a leaf (or any lens node) across axes. */
+export function lensNodeTitle(toc: BookToc, nodeId: PageLayer): string {
+  if (!toc.lenses) return nodeId;
+  if (toc.lensAxisTitles?.[nodeId]) return toc.lensAxisTitles[nodeId]!;
+  for (const axis of lensAxisIds(toc)) {
+    const node = findLensNode(toc.lenses[axis] ?? [], nodeId);
+    if (node) return node.title;
+  }
+  return nodeId;
+}
+
+export interface LensLegendItem {
+  id: PageLayer;
+  title: string;
+}
+
+/** Effective selected leaves for the legend (multi-select hint). */
+export function selectionLegendLeaves(
+  toc: BookToc,
+  selection: LensSelection | null,
+): LensLegendItem[] {
+  if (!selection || !toc.lenses) return [];
+  const out: LensLegendItem[] = [];
+  const seen = new Set<PageLayer>();
+  for (const axis of lensAxisIds(toc)) {
+    const leaves = effectiveAxisLeaves(toc, axis, normalizeAxisSelection(selection[axis]));
+    for (const id of leaves) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push({ id, title: lensNodeTitle(toc, id) });
+    }
+  }
+  return out;
+}
+
+/** Leaves that nest under a step heading (fill / UI / fallback), not entity tables. */
+const STEP_CLUSTER_LEAVES = new Set(['flow', 'ui', 'fallback']);
+
+/**
+ * Visual cluster role for step-grouped sections.
+ * Titled sections open a cluster; untitled step slices (flow/ui/fallback) nest.
+ * Entity / permission blocks stay flush even when untitled (e.g. E-R).
+ */
+export function sectionClusterRole(
+  section: { title: string },
+  index: number,
+  lensLeaves: PageLayer[] = [],
+): 'start' | 'child' | null {
+  if (index <= 0) return null;
+  if (section.title) return 'start';
+  if (
+    lensLeaves.length > 0 &&
+    lensLeaves.every((id) => STEP_CLUSTER_LEAVES.has(id))
+  ) {
+    return 'child';
+  }
+  return null;
 }
 
 export function filterChapters(
@@ -513,7 +609,7 @@ export function selectionFromPageLayers(
   return sel;
 }
 
-/** TOC sections visible under the current lens selection. */
+/** TOC sections visible under the current lens selection (untitled sections omitted). */
 export function visibleTocSections(
   chapter: TocChapter,
   selection: LensSelection | null,
@@ -522,7 +618,7 @@ export function visibleTocSections(
   return filterSectionsByAllowlist(
     chapter.sections,
     sectionAllowlistFor(chapter, selection, toc),
-  );
+  ).filter((s) => s.title.length > 0);
 }
 
 /** Ancestor group titles for a page (outer → inner). Empty if top-level page. */

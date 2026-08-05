@@ -10,8 +10,80 @@
   scroll-margin-top: 64px;
 }
 
+.doc-section.has-lens {
+  border-left-color: color-mix(in srgb, var(--section-lens, var(--lens-default)) 72%, #eceae3);
+}
+
+.doc-section.section-cluster-start {
+  margin-top: 14px;
+}
+
+.doc-section.section-cluster-child {
+  margin-left: 4px;
+}
+
+/* 右下角维度标签：默认隐藏，悬停显示；底边与末行内容齐平 */
+.section-lens-tags {
+  position: absolute;
+  right: 8px;
+  bottom: 2px;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  max-width: 55%;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+
+.doc-section:hover .section-lens-tags,
+.doc-section:focus-within .section-lens-tags {
+  opacity: 1;
+}
+
+.doc-section.selecting .section-lens-tags {
+  opacity: 0;
+}
+
+.section-lens-tag {
+  display: inline-block;
+  padding: 0 5px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--tag-lens, var(--lens-default)) 10%, #fff);
+  color: color-mix(in srgb, var(--tag-lens, var(--lens-default)) 45%, var(--muted));
+  font-family: var(--sans);
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+/* 去掉末块下边距，让标签底边贴齐最后一行内容 */
+.doc-section.has-lens-tags .section-body > :last-child {
+  margin-bottom: 0;
+}
+
+.doc-section.has-lens-tags .section-body {
+  padding-right: 4.5em;
+}
+
+
 .doc-section :is(h1, h2, h3, h4, h5, h6)[id] {
   scroll-margin-top: 64px;
+}
+
+/* Invisible section boundary anchor from `{#id}` lines */
+.section-marker {
+  display: block;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  scroll-margin-top: 64px;
+  pointer-events: none;
 }
 
 /* 右侧状态标签不压住标题文字 */

@@ -10,9 +10,13 @@ import {
   filterChapters,
   filterSectionsByAllowlist,
   groupChaptersForDigest,
+  lensNodeTitle,
   sectionAllowlistFor,
+  sectionClusterRole,
+  sectionLensLeaves,
+  selectionLegendLeaves,
 } from '@shared/lenses';
-import type { BookToc, LensSelection, TocChapter } from '@shared/types';
+import type { BookToc, LensSelection, PageLayer, TocChapter } from '@shared/types';
 
 const props = defineProps<{
   bookId: string;
@@ -40,6 +44,32 @@ let unbindMermaid: (() => void) | null = null;
 const visibleChapters = computed(() =>
   filterChapters(props.toc.chapters, props.lensSelection ?? null, props.toc),
 );
+
+const activeLeaves = computed(
+  () => new Set(selectionLegendLeaves(props.toc, props.lensSelection ?? null).map((i) => i.id)),
+);
+
+const lensChrome = computed(() => activeLeaves.value.size > 1);
+
+function leavesFor(chapter: TocChapter, sectionId: string): PageLayer[] {
+  return sectionLensLeaves(chapter, sectionId, props.toc);
+}
+
+function titlesFor(chapter: TocChapter): Record<string, string> {
+  if (!chapter.sectionAllowlists) return {};
+  const map: Record<string, string> = {};
+  for (const byLeaf of Object.values(chapter.sectionAllowlists)) {
+    for (const leaf of Object.keys(byLeaf ?? {})) {
+      map[leaf] = lensNodeTitle(props.toc, leaf);
+    }
+  }
+  return map;
+}
+
+function clusterFor(chapter: TocChapter, section: RenderedSection, index: number) {
+  if (!lensChrome.value) return null;
+  return sectionClusterRole(section, index, leavesFor(chapter, section.id));
+}
 
 async function load(): Promise<void> {
   loading.value = true;
@@ -153,12 +183,16 @@ onBeforeUnmount(() => {
               {{ page.title }}
             </div>
             <SectionBlock
-              v-for="s in page.sections"
+              v-for="(s, i) in page.sections"
               :id="digestAnchorId(page.chapter.id, s.id)"
               :key="page.chapter.id + '#' + s.id"
               :book-id="bookId"
               :chapter-id="page.chapter.id"
               :section="s"
+              :lens-leaves="leavesFor(page.chapter, s.id)"
+              :lens-titles="titlesFor(page.chapter)"
+              :lens-chrome="lensChrome"
+              :cluster="clusterFor(page.chapter, s, i)"
             />
           </div>
         </div>
