@@ -58,6 +58,14 @@ function isSafeAssetRel(rel: string): boolean {
   return SAFE_ASSET_REL.test(rel) && !rel.includes('..');
 }
 
+const LENS_COLOR_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
+
+function parseLensColor(raw: unknown): string | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const color = raw.trim();
+  return LENS_COLOR_RE.test(color) ? color : undefined;
+}
+
 function parseLensTreeNode(
   bookId: string,
   item: unknown,
@@ -80,6 +88,11 @@ function parseLensTreeNode(
   }
   seenOptionIds.add(id);
 
+  const color = parseLensColor((item as { color?: unknown }).color);
+  if ((item as { color?: unknown }).color != null && !color) {
+    console.warn(`book ${bookId}: lenses "${id}" has invalid color; ignoring`);
+  }
+
   const rawChildren = (item as { children?: unknown }).children;
   let children: BookLens[] | undefined;
   if (Array.isArray(rawChildren) && rawChildren.length > 0) {
@@ -90,7 +103,12 @@ function parseLensTreeNode(
     }
     if (children.length === 0) children = undefined;
   }
-  return children ? { id, title, children } : { id, title };
+  return {
+    id,
+    title,
+    ...(color ? { color } : {}),
+    ...(children ? { children } : {}),
+  };
 }
 
 interface ParsedLenses {
@@ -145,7 +163,11 @@ function parseLenses(bookId: string, raw: unknown): ParsedLenses | undefined {
         continue;
       }
       seenOptionIds.add(id);
-      lenses[id] = [{ id, title }];
+      const color = parseLensColor((item as { color?: unknown }).color);
+      if ((item as { color?: unknown }).color != null && !color) {
+        console.warn(`book ${bookId}: lenses axis "${id}" has invalid color; ignoring`);
+      }
+      lenses[id] = [{ id, title, ...(color ? { color } : {}) }];
     }
     lensAxisTitles[id] = title;
     lensAxisOrder.push(id);

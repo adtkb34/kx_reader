@@ -16,6 +16,8 @@ export type LensAxisId = string;
 export interface BookLens {
   id: PageLayer;
   title: string;
+  /** Optional accent for tags / legend (e.g. `#6d86a0`). */
+  color?: string;
   /** Nested options; omit or empty = leaf. */
   children?: BookLens[];
 }

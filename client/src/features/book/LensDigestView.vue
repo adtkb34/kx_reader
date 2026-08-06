@@ -10,6 +10,7 @@ import {
   filterChapters,
   filterSectionsByAllowlist,
   groupChaptersForDigest,
+  lensColorMap,
   lensNodeTitle,
   sectionAllowlistFor,
   sectionClusterRole,
@@ -66,9 +67,11 @@ function titlesFor(chapter: TocChapter): Record<string, string> {
   return map;
 }
 
-function clusterFor(chapter: TocChapter, section: RenderedSection, index: number) {
+const lensColors = computed(() => lensColorMap(props.toc));
+
+function clusterFor(_chapter: TocChapter, section: RenderedSection, index: number) {
   if (!lensChrome.value) return null;
-  return sectionClusterRole(section, index, leavesFor(chapter, section.id));
+  return sectionClusterRole(section, index);
 }
 
 async function load(): Promise<void> {
@@ -191,6 +194,7 @@ onBeforeUnmount(() => {
               :section="s"
               :lens-leaves="leavesFor(page.chapter, s.id)"
               :lens-titles="titlesFor(page.chapter)"
+              :lens-colors="lensColors"
               :lens-chrome="lensChrome"
               :cluster="clusterFor(page.chapter, s, i)"
             />

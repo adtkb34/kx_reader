@@ -16,10 +16,12 @@ const props = withDefaults(
     bookId: string;
     chapterId: string;
     section: RenderedSection;
-    /** Leaf lens ids this section belongs to (intersected with current selection). */
+    /** Leaf lens ids this section belongs to. */
     lensLeaves?: string[];
     /** leaf id → display title for tags. */
     lensTitles?: Record<string, string>;
+    /** leaf id → configured accent from book.json. */
+    lensColors?: Record<string, string>;
     /** When true (multi-lens), tint the left edge by dimension. */
     lensChrome?: boolean;
     /** Step-cluster visual role. */
@@ -28,6 +30,7 @@ const props = withDefaults(
   {
     lensLeaves: () => [],
     lensTitles: () => ({}),
+    lensColors: () => ({}),
     lensChrome: false,
     cluster: null,
   },
@@ -47,11 +50,16 @@ const primaryLens = computed(() =>
 );
 const lensAttr = computed(() => props.lensLeaves.join(' '));
 const tintLens = computed(() => props.lensChrome && props.lensLeaves.length > 0);
+
+function resolveLensColor(id: string): string {
+  return props.lensColors[id] || `var(--lens-${id}, var(--lens-default))`;
+}
+
 const sectionStyle = computed(() => {
   if (!tintLens.value) return undefined;
   const color =
     props.lensLeaves.length === 1
-      ? `var(--lens-${props.lensLeaves[0]}, var(--lens-default))`
+      ? resolveLensColor(props.lensLeaves[0]!)
       : 'var(--lens-default)';
   return { '--section-lens': color } as Record<string, string>;
 });
@@ -59,6 +67,7 @@ const lensTags = computed(() =>
   props.lensLeaves.map((id) => ({
     id,
     title: props.lensTitles[id] ?? id,
+    color: resolveLensColor(id),
   })),
 );
 
@@ -269,7 +278,7 @@ onBeforeUnmount(() => {
         :key="tag.id"
         class="section-lens-tag"
         :data-lens="tag.id"
-        :style="{ '--tag-lens': `var(--lens-${tag.id}, var(--lens-default))` }"
+        :style="{ '--tag-lens': tag.color }"
       >
         {{ tag.title }}
       </span>

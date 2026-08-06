@@ -405,9 +405,32 @@ export function lensNodeTitle(toc: BookToc, nodeId: PageLayer): string {
   return nodeId;
 }
 
+/** Configured accent color for a lens node, if any. */
+export function lensNodeColor(toc: BookToc, nodeId: PageLayer): string | undefined {
+  if (!toc.lenses) return undefined;
+  for (const axis of lensAxisIds(toc)) {
+    const node = findLensNode(toc.lenses[axis] ?? [], nodeId);
+    if (node?.color) return node.color;
+  }
+  return undefined;
+}
+
+/** leaf/option id → configured color (only nodes that declare `color`). */
+export function lensColorMap(toc: BookToc): Record<string, string> {
+  const map: Record<string, string> = {};
+  if (!toc.lenses) return map;
+  for (const axis of lensAxisIds(toc)) {
+    walkLensNodes(toc.lenses[axis] ?? [], (n) => {
+      if (n.color) map[n.id] = n.color;
+    });
+  }
+  return map;
+}
+
 export interface LensLegendItem {
   id: PageLayer;
   title: string;
+  color?: string;
 }
 
 /** Effective selected leaves for the legend (multi-select hint). */
@@ -423,34 +446,24 @@ export function selectionLegendLeaves(
     for (const id of leaves) {
       if (seen.has(id)) continue;
       seen.add(id);
-      out.push({ id, title: lensNodeTitle(toc, id) });
+      const color = lensNodeColor(toc, id);
+      out.push({ id, title: lensNodeTitle(toc, id), ...(color ? { color } : {}) });
     }
   }
   return out;
 }
 
-/** Leaves that nest under a step heading (fill / UI / fallback), not entity tables. */
-const STEP_CLUSTER_LEAVES = new Set(['flow', 'ui', 'fallback']);
-
 /**
  * Visual cluster role for step-grouped sections.
- * Titled sections open a cluster; untitled step slices (flow/ui/fallback) nest.
- * Entity / permission blocks stay flush even when untitled (e.g. E-R).
+ * Titled sections open a cluster; untitled sections nest under the previous block.
  */
 export function sectionClusterRole(
   section: { title: string },
   index: number,
-  lensLeaves: PageLayer[] = [],
 ): 'start' | 'child' | null {
   if (index <= 0) return null;
   if (section.title) return 'start';
-  if (
-    lensLeaves.length > 0 &&
-    lensLeaves.every((id) => STEP_CLUSTER_LEAVES.has(id))
-  ) {
-    return 'child';
-  }
-  return null;
+  return 'child';
 }
 
 export function filterChapters(

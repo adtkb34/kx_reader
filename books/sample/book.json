@@ -8,11 +8,13 @@
       "children": [
         {
           "id": "scenario",
-          "title": "场景"
+          "title": "场景",
+          "color": "#7a8a9a"
         },
         {
           "id": "impl",
-          "title": "实现"
+          "title": "实现",
+          "color": "#6d86a0"
         }
       ]
     }

@@ -405,13 +405,27 @@ describe('selectionLegendLeaves / sectionClusterRole', () => {
     ]);
   });
 
-  it('assigns cluster roles from title, index, and leaves', () => {
+  it('includes configured lens colors', () => {
+    const colored: BookToc = {
+      ...tocWithLenses,
+      lenses: {
+        read: [
+          { id: 'scenario', title: '场景', color: '#7a8a9a' },
+          { id: 'impl', title: '实现', color: '#6d86a0' },
+        ],
+        audience: tocWithLenses.lenses!.audience,
+      },
+    };
+    expect(selectionLegendLeaves(colored, { read: ['scenario', 'impl'] })).toEqual([
+      { id: 'scenario', title: '场景', color: '#7a8a9a' },
+      { id: 'impl', title: '实现', color: '#6d86a0' },
+    ]);
+  });
+
+  it('assigns cluster roles from title and index', () => {
     expect(sectionClusterRole({ title: '账号密码' }, 0)).toBeNull();
     expect(sectionClusterRole({ title: '账号密码' }, 1)).toBe('start');
-    expect(sectionClusterRole({ title: '' }, 1, ['flow'])).toBe('child');
-    expect(sectionClusterRole({ title: '' }, 1, ['ui', 'fallback'])).toBe('child');
-    expect(sectionClusterRole({ title: '' }, 1, ['entity'])).toBeNull();
-    expect(sectionClusterRole({ title: '' }, 1, [])).toBeNull();
+    expect(sectionClusterRole({ title: '' }, 1)).toBe('child');
   });
 });
 

@@ -10,6 +10,7 @@ import SectionBlock from '@/features/book/SectionBlock.vue';
 import { ui } from '@/stores/ui';
 import {
   filterSectionsByAllowlist,
+  lensColorMap,
   lensNodeTitle,
   sectionAllowlistFor,
   sectionClusterRole,
@@ -64,6 +65,11 @@ const lensTitleMap = computed(() => {
   return map;
 });
 
+const lensColors = computed(() => {
+  const toc = tocOf(props.bookId);
+  return toc ? lensColorMap(toc) : {};
+});
+
 function leavesFor(sectionId: string): PageLayer[] {
   const toc = tocOf(props.bookId);
   const ch = tocChapter.value;
@@ -73,7 +79,7 @@ function leavesFor(sectionId: string): PageLayer[] {
 
 function clusterFor(section: RenderedSection, index: number) {
   if (!lensChrome.value) return null;
-  return sectionClusterRole(section, index, leavesFor(section.id));
+  return sectionClusterRole(section, index);
 }
 
 async function load(): Promise<void> {
@@ -265,6 +271,7 @@ function goNext(): void {
           :section="s"
           :lens-leaves="leavesFor(s.id)"
           :lens-titles="lensTitleMap"
+          :lens-colors="lensColors"
           :lens-chrome="lensChrome"
           :cluster="clusterFor(s, i)"
         />
