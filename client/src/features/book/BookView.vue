@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import {
+  getBookShowLevel,
   getStoredLensSelection,
   setBookLensSelection,
+  setBookShowLevel,
   setLensPickMode,
   setLensReadMode,
   toggleDetailsOpen,
@@ -13,10 +15,13 @@ import {
 import { useOrphans } from '@/composables/orphans';
 import {
   allowedAxisSelectionIds,
+  bookContentRanks,
   buildLensSelectTree,
   collapseEachAxisToSingle,
+  collapseEachAxisToSingleLeaf,
   defaultSelection,
   filterChapters,
+  collapseSingletonGroups,
   filterTree,
   flatIdsToSelection,
   hasLenses,
@@ -31,9 +36,17 @@ import {
   selectionToFlatIds,
   visibleIdSet,
 } from '@shared/lenses';
+import {
+  findRulerSkeletonChapter,
+  resolveRulerLensSwitchChapter,
+  rulerSidebarKeepIds,
+  selectionUsesRulerHang,
+} from '@shared/ruler';
 import type { BookToc, LensSelection, PageLayer, TocChapter } from '@shared/types';
 import LensDigestView from '@/features/book/LensDigestView.vue';
 import DigestOutline from '@/features/book/DigestOutline.vue';
+import RulerView from '@/features/book/RulerView.vue';
+import RulerOutline from '@/features/book/RulerOutline.vue';
 import TocSidebar from '@/features/book/TocSidebar.vue';
 import ChapterPage from '@/features/book/ChapterPage.vue';
 import ChapterOutline from '@/features/book/ChapterOutline.vue';
@@ -63,7 +76,8 @@ function sanitizeSelection(
   t: BookToc | null | undefined = toc.value,
 ): LensSelection | null {
   if (!t?.lenses) return null;
-  const base = sel ?? defaultSelection(t);
+  const allowEmpty = !!t.ruler && ui.lensReadMode === 'ruler';
+  const base = sel ?? (allowEmpty ? emptyLensSelection(t) : defaultSelection(t));
   if (!base) return null;
   const fallback = defaultSelection(t);
   const out: LensSelection = {};
@@ -71,13 +85,32 @@ function sanitizeSelection(
     const allowed = allowedAxisSelectionIds(t, axis);
     const pick = normalizeAxisSelection(base[axis]).filter((id) => allowed.has(id));
     if (pick.length > 0) out[axis] = pick;
+    else if (allowEmpty) out[axis] = [];
     else if (fallback?.[axis]?.length) out[axis] = [...fallback[axis]];
   }
   const flat = selectionToFlatIds(t, out);
-  const normalized = flatIdsToSelection(t, flat, flat);
+  const normalized = flatIdsToSelection(t, flat, flat, { allowEmpty });
   if (!normalized) return null;
-  if (ui.lensPickMode === 'single') return collapseEachAxisToSingle(t, normalized);
+  if (ui.lensPickMode === 'single' && !allowEmpty) {
+    return t.ruler
+      ? collapseEachAxisToSingleLeaf(t, normalized)
+      : collapseEachAxisToSingle(t, normalized);
+  }
+  if (ui.lensPickMode === 'single' && allowEmpty) {
+    // Single-pick still collapses when something is chosen; empty stays empty.
+    const hasAny = selectionToFlatIds(t, normalized).length > 0;
+    if (!hasAny) return normalized;
+    return t.ruler
+      ? collapseEachAxisToSingleLeaf(t, normalized)
+      : collapseEachAxisToSingle(t, normalized);
+  }
   return normalized;
+}
+
+function emptyLensSelection(t: BookToc): LensSelection {
+  const out: LensSelection = {};
+  for (const axis of lensAxisIds(t)) out[axis] = [];
+  return out;
 }
 
 const activeSelection = computed<LensSelection | null>(() => {
@@ -87,23 +120,27 @@ const activeSelection = computed<LensSelection | null>(() => {
   return sanitizeSelection(candidate, t);
 });
 
-const filteredChapters = computed(() =>
-  toc.value ? filterChapters(toc.value.chapters, activeSelection.value, toc.value) : [],
+const hangUnderRuler = computed(
+  () => !!toc.value && selectionUsesRulerHang(toc.value, activeSelection.value),
 );
 
-const filteredTree = computed(() => {
+const isRulerMode = computed(
+  () =>
+    !!toc.value &&
+    !!toc.value.ruler &&
+    hasLenses(toc.value) &&
+    !!activeSelection.value &&
+    (ui.lensReadMode === 'ruler' || hangUnderRuler.value),
+);
+
+const filteredChapters = computed(() => {
   const t = toc.value;
   if (!t) return [];
-  const ids = visibleIdSet(t.chapters, activeSelection.value, t);
-  const base = t.tree?.length
-    ? t.tree
-    : t.chapters.map((c) => ({
-        type: 'page' as const,
-        id: c.id,
-        title: c.title,
-        file: c.file,
-      }));
-  return filterTree(base, ids);
+  const visible = filterChapters(t.chapters, activeSelection.value, t);
+  if (!t.ruler) return visible;
+  const keep = rulerSidebarKeepIds(t, activeSelection.value, isRulerMode.value);
+  const kept = visible.filter((c) => keep.has(c.id));
+  return kept.length ? kept : visible;
 });
 
 const lensSelectTree = computed(() => (toc.value ? buildLensSelectTree(toc.value) : []));
@@ -111,6 +148,20 @@ const lensSelectTree = computed(() => (toc.value ? buildLensSelectTree(toc.value
 const flatLensIds = computed(() =>
   toc.value ? selectionToFlatIds(toc.value, activeSelection.value) : [],
 );
+
+const contentRanks = computed(() => (toc.value ? bookContentRanks(toc.value) : []));
+
+/** `null` = 全部; track ui.showLevelByBook for the select label. */
+const readerShowLevel = computed(() => getBookShowLevel(bookId.value));
+
+function onShowLevel(raw: string | number | null): void {
+  if (raw === 'all' || raw == null || raw === '') {
+    setBookShowLevel(bookId.value, null);
+    return;
+  }
+  const n = typeof raw === 'number' ? raw : Number(raw);
+  setBookShowLevel(bookId.value, Number.isFinite(n) ? n : null);
+}
 
 function queryEqual(
   a: Record<string, string | string[]>,
@@ -186,10 +237,15 @@ async function ensureLoaded(): Promise<void> {
 
   if (!chapterId.value) {
     const sel = activeSelection.value;
-    const visible = filterChapters(t.chapters, sel, t);
     const last = localStorage.getItem(`reader.last.${bookId.value}`);
+    const seed = last ?? t.chapters[0].id;
     const target =
-      visible.find((c) => c.id === last)?.id ?? visible[0]?.id ?? t.chapters[0].id;
+      t.ruler && sel
+        ? resolveRulerLensSwitchChapter(t, seed, sel)
+        : (() => {
+            const visible = filterChapters(t.chapters, sel, t);
+            return visible.find((c) => c.id === last)?.id ?? visible[0]?.id ?? t.chapters[0].id;
+          })();
     router.replace(bookLocation(target, { selection: sel, t }));
     return;
   }
@@ -200,6 +256,14 @@ async function ensureLoaded(): Promise<void> {
     const adopted = selectionFromPageLayers(t, current, sel);
     setBookLensSelection(bookId.value, adopted);
     sel = adopted;
+  }
+
+  if (t.ruler && sel && chapterId.value) {
+    const target = resolveRulerLensSwitchChapter(t, chapterId.value, sel);
+    if (target !== chapterId.value) {
+      router.replace(bookLocation(target, { selection: sel, t }));
+      return;
+    }
   }
 
   if (hasLenses(t) && sel) {
@@ -253,40 +317,100 @@ function finalizeSelection(
   t: BookToc,
   nextSel: LensSelection,
   preferIds: PageLayer[] = [],
+  allowEmpty = false,
 ): LensSelection {
   if (ui.lensPickMode !== 'single') return nextSel;
-  return collapseEachAxisToSingle(t, nextSel, preferIds);
+  if (allowEmpty && selectionToFlatIds(t, nextSel).length === 0) return nextSel;
+  return t.ruler
+    ? collapseEachAxisToSingleLeaf(t, nextSel, preferIds)
+    : collapseEachAxisToSingle(t, nextSel, preferIds);
+}
+
+function resolveSwitchChapter(
+  t: BookToc,
+  currentId: string,
+  nextSel: LensSelection,
+): string {
+  if (t.ruler) return resolveRulerLensSwitchChapter(t, currentId, nextSel);
+  return resolveLensSwitchChapter(t, currentId, nextSel);
 }
 
 function onLensSelect(options: PageLayer[]): void {
   const t = toc.value;
   const sel = activeSelection.value;
   if (!t || !sel) return;
+  const allowEmpty = !!t.ruler && ui.lensReadMode === 'ruler';
   const prevFlat = selectionToFlatIds(t, sel);
   const added = options.filter((id) => !prevFlat.includes(id));
-  let nextSel = flatIdsToSelection(t, options, prevFlat);
+  let nextSel = flatIdsToSelection(t, options, prevFlat, { allowEmpty });
   if (!nextSel) return;
-  nextSel = finalizeSelection(t, nextSel, added);
-  const target = resolveLensSwitchChapter(t, chapterId.value, nextSel);
+  nextSel = finalizeSelection(t, nextSel, added, allowEmpty);
+  const target = resolveSwitchChapter(t, chapterId.value, nextSel);
   setBookLensSelection(bookId.value, nextSel);
   const mode = target !== chapterId.value ? 'push' : 'replace';
   syncLensQueryToRoute(nextSel, t, mode, target);
 }
 
 function onLensPickMode(mode: LensAxisPickMode): void {
-  setLensPickMode(mode);
   const t = toc.value;
-  const sel = activeSelection.value;
-  if (!t || !sel || mode !== 'single') return;
-  const nextSel = collapseEachAxisToSingle(t, sel);
-  if (sameLensSelection(nextSel, sel)) return;
-  const target = resolveLensSwitchChapter(t, chapterId.value, nextSel);
+  // Read storage before flipping pick mode — sanitize would collapse activeSelection
+  // and sameLensSelection would early-return without leaving the index page.
+  const raw =
+    (t && (ui.lensByBook[bookId.value] ?? getStoredLensSelection(bookId.value))) ||
+    activeSelection.value;
+  setLensPickMode(mode);
+  if (!t || !raw || !chapterId.value || mode !== 'single') return;
+  const nextSel = collapseEachAxisToSingleLeaf(t, raw);
   setBookLensSelection(bookId.value, nextSel);
+  const target = resolveSwitchChapter(t, chapterId.value, nextSel);
   syncLensQueryToRoute(nextSel, t, target !== chapterId.value ? 'push' : 'replace', target);
 }
 
 function onLensReadMode(mode: LensReadMode): void {
+  if (mode === 'ruler' && !toc.value?.ruler) {
+    setLensReadMode('page');
+    return;
+  }
+  const t = toc.value;
+  const rawSel =
+    (t && (ui.lensByBook[bookId.value] ?? getStoredLensSelection(bookId.value))) ||
+    activeSelection.value;
   setLensReadMode(mode);
+  if (!t?.ruler || !chapterId.value) return;
+
+  // Explicit 单页 while multi-hanging: collapse to one leaf and open that page.
+  if (mode === 'page') {
+    let sel = rawSel ? sanitizeSelection(rawSel, t) : null;
+    if (sel && selectionUsesRulerHang(t, sel)) {
+      setLensPickMode('single');
+      sel = collapseEachAxisToSingleLeaf(t, sel);
+      setBookLensSelection(bookId.value, sel);
+    } else if (sel) {
+      setBookLensSelection(bookId.value, sel);
+    }
+    if (sel) {
+      const target = resolveRulerLensSwitchChapter(t, chapterId.value, sel);
+      if (target !== chapterId.value) {
+        syncLensQueryToRoute(sel, t, 'replace', target);
+      }
+    }
+    return;
+  }
+
+  if (mode === 'digest') {
+    if (rawSel) {
+      const sel = sanitizeSelection(rawSel, t);
+      if (sel) setBookLensSelection(bookId.value, sel);
+    }
+    return;
+  }
+
+  // Manual 尺子: go to index skeleton.
+  const sel = activeSelection.value;
+  if (!sel) return;
+  const index = findRulerSkeletonChapter(t);
+  const dest = index?.id ?? resolveRulerLensSwitchChapter(t, chapterId.value, sel);
+  if (dest !== chapterId.value) syncLensQueryToRoute(sel, t, 'replace', dest);
 }
 
 const isDigestMode = computed(
@@ -294,7 +418,37 @@ const isDigestMode = computed(
     !!toc.value &&
     hasLenses(toc.value) &&
     ui.lensReadMode === 'digest' &&
-    !!activeSelection.value,
+    !!activeSelection.value &&
+    !isRulerMode.value,
+);
+
+/** Digest hides the book TOC; ruler keeps it (keys page stays navigable). */
+const hideBookToc = computed(() => isDigestMode.value);
+
+const filteredTree = computed(() => {
+  const t = toc.value;
+  if (!t) return [];
+  let ids = visibleIdSet(t.chapters, activeSelection.value, t);
+  if (t.ruler) {
+    const keep = rulerSidebarKeepIds(t, activeSelection.value, isRulerMode.value);
+    ids = new Set([...ids].filter((id) => keep.has(id)));
+  }
+  const base = t.tree?.length
+    ? t.tree
+    : t.chapters.map((c) => ({
+        type: 'page' as const,
+        id: c.id,
+        title: c.title,
+        file: c.file,
+      }));
+  return collapseSingletonGroups(filterTree(base, ids));
+});
+
+watch(
+  () => [toc.value?.ruler, ui.lensReadMode] as const,
+  ([ruler, mode]) => {
+    if (mode === 'ruler' && !ruler) setLensReadMode('page');
+  },
 );
 
 function onKey(e: KeyboardEvent): void {
@@ -320,7 +474,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 <template>
   <div v-if="toc" class="book-layout">
     <TocSidebar
-      v-if="ui.tocOpen && !isDigestMode"
+      v-if="ui.tocOpen && !hideBookToc"
       :toc="toc"
       :tree="filteredTree"
       :book-id="bookId"
@@ -331,7 +485,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
       <div class="topbar">
         <router-link to="/" class="btn ghost">‹ 书架</router-link>
         <button
-          v-if="!ui.tocOpen && !isDigestMode"
+          v-if="!ui.tocOpen && !hideBookToc"
           class="btn ghost toc-toggle"
           type="button"
           title="展开目录"
@@ -341,34 +495,57 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
           <el-icon :size="16"><Expand /></el-icon>
         </button>
         <span class="spacer" />
-        <div v-if="lensSelectTree.length && activeSelection" class="lens-controls">
-          <span class="visually-hidden">阅读模式</span>
-          <el-select
-            class="lens-mode-select"
-            :model-value="ui.lensReadMode"
-            @update:model-value="onLensReadMode($event as LensReadMode)"
-          >
-            <el-option label="单页" value="page" />
-            <el-option label="汇总" value="digest" />
-          </el-select>
-          <span class="visually-hidden">透镜选择模式</span>
-          <el-select
-            class="lens-mode-select"
-            :model-value="ui.lensPickMode"
-            @update:model-value="onLensPickMode($event as LensAxisPickMode)"
-          >
-            <el-option label="多选" value="multi" />
-            <el-option label="单选" value="single" />
-          </el-select>
-          <div class="lens-select-wrap">
-            <span class="visually-hidden">透镜</span>
-            <LensTreeSelect
-              :nodes="lensSelectTree"
-              :model-value="flatLensIds"
-              placeholder="透镜"
-              @update:model-value="onLensSelect"
-            />
-          </div>
+        <div
+          v-if="(lensSelectTree.length && activeSelection) || contentRanks.length"
+          class="lens-controls"
+        >
+          <template v-if="lensSelectTree.length && activeSelection">
+            <span class="visually-hidden">阅读模式</span>
+            <el-select
+              class="lens-mode-select"
+              :model-value="isRulerMode ? 'ruler' : ui.lensReadMode"
+              @update:model-value="onLensReadMode($event as LensReadMode)"
+            >
+              <el-option label="单页" value="page" />
+              <el-option label="汇总" value="digest" />
+              <el-option v-if="toc.ruler" label="尺子" value="ruler" />
+            </el-select>
+            <span class="visually-hidden">透镜选择模式</span>
+            <el-select
+              class="lens-mode-select"
+              :model-value="ui.lensPickMode"
+              @update:model-value="onLensPickMode($event as LensAxisPickMode)"
+            >
+              <el-option label="多选" value="multi" />
+              <el-option label="单选" value="single" />
+            </el-select>
+            <div class="lens-select-wrap">
+              <span class="visually-hidden">透镜</span>
+              <LensTreeSelect
+                :nodes="lensSelectTree"
+                :model-value="flatLensIds"
+                :clearable="!!toc.ruler && ui.lensReadMode === 'ruler'"
+                placeholder="透镜"
+                @update:model-value="onLensSelect"
+              />
+            </div>
+          </template>
+          <template v-if="contentRanks.length">
+            <span class="visually-hidden">内容等级</span>
+            <el-select
+              class="lens-mode-select show-level-select"
+              :model-value="readerShowLevel == null ? 'all' : String(readerShowLevel)"
+              @update:model-value="onShowLevel"
+            >
+              <el-option label="全部等级" value="all" />
+              <el-option
+                v-for="r in contentRanks"
+                :key="r"
+                :label="`等级 ${r}`"
+                :value="String(r)"
+              />
+            </el-select>
+          </template>
         </div>
         <button v-if="orphans.length" class="btn ghost warn" @click="ui.orphanOpen = true">
           孤立标注 {{ orphans.length }}
@@ -389,8 +566,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
       <div class="book-body">
         <div class="book-reading">
           <div class="book-content">
+            <RulerView
+              v-if="isRulerMode && toc"
+              :book-id="bookId"
+              :toc="toc"
+              :lens-selection="activeSelection"
+            />
             <LensDigestView
-              v-if="isDigestMode && toc"
+              v-else-if="isDigestMode && toc"
               :book-id="bookId"
               :toc="toc"
               :lens-selection="activeSelection"
@@ -404,8 +587,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
               :lens-selection="activeSelection"
             />
           </div>
+          <RulerOutline
+            v-if="isRulerMode && toc"
+            :toc="toc"
+            :book-id="bookId"
+            :lens-selection="activeSelection"
+          />
           <DigestOutline
-            v-if="isDigestMode && toc"
+            v-else-if="isDigestMode && toc"
             :toc="toc"
             :book-id="bookId"
             :lens-selection="activeSelection"

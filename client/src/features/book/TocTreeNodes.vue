@@ -7,7 +7,7 @@ import { annotationsFor, sectionKey } from '@/stores/annotations';
 import { DEFAULT_STATUS } from '@shared/annotations';
 import TocTreeNodes from '@/features/book/TocTreeNodes.vue';
 import { tocOf } from '@/stores/books';
-import { setLensReadMode } from '@/stores/ui';
+import { getBookShowLevel, setLensReadMode } from '@/stores/ui';
 
 const props = withDefaults(
   defineProps<{
@@ -39,7 +39,12 @@ function chapterStats(pageId: string): { unread: number; question: number } {
   if (!ch) return { unread: 0, question: 0 };
   let unread = 0;
   let question = 0;
-  for (const s of visibleTocSections(ch, props.lensSelection ?? null, bookToc.value)) {
+  for (const s of visibleTocSections(
+    ch,
+    props.lensSelection ?? null,
+    bookToc.value,
+    getBookShowLevel(props.bookId),
+  )) {
     const st = anns.value[sectionKey(ch.id, s.id)]?.status ?? DEFAULT_STATUS;
     if (st === 'unread') unread++;
     if (st === 'question') question++;

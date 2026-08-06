@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest';
 import {
   buildLensSelectTree,
   collapseEachAxisToSingle,
+  collapseEachAxisToSingleLeaf,
+  collapseSingletonGroups,
   defaultSelection,
   digestAnchorId,
   effectiveAxisLeaves,
   effectiveLeaves,
   expandSectionAllowlist,
   filterChapters,
+  filterSectionsByShowLevel,
   flatIdsToSelection,
   groupChaptersForDigest,
   leavesUnder,
@@ -146,6 +149,13 @@ describe('flatIdsToSelection', () => {
       audience: ['audience'],
     });
   });
+
+  it('allowEmpty keeps axes empty instead of defaulting', () => {
+    expect(flatIdsToSelection(tocWithLenses, [], [], { allowEmpty: true })).toEqual({
+      read: [],
+      audience: [],
+    });
+  });
 });
 
 describe('collapseEachAxisToSingle', () => {
@@ -163,6 +173,20 @@ describe('collapseEachAxisToSingle', () => {
     expect(
       collapseEachAxisToSingle(tocWithLenses, { read: ['scenario', 'impl'], audience: ['tenant'] }),
     ).toEqual({ read: ['impl'], audience: ['tenant'] });
+  });
+});
+
+describe('collapseEachAxisToSingleLeaf', () => {
+  it('narrows a parent node to one effective leaf', () => {
+    expect(
+      collapseEachAxisToSingleLeaf(tocWithLenses, { read: ['read'], audience: ['audience'] }),
+    ).toEqual({ read: ['impl'], audience: ['admin'] });
+  });
+
+  it('keeps an already-single leaf', () => {
+    expect(
+      collapseEachAxisToSingleLeaf(tocWithLenses, { read: ['scenario'], audience: ['tenant'] }),
+    ).toEqual({ read: ['scenario'], audience: ['tenant'] });
   });
 });
 
@@ -358,6 +382,46 @@ describe('sectionAllowlistFor', () => {
   });
 });
 
+describe('filterSectionsByShowLevel', () => {
+  it('hides sections with rank above page showLevel on any page', () => {
+    const chapter: TocChapter = {
+      id: 'flow',
+      title: '流程',
+      file: 'flow.md',
+      showLevel: 1,
+      sections: [
+        { id: 'a', title: '概览', level: 2, rank: 1 },
+        { id: 'b', title: '细节', level: 2, rank: 2 },
+        { id: 'c', title: '无等级', level: 2 },
+      ],
+    };
+    expect(
+      filterSectionsByShowLevel(chapter.sections, chapter).map((s) => s.id),
+    ).toEqual(['a', 'c']);
+  });
+
+  it('reader topbar level overrides page showLevel; null means 全部', () => {
+    const chapter: TocChapter = {
+      id: 'flow',
+      title: '流程',
+      file: 'flow.md',
+      showLevel: 1,
+      sections: [
+        { id: 'a', title: '概览', level: 2, rank: 1 },
+        { id: 'b', title: '细节', level: 2, rank: 2 },
+      ],
+    };
+    expect(filterSectionsByShowLevel(chapter.sections, chapter, 2).map((s) => s.id)).toEqual([
+      'a',
+      'b',
+    ]);
+    expect(filterSectionsByShowLevel(chapter.sections, chapter, null).map((s) => s.id)).toEqual([
+      'a',
+      'b',
+    ]);
+  });
+});
+
 describe('sectionLensLeaves', () => {
   const chapter: TocChapter = {
     id: 'auth',
@@ -475,5 +539,53 @@ describe('pageGroupPath / groupChaptersForDigest', () => {
 
   it('builds digest anchor ids', () => {
     expect(digestAnchorId('login', 'flow')).toBe('digest-login--flow');
+  });
+});
+
+describe('collapseSingletonGroups', () => {
+  it('promotes a page-only directory with one page to the directory title', () => {
+    const tree = collapseSingletonGroups([
+      {
+        type: 'group',
+        id: 'identity',
+        title: '身份',
+        children: [
+          {
+            type: 'group',
+            id: 'register',
+            title: '账号注册',
+            children: [
+              { type: 'page', id: 'index', title: '账号注册', file: 'index.md' },
+            ],
+          },
+        ],
+      },
+    ]);
+    expect(tree).toEqual([
+      {
+        type: 'group',
+        id: 'identity',
+        title: '身份',
+        children: [
+          { type: 'page', id: 'index', title: '账号注册', file: 'index.md' },
+        ],
+      },
+    ]);
+  });
+
+  it('keeps a page-only directory when multiple pages remain', () => {
+    const tree = collapseSingletonGroups([
+      {
+        type: 'group',
+        id: 'register',
+        title: '账号注册',
+        children: [
+          { type: 'page', id: 'scenario', title: '注册场景', file: 'scenario.md' },
+          { type: 'page', id: 'entity', title: '实体', file: 'entity.md' },
+        ],
+      },
+    ]);
+    expect(tree[0]).toMatchObject({ type: 'group', id: 'register', title: '账号注册' });
+    expect(tree[0].type === 'group' && tree[0].children).toHaveLength(2);
   });
 });

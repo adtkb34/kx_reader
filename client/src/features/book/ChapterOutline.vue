@@ -5,6 +5,7 @@ import type { RouteLocationRaw } from 'vue-router';
 import type { BookToc, LensSelection, TocChapter } from '@shared/types';
 import { lensQueryFromSelection, visibleTocSections } from '@shared/lenses';
 import { annotationsFor, sectionKey } from '@/stores/annotations';
+import { getBookShowLevel } from '@/stores/ui';
 
 const props = defineProps<{
   toc: BookToc;
@@ -18,7 +19,12 @@ const router = useRouter();
 const anns = computed(() => annotationsFor(props.bookId));
 
 const sections = computed(() =>
-  visibleTocSections(props.chapter, props.lensSelection ?? null, props.toc),
+  visibleTocSections(
+    props.chapter,
+    props.lensSelection ?? null,
+    props.toc,
+    getBookShowLevel(props.bookId),
+  ),
 );
 
 function noteCount(sectionId: string): number {

@@ -6,6 +6,7 @@ const props = defineProps<{
   nodes: BookLens[];
   modelValue: PageLayer[];
   placeholder?: string;
+  clearable?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -47,6 +48,7 @@ const selected = computed({
     collapse-tags
     collapse-tags-tooltip
     check-strictly
+    :clearable="clearable"
     :render-after-expand="false"
     show-checkbox
     default-expand-all

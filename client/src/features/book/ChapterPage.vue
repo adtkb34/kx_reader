@@ -9,9 +9,10 @@ import { bindMermaidDetails, renderMermaidIn } from '@/mermaid';
 import { cloneDiagramHtml, diagramZoomTarget } from '@/diagramZoom';
 import SectionBlock from '@/features/book/SectionBlock.vue';
 import DiagramLightbox from '@/features/book/DiagramLightbox.vue';
-import { ui } from '@/stores/ui';
+import { ui, getBookShowLevel } from '@/stores/ui';
 import {
   filterSectionsByAllowlist,
+  filterSectionsByShowLevel,
   lensColorMap,
   lensNodeTitle,
   sectionAllowlistFor,
@@ -107,7 +108,11 @@ async function load(): Promise<void> {
     const allow = tocChapter
       ? sectionAllowlistFor(tocChapter, props.lensSelection ?? null, toc)
       : null;
-    sections.value = filterSectionsByAllowlist(splitSections(html), allow);
+    sections.value = filterSectionsByShowLevel(
+      filterSectionsByAllowlist(splitSections(html), allow),
+      tocChapter,
+      getBookShowLevel(props.bookId),
+    );
     await nextTick();
     applyDetailsPref();
     unbindMermaid = bindMermaidDetails(contentEl.value);
@@ -123,7 +128,13 @@ async function load(): Promise<void> {
 }
 
 watch(
-  () => [props.bookId, props.chapterId, JSON.stringify(props.lensSelection ?? null)] as const,
+  () =>
+    [
+      props.bookId,
+      props.chapterId,
+      JSON.stringify(props.lensSelection ?? null),
+      getBookShowLevel(props.bookId),
+    ] as const,
   load,
   { immediate: true },
 );

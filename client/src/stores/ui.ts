@@ -5,8 +5,8 @@ import { normalizeAxisSelection } from '@shared/lenses';
 /** Same-axis multi-select vs single-select for the lens tree. */
 export type LensAxisPickMode = 'multi' | 'single';
 
-/** Single-page reading vs lens digest (all visible sections in one stream). */
-export type LensReadMode = 'page' | 'digest';
+/** Single-page reading vs lens digest vs ruler reorder. */
+export type LensReadMode = 'page' | 'digest' | 'ruler';
 
 const LENS_PICK_KEY = 'reader.lensPickMode';
 const LENS_READ_KEY = 'reader.lensReadMode';
@@ -18,7 +18,13 @@ function readLensPickMode(): LensAxisPickMode {
 }
 
 function readLensReadMode(): LensReadMode {
-  return localStorage.getItem(LENS_READ_KEY) === 'digest' ? 'digest' : 'page';
+  const raw = localStorage.getItem(LENS_READ_KEY);
+  if (raw === 'digest' || raw === 'ruler') return raw;
+  return 'page';
+}
+
+function showLevelStorageKey(bookId: string): string {
+  return `reader.showLevel.${bookId}`;
 }
 
 export const ui = reactive({
@@ -33,11 +39,34 @@ export const ui = reactive({
   tocOpen: localStorage.getItem('reader.tocOpen') !== '0',
   /** Active multi-axis lens selection per book. */
   lensByBook: {} as Record<string, LensSelection>,
+  /** Per-book content rank ceiling; `null` = show all ranks. */
+  showLevelByBook: {} as Record<string, number | null>,
   /** 多选 = same-axis multi; 单选 = one id per axis. */
   lensPickMode: readLensPickMode() as LensAxisPickMode,
   /** 单页 = one chapter; 汇总 = all visible sections under current lens. */
   lensReadMode: readLensReadMode() as LensReadMode,
 });
+
+/** Load per-book content rank ceiling; `null` = 全部. */
+export function getBookShowLevel(bookId: string): number | null {
+  // Use `in` + property read so Vue tracks showLevelByBook[bookId].
+  // hasOwnProperty alone does not establish a reactive dependency.
+  if (!(bookId in ui.showLevelByBook)) {
+    const raw = localStorage.getItem(showLevelStorageKey(bookId));
+    if (raw == null || raw === 'all' || raw === '') {
+      ui.showLevelByBook[bookId] = null;
+    } else {
+      const n = Number(raw);
+      ui.showLevelByBook[bookId] = Number.isFinite(n) ? n : null;
+    }
+  }
+  return ui.showLevelByBook[bookId]!;
+}
+
+export function setBookShowLevel(bookId: string, level: number | null): void {
+  ui.showLevelByBook[bookId] = level;
+  localStorage.setItem(showLevelStorageKey(bookId), level == null ? 'all' : String(level));
+}
 
 export function setLensPickMode(mode: LensAxisPickMode): void {
   ui.lensPickMode = mode;

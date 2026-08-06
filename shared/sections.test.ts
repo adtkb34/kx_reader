@@ -29,6 +29,20 @@ More.
     ]);
   });
 
+  it('parses optional rank on any page marker', () => {
+    const md = `{#scene rank=1}
+## 用户发起账号注册
+
+{#step rank=2}
+## 账号密码
+`;
+    const { sections } = extractSections(md);
+    expect(sections.map((s) => ({ id: s.id, title: s.title, rank: s.rank }))).toEqual([
+      { id: 'scene', title: '用户发起账号注册', rank: 1 },
+      { id: 'step', title: '账号密码', rank: 2 },
+    ]);
+  });
+
   it('allows untitled blocks nested under the preceding titled section', () => {
     const md = `{#parent}
 ## Parent
@@ -64,17 +78,24 @@ Body.
     expect(sections[0].title).toBe('Real');
   });
 
-  it('ignores markers inside details containers', () => {
+  it('includes markers inside details containers (row groups in one table)', () => {
     const md = `{#outer}
 ## Outer
 
-:::details
-{#inner}
-## Inner
+:::details users
+{#inner-a}
+| a | b |
+| --- | --- |
+| 1 | 2 |
+
+{#inner-b}
+| a | b |
+| --- | --- |
+| 3 | 4 |
 :::
 `;
     const { sections } = extractSections(md);
-    expect(sections.map((s) => s.id)).toEqual(['outer']);
+    expect(sections.map((s) => s.id)).toEqual(['outer', 'inner-a', 'inner-b']);
   });
 });
 

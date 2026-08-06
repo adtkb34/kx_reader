@@ -64,6 +64,10 @@
   width: 4.75rem;
 }
 
+.show-level-select {
+  width: 7.5rem;
+}
+
 .lens-mode-select :deep(.el-select__wrapper) {
   min-height: 30px;
   border-radius: 8px;

@@ -3,6 +3,7 @@ import markdownItAttrs from 'markdown-it-attrs';
 import markdownItContainer from 'markdown-it-container';
 import type { TocSection } from './types';
 import { sectionMarkerPlugin } from './sectionMarker';
+import { collectTableRowMarkers, tableRowIdPlugin } from './tableRowId';
 
 /**
  * 与客户端 markdown-it-anchor 使用同一个 slugify，
@@ -20,6 +21,7 @@ export function slugify(text: string): string {
 const md = new MarkdownIt()
   .use(sectionMarkerPlugin)
   .use(markdownItAttrs, { allowedAttributes: ['id', 'class'] })
+  .use(tableRowIdPlugin)
   .use(markdownItContainer, 'details');
 
 type Token = ReturnType<MarkdownIt['parse']>[number];
@@ -43,6 +45,8 @@ export interface ExtractedSections {
 
 interface MarkerHit {
   id: string;
+  /** Content rank from `{#id rank=N}`, if any. */
+  rank?: number;
   /** 0-based start line of the `{#id}` marker */
   startLine: number;
 }
@@ -50,14 +54,23 @@ interface MarkerHit {
 function collectMarkers(markdown: string): { markers: MarkerHit[]; hasIntro: boolean } {
   const tokens = md.parse(markdown, {});
   const markers: MarkerHit[] = [];
+  const seen = new Set<string>();
   let sawMarker = false;
   let hasIntro = false;
 
   for (const t of tokens) {
-    if (t.type === 'section_marker' && t.level === 0) {
+    if (t.type === 'section_marker') {
       const id = t.attrGet('id');
-      if (id) {
-        markers.push({ id, startLine: t.map?.[0] ?? 0 });
+      if (id && !seen.has(id)) {
+        const rankRaw = t.attrGet('data-rank');
+        const rank =
+          rankRaw != null && /^\d+$/.test(rankRaw) ? Number(rankRaw) : undefined;
+        markers.push({
+          id,
+          startLine: t.map?.[0] ?? 0,
+          ...(rank != null ? { rank } : {}),
+        });
+        seen.add(id);
         sawMarker = true;
       }
       continue;
@@ -78,6 +91,14 @@ function collectMarkers(markdown: string): { markers: MarkerHit[]; hasIntro: boo
     }
   }
 
+  for (const row of collectTableRowMarkers(markdown)) {
+    if (seen.has(row.id)) continue;
+    markers.push({ id: row.id, startLine: row.startLine });
+    seen.add(row.id);
+    sawMarker = true;
+  }
+
+  markers.sort((a, b) => a.startLine - b.startLine || a.id.localeCompare(b.id));
   return { markers, hasIntro };
 }
 
@@ -127,17 +148,22 @@ function assignSectionMetas(
       title = '';
       level = Math.max(lastTitledLevel, 2);
     }
-    sections.push({ id: m.id, title, level });
+    sections.push({
+      id: m.id,
+      title,
+      level,
+      ...(m.rank != null ? { rank: m.rank } : {}),
+    });
   }
 
   return sections;
 }
 
 /**
- * 抽取章节里的可标记小节（独占行 `{#id}` 为边界）。
- * - 折叠块内部的标记不算小节（block level > 0）。
+ * 抽取章节里的可标记小节（独占行 `{#id}` / `{#id rank=N}` 为边界）。
+ * - 折叠块内的标记也算小节（便于一张表内标记行组）。
  * - 第一个标记之前若存在正文，则记 hasIntro。
- * - 节标题/层级取节内第一个 h2–h6；无标题则 title 为空、level = 最近有标题节 level+1。
+ * - 节标题/层级取节内第一个 h2–h6；无标题则 title 为空、level = 最近有标题节 level。
  */
 export function extractSections(markdown: string): ExtractedSections {
   const lines = markdown.split('\n');
@@ -152,6 +178,7 @@ export interface SectionBody {
   id: string;
   title: string;
   level: number;
+  rank?: number;
   /** 该小节的 Markdown 原文（含开头 `{#id}` 行） */
   body: string;
 }
@@ -181,6 +208,7 @@ export function extractSectionBodies(markdown: string): ExtractedSectionBodies {
       id: m.id,
       title: meta.title,
       level: meta.level,
+      ...(meta.rank != null ? { rank: meta.rank } : {}),
       body: sliceLines(lines, m.startLine, end),
     });
   }

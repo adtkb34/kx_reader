@@ -5,6 +5,7 @@ import container from 'markdown-it-container';
 import hljs from 'highlight.js/lib/common';
 import { slugify } from '@shared/sections';
 import { SECTION_MARKER_CLASS, sectionMarkerPlugin } from '@shared/sectionMarker';
+import { SECTION_ROW_CLASS, tableRowIdPlugin } from '@shared/tableRowId';
 import { renderWireframe } from '@/wireframe';
 
 export interface RenderEnv {
@@ -49,6 +50,7 @@ const md: MarkdownIt = new MarkdownIt({
 
 md.use(sectionMarkerPlugin);
 md.use(attrs, { allowedAttributes: ['id', 'class'] });
+md.use(tableRowIdPlugin);
 md.use(anchor, { slugify });
 md.use(container, 'details', {
   render(tokens: { nesting: number; info: string }[], idx: number) {
@@ -170,9 +172,9 @@ function firstHeadingInHtml(html: string): { title: string; level: number } | nu
 }
 
 /**
- * 把整章 HTML 按 `.section-marker` 切成可标记小节。
- * 第一个标记之前的内容归入 `_intro`；折叠块内部的标记不会出现在顶层。
- * 与服务端 shared/sections.ts 的目录抽取严格一致。
+ * 把整章 HTML 按**顶层** `.section-marker` 切成可标记小节。
+ * 折叠块内部的标记仍留在父小节 HTML 里（整表一起读）；
+ * 按 id 取行组片段请用 `extractSectionFragment`。
  */
 export function splitSections(html: string): RenderedSection[] {
   const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -230,4 +232,176 @@ export function splitSections(html: string): RenderedSection[] {
     out.push({ id: sec.id, title, level, html: sec.html });
   }
   return out;
+}
+
+/**
+ * 按文档序取某个 id 区间的 HTML，供尺子挂靠。
+ * - 独占行 `{#id}` → `.section-marker` 区间
+ * - 表行尾 `{#id}` → 从该 `<tr>` 起至下一标记行之前，包成一张小表
+ */
+export function extractSectionFragment(
+  html: string,
+  sectionId: string,
+): RenderedSection | null {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+
+  const row = doc.querySelector(
+    `tr#${cssEscape(sectionId)}.${SECTION_ROW_CLASS}, tr.${SECTION_ROW_CLASS}[id="${cssEscape(sectionId)}"]`,
+  ) as HTMLTableRowElement | null;
+  if (row) {
+    return extractTableRowFragment(row, sectionId);
+  }
+
+  const markers = Array.from(
+    doc.querySelectorAll(`.${SECTION_MARKER_CLASS}`),
+  ) as HTMLElement[];
+  const idx = markers.findIndex((m) => m.id === sectionId);
+  if (idx < 0) return null;
+  const start = markers[idx]!;
+  const end = markers[idx + 1] ?? null;
+  const range = doc.createRange();
+  range.setStartBefore(start);
+  if (end) range.setEndBefore(end);
+  else range.setEnd(doc.body, doc.body.childNodes.length);
+  const frag = range.cloneContents();
+  const wrap = doc.createElement('div');
+  wrap.appendChild(frag);
+  const sectionHtml = wrap.innerHTML;
+  const withoutMarker = sectionHtml.replace(
+    new RegExp(`^<div class="${SECTION_MARKER_CLASS}" id="[^"]*"></div>\\n?`),
+    '',
+  );
+  const heading = firstHeadingInHtml(withoutMarker);
+  return {
+    id: sectionId,
+    title: heading?.title ?? '',
+    level: heading?.level ?? 2,
+    html: sectionHtml,
+  };
+}
+
+function cssEscape(id: string): string {
+  if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') return CSS.escape(id);
+  return id.replace(/([^a-zA-Z0-9_-])/g, '\\$1');
+}
+
+/** Row group: this marked <tr> through the row before the next marked <tr> in the same table. */
+function extractTableRowFragment(
+  startRow: HTMLTableRowElement,
+  sectionId: string,
+): RenderedSection {
+  const doc = startRow.ownerDocument;
+  const table = startRow.closest('table');
+  const allRows = table
+    ? (Array.from(table.querySelectorAll('tr')) as HTMLTableRowElement[])
+    : [startRow];
+  const startIdx = allRows.indexOf(startRow);
+  const slice: HTMLTableRowElement[] = [];
+  for (let i = startIdx; i < allRows.length; i++) {
+    const r = allRows[i]!;
+    if (i > startIdx && r.classList.contains(SECTION_ROW_CLASS)) break;
+    slice.push(r);
+  }
+
+  const out = doc.createElement('table');
+  const headRows = slice.filter((r) => r.parentElement?.tagName === 'THEAD');
+  const bodyRows = slice.filter((r) => r.parentElement?.tagName !== 'THEAD');
+  if (headRows.length) {
+    const thead = doc.createElement('thead');
+    for (const r of headRows) thead.appendChild(r.cloneNode(true));
+    out.appendChild(thead);
+  }
+  if (bodyRows.length) {
+    const tbody = doc.createElement('tbody');
+    for (const r of bodyRows) tbody.appendChild(r.cloneNode(true));
+    out.appendChild(tbody);
+  }
+  if (!headRows.length && !bodyRows.length) {
+    out.appendChild(startRow.cloneNode(true));
+  }
+
+  return {
+    id: sectionId,
+    title: '',
+    level: 2,
+    html: out.outerHTML,
+  };
+}
+
+/** Join several section fragments; consecutive bare tables are merged into one. */
+export function joinSectionFragments(
+  parts: RenderedSection[],
+  id: string,
+  title: string,
+  level: number,
+): RenderedSection | null {
+  if (parts.length === 0) return null;
+  const mergedHtml = mergeAdjacentTables(parts.map((p) => p.html).join(''));
+  return { id, title: title || parts[0]!.title, level, html: mergedHtml };
+}
+
+function mergeAdjacentTables(html: string): string {
+  const doc = new DOMParser().parseFromString(`<div id="root">${html}</div>`, 'text/html');
+  const root = doc.getElementById('root');
+  if (!root) return html;
+  const nodes = Array.from(root.childNodes);
+  const out: Node[] = [];
+  let pendingTable: HTMLTableElement | null = null;
+
+  const flushTable = () => {
+    if (pendingTable) {
+      out.push(pendingTable);
+      pendingTable = null;
+    }
+  };
+
+  const appendBodyRows = (from: HTMLTableElement, into: HTMLTableElement) => {
+    const destBody =
+      into.tBodies[0] ?? into.appendChild(doc.createElement('tbody'));
+    for (const body of Array.from(from.tBodies)) {
+      for (const row of Array.from(body.rows)) {
+        destBody.appendChild(row.cloneNode(true));
+      }
+    }
+    for (const row of Array.from(from.rows)) {
+      if (row.parentElement?.tagName === 'THEAD') continue;
+      if (row.parentElement?.tagName === 'TBODY') continue;
+      destBody.appendChild(row.cloneNode(true));
+    }
+  };
+
+  for (const node of nodes) {
+    if (node.nodeType === Node.ELEMENT_NODE && (node as Element).tagName === 'TABLE') {
+      const table = node as HTMLTableElement;
+      // A fragment with its own <thead> starts a new logical table
+      // (e.g. fields header vs index header must not collapse).
+      if (table.tHead && pendingTable) {
+        flushTable();
+      }
+      if (!pendingTable) {
+        pendingTable = table.cloneNode(true) as HTMLTableElement;
+        continue;
+      }
+      if (table.tHead && !pendingTable.tHead) {
+        const destBody =
+          pendingTable.tBodies[0] ?? pendingTable.appendChild(doc.createElement('tbody'));
+        pendingTable.insertBefore(table.tHead.cloneNode(true), destBody);
+      }
+      appendBodyRows(table, pendingTable);
+      continue;
+    }
+    // section-marker divs between tables: skip when merging
+    if (
+      node.nodeType === Node.ELEMENT_NODE &&
+      (node as Element).classList?.contains(SECTION_MARKER_CLASS)
+    ) {
+      continue;
+    }
+    flushTable();
+    out.push(node.cloneNode(true));
+  }
+  flushTable();
+  const wrap = doc.createElement('div');
+  for (const n of out) wrap.appendChild(n);
+  return wrap.innerHTML;
 }

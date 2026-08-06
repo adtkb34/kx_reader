@@ -6,11 +6,12 @@ import { bindMermaidDetails, renderMermaidIn } from '@/mermaid';
 import { cloneDiagramHtml, diagramZoomTarget } from '@/diagramZoom';
 import SectionBlock from '@/features/book/SectionBlock.vue';
 import DiagramLightbox from '@/features/book/DiagramLightbox.vue';
-import { ui } from '@/stores/ui';
+import { ui, getBookShowLevel } from '@/stores/ui';
 import {
   digestAnchorId,
   filterChapters,
   filterSectionsByAllowlist,
+  filterSectionsByShowLevel,
   groupChaptersForDigest,
   lensColorMap,
   lensNodeTitle,
@@ -99,7 +100,11 @@ async function load(): Promise<void> {
           fileToChapter,
         });
         const allow = sectionAllowlistFor(ch, props.lensSelection ?? null, props.toc);
-        const sections = filterSectionsByAllowlist(splitSections(html), allow);
+        const sections = filterSectionsByShowLevel(
+          filterSectionsByAllowlist(splitSections(html), allow),
+          ch,
+          getBookShowLevel(props.bookId),
+        );
         return {
           chapter: ch,
           title: content.title || ch.title,
@@ -145,6 +150,7 @@ watch(
       props.bookId,
       JSON.stringify(props.lensSelection ?? null),
       visibleChapters.value.map((c) => c.id).join(','),
+      getBookShowLevel(props.bookId),
     ] as const,
   load,
   { immediate: true },

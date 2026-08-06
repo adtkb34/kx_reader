@@ -193,11 +193,14 @@ export function selectionToFlatIds(toc: BookToc, selection: LensSelection | null
 /**
  * Map flat select-tree ids back to per-axis LensSelection.
  * Applies branch-layer normalization on the full select tree.
+ * By default empty axes fall back to `defaultSelection`; pass `allowEmpty` for
+ * ruler mode (skeleton only, no dimension hang-offs).
  */
 export function flatIdsToSelection(
   toc: BookToc,
   flatIds: PageLayer[],
   prevFlat: PageLayer[] = [],
+  opts?: { allowEmpty?: boolean },
 ): LensSelection | null {
   if (!toc.lenses) return null;
   const tree = buildLensSelectTree(toc);
@@ -218,10 +221,12 @@ export function flatIdsToSelection(
       }
     }
   }
-  const fallback = defaultSelection(toc);
-  for (const axis of lensAxisIds(toc)) {
-    if (!out[axis]?.length && fallback?.[axis]?.length) {
-      out[axis] = [...fallback[axis]];
+  if (!opts?.allowEmpty) {
+    const fallback = defaultSelection(toc);
+    for (const axis of lensAxisIds(toc)) {
+      if (!out[axis]?.length && fallback?.[axis]?.length) {
+        out[axis] = [...fallback[axis]];
+      }
     }
   }
   return Object.keys(out).length > 0 ? out : null;
@@ -243,6 +248,35 @@ export function collapseEachAxisToSingle(
     }
     const hit = ids.find((id) => prefer.has(id));
     out[axis] = [hit ?? ids[ids.length - 1]];
+  }
+  return out;
+}
+
+/**
+ * Collapse each axis to exactly one effective leaf (never a parent that
+ * still expands to multiple leaves — that would keep ruler auto-hang on).
+ */
+export function collapseEachAxisToSingleLeaf(
+  toc: BookToc,
+  selection: LensSelection,
+  preferIds: PageLayer[] = [],
+): LensSelection {
+  const collapsed = collapseEachAxisToSingle(toc, selection, preferIds);
+  const prefer = new Set(preferIds);
+  const out: LensSelection = {};
+  for (const axis of lensAxisIds(toc)) {
+    const ids = normalizeAxisSelection(collapsed[axis]);
+    if (ids.length === 0) {
+      out[axis] = [];
+      continue;
+    }
+    const leaves = effectiveAxisLeaves(toc, axis, ids);
+    if (leaves.length <= 1) {
+      out[axis] = leaves.length === 1 ? [leaves[0]] : [...ids];
+      continue;
+    }
+    const hit = leaves.find((id) => prefer.has(id));
+    out[axis] = [hit ?? leaves[leaves.length - 1]];
   }
   return out;
 }
@@ -359,6 +393,59 @@ export function filterSectionsByAllowlist<T extends { id: string }>(
   if (!allowlist) return sections;
   const allowed = new Set(allowlist);
   return sections.filter((s) => allowed.has(s.id));
+}
+
+/** True when section has no rank, or rank ≤ page showLevel, or showLevel unset. */
+export function sectionPassesShowLevel(
+  section: { rank?: number } | undefined,
+  showLevel: number | undefined,
+): boolean {
+  if (showLevel == null || !Number.isFinite(showLevel)) return true;
+  if (section?.rank == null) return true;
+  return section.rank <= showLevel;
+}
+
+/**
+ * Reader topbar level vs page `showLevel`.
+ * - `null` = 全部（不按 rank 过滤，忽略页配置）
+ * - `number` = 强制该上限
+ * - `undefined` = 未选顶栏，回退到页 `showLevel`
+ */
+export type ReaderShowLevel = number | null | undefined;
+
+export function effectiveShowLevel(
+  chapter: TocChapter | null | undefined,
+  readerShowLevel?: ReaderShowLevel,
+): number | undefined {
+  if (readerShowLevel === null) return undefined;
+  if (typeof readerShowLevel === 'number' && Number.isFinite(readerShowLevel)) {
+    return readerShowLevel;
+  }
+  const page = chapter?.showLevel;
+  return page != null && Number.isFinite(page) ? page : undefined;
+}
+
+/** Sorted unique content ranks present in the book (for topbar options). */
+export function bookContentRanks(toc: BookToc): number[] {
+  const ranks = new Set<number>();
+  for (const ch of toc.chapters) {
+    for (const s of ch.sections) {
+      if (s.rank != null && Number.isFinite(s.rank)) ranks.add(s.rank);
+    }
+  }
+  return [...ranks].sort((a, b) => a - b);
+}
+
+/** Drop sections whose rank exceeds the effective showLevel. */
+export function filterSectionsByShowLevel<T extends { id: string }>(
+  sections: T[],
+  chapter: TocChapter | null | undefined,
+  readerShowLevel?: ReaderShowLevel,
+): T[] {
+  const level = effectiveShowLevel(chapter, readerShowLevel);
+  if (level == null) return sections;
+  const byId = new Map((chapter?.sections ?? []).map((s) => [s.id, s]));
+  return sections.filter((s) => sectionPassesShowLevel(byId.get(s.id), level));
 }
 
 /**
@@ -487,6 +574,35 @@ export function filterTree(nodes: TocTreeNode[], visibleIds: Set<string>): TocTr
     if (children.length > 0) {
       out.push({ ...node, children });
     }
+  }
+  return out;
+}
+
+/**
+ * When a directory's filtered children are a single page (no nested groups in
+ * the original node), show only the directory: one page row with the group title.
+ * Parent folders that only hold groups stay as groups.
+ */
+export function collapseSingletonGroups(nodes: TocTreeNode[]): TocTreeNode[] {
+  const out: TocTreeNode[] = [];
+  for (const node of nodes) {
+    if (node.type === 'page') {
+      out.push(node);
+      continue;
+    }
+    const hadNestedGroup = node.children.some((c) => c.type === 'group');
+    const children = collapseSingletonGroups(node.children);
+    if (!hadNestedGroup && children.length === 1 && children[0].type === 'page') {
+      const page = children[0];
+      out.push({
+        type: 'page',
+        id: page.id,
+        title: node.title,
+        file: page.file,
+      });
+      continue;
+    }
+    out.push({ ...node, children });
   }
   return out;
 }
@@ -627,10 +743,15 @@ export function visibleTocSections(
   chapter: TocChapter,
   selection: LensSelection | null,
   toc?: BookToc | null,
+  readerShowLevel?: ReaderShowLevel,
 ): TocSection[] {
-  return filterSectionsByAllowlist(
-    chapter.sections,
-    sectionAllowlistFor(chapter, selection, toc),
+  return filterSectionsByShowLevel(
+    filterSectionsByAllowlist(
+      chapter.sections,
+      sectionAllowlistFor(chapter, selection, toc),
+    ),
+    chapter,
+    readerShowLevel,
   ).filter((s) => s.title.length > 0);
 }
 

@@ -8,6 +8,7 @@ import {
   visibleTocSections,
 } from '@shared/lenses';
 import { annotationsFor, sectionKey } from '@/stores/annotations';
+import { getBookShowLevel } from '@/stores/ui';
 
 const props = defineProps<{
   toc: BookToc;
@@ -37,6 +38,7 @@ const anns = computed(() => annotationsFor(props.bookId));
 
 const groups = computed((): OutlineGroup[] => {
   const chapters = filterChapters(props.toc.chapters, props.lensSelection ?? null, props.toc);
+  const showLevel = getBookShowLevel(props.bookId);
   return groupChaptersForDigest(props.toc, chapters)
     .map((g) => ({
       groupTitle: g.groupTitle,
@@ -44,12 +46,14 @@ const groups = computed((): OutlineGroup[] => {
         .map((ch) => ({
           chapterId: ch.id,
           title: ch.title,
-          sections: visibleTocSections(ch, props.lensSelection ?? null, props.toc).map((s) => ({
-            chapterId: ch.id,
-            sectionId: s.id,
-            title: s.title,
-            level: s.level,
-          })),
+          sections: visibleTocSections(ch, props.lensSelection ?? null, props.toc, showLevel).map(
+            (s) => ({
+              chapterId: ch.id,
+              sectionId: s.id,
+              title: s.title,
+              level: s.level,
+            }),
+          ),
         }))
         .filter((p) => p.sections.length > 0),
     }))

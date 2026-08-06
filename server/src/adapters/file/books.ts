@@ -5,6 +5,7 @@ import { BOOKS_DIR } from '../../config';
 import { extractSections } from '../../../../shared/sections';
 import type {
   BookLens,
+  BookRuler,
   BookSummary,
   BookToc,
   ChapterContent,
@@ -13,7 +14,7 @@ import type {
   TocChapter,
   TocTreeNode,
 } from '../../../../shared/types';
-import { lensLeafIds } from '../../../../shared/lenses';
+import { findLensNode, lensLeafIds } from '../../../../shared/lenses';
 import type { BookAsset, BookRepository } from '../../ports/books';
 
 export type { BookAsset, BookRepository };
@@ -29,6 +30,8 @@ interface BookManifest {
   contents?: unknown[];
   /** Top-level array of axes; each node has `id` + `title` (+ optional `children`). */
   lenses?: BookLens[];
+  /** Optional ruler-mode: key sections → linked section ids. */
+  ruler?: unknown;
 }
 
 /** Book id / single path segment. */
@@ -174,6 +177,67 @@ function parseLenses(bookId: string, raw: unknown): ParsedLenses | undefined {
   }
 
   return lensAxisOrder.length > 0 ? { lenses, lensAxisTitles, lensAxisOrder } : undefined;
+}
+
+function parseRuler(
+  bookId: string,
+  raw: unknown,
+  bookLenses: Record<LensAxisId, BookLens[]> | undefined,
+): BookRuler | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const axis = (raw as { axis?: unknown }).axis;
+  const keys = (raw as { keys?: unknown }).keys;
+  const linksRaw = (raw as { links?: unknown }).links;
+  if (typeof axis !== 'string' || !SAFE_SEGMENT.test(axis)) {
+    console.warn(`book ${bookId}: ruler.axis invalid; skipping ruler`);
+    return undefined;
+  }
+  if (bookLenses && !bookLenses[axis]) {
+    console.warn(`book ${bookId}: ruler.axis "${axis}" not in lenses; skipping ruler`);
+    return undefined;
+  }
+  if (keys != null && (typeof keys !== 'string' || !SAFE_SEGMENT.test(keys))) {
+    console.warn(`book ${bookId}: ruler.keys invalid; skipping ruler`);
+    return undefined;
+  }
+  if (typeof keys === 'string' && bookLenses) {
+    const node = findLensNode(bookLenses[axis] ?? [], keys);
+    if (!node) {
+      console.warn(`book ${bookId}: ruler.keys "${keys}" not under axis "${axis}"; skipping ruler`);
+      return undefined;
+    }
+  }
+  if (!linksRaw || typeof linksRaw !== 'object' || Array.isArray(linksRaw)) {
+    console.warn(`book ${bookId}: ruler.links must be an object; skipping ruler`);
+    return undefined;
+  }
+  const links: Record<string, string[]> = {};
+  for (const [key, val] of Object.entries(linksRaw as Record<string, unknown>)) {
+    if (!SAFE_SEGMENT.test(key)) {
+      console.warn(`book ${bookId}: ruler.links key "${key}" invalid; skipping`);
+      continue;
+    }
+    if (
+      !Array.isArray(val) ||
+      val.length === 0 ||
+      !val.every((s) => typeof s === 'string' && SAFE_SEGMENT.test(s))
+    ) {
+      console.warn(
+        `book ${bookId}: ruler.links["${key}"] must be a non-empty string array; skipping`,
+      );
+      continue;
+    }
+    links[key] = [...(val as string[])];
+  }
+  if (Object.keys(links).length === 0) {
+    console.warn(`book ${bookId}: ruler.links empty after validation; skipping ruler`);
+    return undefined;
+  }
+  return {
+    axis,
+    ...(typeof keys === 'string' ? { keys } : {}),
+    links,
+  };
 }
 
 /**
@@ -326,11 +390,19 @@ async function loadPage(
       `book ${bookId}: page "${manifestId}" has frontmatter layer/pair; ignored — use contents[].lenses`,
     );
   }
+  const fmShow = fm.data.showLevel;
+  const showLevel =
+    typeof fmShow === 'number' && Number.isFinite(fmShow) ? fmShow : undefined;
+  const fmRole = fm.data.role;
+  const role =
+    fmRole === 'ruler' || fmRole === 'page' ? (fmRole as 'ruler' | 'page') : undefined;
   return {
     id: manifestId,
     title,
     file,
     sections: all,
+    ...(showLevel != null ? { showLevel } : {}),
+    ...(role ? { role } : {}),
   };
 }
 
@@ -357,6 +429,8 @@ async function walkContents(
     const file = (item as { file?: unknown }).file;
     const title = (item as { title?: unknown }).title;
     const lenses = (item as { lenses?: ManifestPageLenses }).lenses;
+    const rawShowLevel = (item as { showLevel?: unknown }).showLevel;
+    const rawRole = (item as { role?: unknown }).role;
     const rawChildren = (item as { children?: unknown }).children;
     const childItems = Array.isArray(rawChildren) ? rawChildren : [];
 
@@ -366,6 +440,12 @@ async function walkContents(
       }
       const page = await loadPage(bookId, file, id);
       if (!page) continue;
+      if (typeof rawShowLevel === 'number' && Number.isFinite(rawShowLevel)) {
+        page.showLevel = rawShowLevel;
+      }
+      if (rawRole === 'ruler' || rawRole === 'page') {
+        page.role = rawRole;
+      }
       applyPageLenses(
         bookId,
         page,
@@ -409,6 +489,7 @@ export async function getBookToc(bookId: string): Promise<BookToc | null> {
 
   const parsed = parseLenses(bookId, manifest.lenses);
   const bookLenses = parsed?.lenses;
+  const ruler = parseRuler(bookId, manifest.ruler, bookLenses);
   const tree: TocTreeNode[] = [];
   const pages: TocChapter[] = [];
   try {
@@ -430,6 +511,7 @@ export async function getBookToc(bookId: string): Promise<BookToc | null> {
           lensAxisOrder: parsed.lensAxisOrder,
         }
       : {}),
+    ...(ruler ? { ruler } : {}),
     tree,
     chapters: pages,
   };
