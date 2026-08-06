@@ -5,6 +5,10 @@
     display: none;
   }
 
+  .book-layout:has(> .toc) {
+    padding-left: 0;
+  }
+
   .chapter-outline {
     display: none;
   }

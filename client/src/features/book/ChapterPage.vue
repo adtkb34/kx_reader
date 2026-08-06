@@ -6,7 +6,9 @@ import { api } from '@/api/client';
 import { tocOf } from '@/stores/books';
 import { renderChapter, splitSections, type RenderedSection } from '@/markdown';
 import { bindMermaidDetails, renderMermaidIn } from '@/mermaid';
+import { cloneDiagramHtml, diagramZoomTarget } from '@/diagramZoom';
 import SectionBlock from '@/features/book/SectionBlock.vue';
+import DiagramLightbox from '@/features/book/DiagramLightbox.vue';
 import { ui } from '@/stores/ui';
 import {
   filterSectionsByAllowlist,
@@ -38,6 +40,7 @@ const contentEl = ref<HTMLElement | null>(null);
 const previewVisible = ref(false);
 const previewUrlList = ref<string[]>([]);
 const previewIndex = ref(0);
+const diagramHtml = ref('');
 let unbindMermaid: (() => void) | null = null;
 
 const tocChapter = computed(() =>
@@ -88,6 +91,7 @@ async function load(): Promise<void> {
   unbindMermaid?.();
   unbindMermaid = null;
   previewVisible.value = false;
+  diagramHtml.value = '';
   try {
     const chapter = await api.chapter(props.bookId, props.chapterId);
     title.value = chapter.title;
@@ -148,6 +152,7 @@ onBeforeUnmount(() => {
   unbindMermaid?.();
   unbindMermaid = null;
   previewVisible.value = false;
+  diagramHtml.value = '';
 });
 
 function applyDetailsPref(): void {
@@ -201,12 +206,23 @@ function openImagePreview(img: HTMLImageElement): void {
   previewVisible.value = true;
 }
 
+function openDiagramPreview(source: HTMLElement): void {
+  diagramHtml.value = cloneDiagramHtml(source);
+}
+
 function onContentClick(e: MouseEvent): void {
   const target = e.target as HTMLElement;
   const img = target.closest?.('img');
   if (img && img.closest('.md-figure')) {
     e.preventDefault();
     openImagePreview(img as HTMLImageElement);
+    return;
+  }
+
+  const diagram = diagramZoomTarget(target);
+  if (diagram) {
+    e.preventDefault();
+    openDiagramPreview(diagram);
     return;
   }
 
@@ -297,5 +313,7 @@ function goNext(): void {
       teleported
       @close="previewVisible = false"
     />
+
+    <DiagramLightbox v-if="diagramHtml" :html="diagramHtml" @close="diagramHtml = ''" />
   </div>
 </template>

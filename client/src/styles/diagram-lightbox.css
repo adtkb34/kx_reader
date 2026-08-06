@@ -1,0 +1,107 @@
+/* ---------- diagram click-to-zoom lightbox ---------- */
+
+.mermaid-wrap.is-rendered,
+.wireframe {
+  cursor: zoom-in;
+}
+
+.diagram-lightbox-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 20px;
+  background: rgba(24, 24, 22, 0.55);
+  overflow: hidden;
+  cursor: zoom-out;
+}
+
+.diagram-lightbox-close {
+  position: fixed;
+  top: 16px;
+  right: 18px;
+  z-index: 101;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #1f2937;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(24, 24, 22, 0.18);
+}
+
+.diagram-lightbox-close:hover {
+  background: #fff;
+}
+
+.diagram-lightbox-stage {
+  cursor: default;
+  margin: auto;
+  padding: 28px 32px;
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  box-shadow: 0 24px 64px rgba(24, 24, 22, 0.28);
+  max-width: min(96vw, 1600px);
+  max-height: calc(100vh - 56px);
+  overflow: auto;
+}
+
+.diagram-lightbox-body {
+  min-width: min(280px, 80vw);
+  margin: 0 auto;
+}
+
+.diagram-lightbox-body > svg {
+  display: block;
+  max-width: none;
+  width: auto;
+  height: auto;
+  margin: 0 auto;
+}
+
+.diagram-lightbox-body .wireframe {
+  margin: 0 auto;
+  cursor: default;
+  /* 与正文 360px 对比，放大展示；过高时由 stage 滚动，不裁切 */
+  width: min(520px, 86vw);
+}
+
+.diagram-lightbox-body .wf-device {
+  max-width: none;
+  width: 100%;
+  margin: 0 auto;
+  font-size: 15px;
+}
+
+.diagram-lightbox-body .wf-frame-title {
+  font-size: 12px;
+  padding: 14px 18px 0;
+}
+
+.diagram-lightbox-body .wf-body {
+  padding: 14px 16px 18px;
+  gap: 10px;
+}
+
+.diagram-lightbox-body .wf-bar,
+.diagram-lightbox-body .wf-row,
+.diagram-lightbox-body .wf-card-title,
+.diagram-lightbox-body .wf-btn {
+  font-size: 14px;
+}
+
+.diagram-lightbox-body .mermaid-wrap {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: default;
+  width: auto;
+  max-width: none;
+}

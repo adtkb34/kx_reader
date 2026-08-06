@@ -1,15 +1,27 @@
 /* ---------- toc sidebar ---------- */
 
+/*
+ * Fixed (not sticky): sticky is clipped by .book-layout's bottom edge, so the
+ * nav jumps up a few pixels when the page is scrolled to the end.
+ */
 .toc {
-  width: 280px;
-  flex: none;
-  position: sticky;
+  position: fixed;
+  left: 0;
   top: 0;
+  z-index: 15;
+  width: 280px;
   height: 100vh;
+  height: 100dvh;
   overflow-y: auto;
   background: #faf8f4;
   border-right: 1px solid var(--line);
   padding: 18px 12px 48px;
+  box-sizing: border-box;
+}
+
+/* Reserve space in the flex row now that .toc is out of flow */
+.book-layout:has(> .toc) {
+  padding-left: 280px;
 }
 
 .toc-header {

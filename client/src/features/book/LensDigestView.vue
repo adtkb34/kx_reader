@@ -3,7 +3,9 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { api } from '@/api/client';
 import { renderChapter, splitSections, type RenderedSection } from '@/markdown';
 import { bindMermaidDetails, renderMermaidIn } from '@/mermaid';
+import { cloneDiagramHtml, diagramZoomTarget } from '@/diagramZoom';
 import SectionBlock from '@/features/book/SectionBlock.vue';
+import DiagramLightbox from '@/features/book/DiagramLightbox.vue';
 import { ui } from '@/stores/ui';
 import {
   digestAnchorId,
@@ -40,6 +42,7 @@ const groups = ref<DigestGroupView[]>([]);
 const error = ref('');
 const loading = ref(false);
 const contentEl = ref<HTMLElement | null>(null);
+const diagramHtml = ref('');
 let unbindMermaid: (() => void) | null = null;
 
 const visibleChapters = computed(() =>
@@ -164,12 +167,20 @@ watch(
 onBeforeUnmount(() => {
   unbindMermaid?.();
   unbindMermaid = null;
+  diagramHtml.value = '';
 });
+
+function onContentClick(e: MouseEvent): void {
+  const diagram = diagramZoomTarget(e.target);
+  if (!diagram) return;
+  e.preventDefault();
+  diagramHtml.value = cloneDiagramHtml(diagram);
+}
 </script>
 
 <template>
   <div class="chapter-wrap digest-wrap">
-    <article ref="contentEl" class="page-card digest-card">
+    <article ref="contentEl" class="page-card digest-card" @click="onContentClick">
       <div v-if="error" class="error-box">
         加载失败：{{ error }}
         <button class="btn" @click="load()">重试</button>
@@ -202,5 +213,7 @@ onBeforeUnmount(() => {
         </div>
       </template>
     </article>
+
+    <DiagramLightbox v-if="diagramHtml" :html="diagramHtml" @close="diagramHtml = ''" />
   </div>
 </template>

@@ -16,6 +16,8 @@ books/*
 !books/focus-tray/**
 !books/practice/
 !books/practice/**
+!books/complaint/
+!books/complaint/**
 
 # Per-book git repos (compare feature); parent tracks content only
 books/**/.git/
