@@ -22,6 +22,7 @@ import {
 import {
   buildRulerPreamble,
   buildRulerTree,
+  findRulerModuleIndexId,
   rulerAnchorId,
   type RulerKeyBlock,
 } from '@shared/ruler';
@@ -31,6 +32,8 @@ const props = defineProps<{
   bookId: string;
   toc: BookToc;
   lensSelection?: LensSelection | null;
+  /** Current route chapter — scopes keys to that module's ruler index. */
+  focusChapterId?: string | null;
 }>();
 
 interface SectionHit {
@@ -57,11 +60,26 @@ const diagramHtml = ref('');
 let unbindMermaid: (() => void) | null = null;
 
 const readerShowLevel = computed(() => getBookShowLevel(props.bookId));
+const focusIndexId = computed(() => {
+  if (!props.focusChapterId) return null;
+  return findRulerModuleIndexId(props.toc, props.focusChapterId) ?? props.focusChapterId;
+});
 const tree = computed(
-  () => buildRulerTree(props.toc, props.lensSelection ?? null, readerShowLevel.value) ?? [],
+  () =>
+    buildRulerTree(
+      props.toc,
+      props.lensSelection ?? null,
+      readerShowLevel.value,
+      focusIndexId.value,
+    ) ?? [],
 );
 const preambleSpec = computed(() =>
-  buildRulerPreamble(props.toc, props.lensSelection ?? null, readerShowLevel.value),
+  buildRulerPreamble(
+    props.toc,
+    props.lensSelection ?? null,
+    readerShowLevel.value,
+    focusIndexId.value,
+  ),
 );
 
 const activeLeaves = computed(

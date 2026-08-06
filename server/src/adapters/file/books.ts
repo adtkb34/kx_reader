@@ -5,7 +5,6 @@ import { BOOKS_DIR } from '../../config';
 import { extractSections } from '../../../../shared/sections';
 import type {
   BookLens,
-  BookRuler,
   BookSummary,
   BookToc,
   ChapterContent,
@@ -14,7 +13,8 @@ import type {
   TocChapter,
   TocTreeNode,
 } from '../../../../shared/types';
-import { findLensNode, lensLeafIds } from '../../../../shared/lenses';
+import { lensLeafIds } from '../../../../shared/lenses';
+import { parseBookRuler } from '../../../../shared/rulerManifest';
 import type { BookAsset, BookRepository } from '../../ports/books';
 
 export type { BookAsset, BookRepository };
@@ -177,67 +177,6 @@ function parseLenses(bookId: string, raw: unknown): ParsedLenses | undefined {
   }
 
   return lensAxisOrder.length > 0 ? { lenses, lensAxisTitles, lensAxisOrder } : undefined;
-}
-
-function parseRuler(
-  bookId: string,
-  raw: unknown,
-  bookLenses: Record<LensAxisId, BookLens[]> | undefined,
-): BookRuler | undefined {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
-  const axis = (raw as { axis?: unknown }).axis;
-  const keys = (raw as { keys?: unknown }).keys;
-  const linksRaw = (raw as { links?: unknown }).links;
-  if (typeof axis !== 'string' || !SAFE_SEGMENT.test(axis)) {
-    console.warn(`book ${bookId}: ruler.axis invalid; skipping ruler`);
-    return undefined;
-  }
-  if (bookLenses && !bookLenses[axis]) {
-    console.warn(`book ${bookId}: ruler.axis "${axis}" not in lenses; skipping ruler`);
-    return undefined;
-  }
-  if (keys != null && (typeof keys !== 'string' || !SAFE_SEGMENT.test(keys))) {
-    console.warn(`book ${bookId}: ruler.keys invalid; skipping ruler`);
-    return undefined;
-  }
-  if (typeof keys === 'string' && bookLenses) {
-    const node = findLensNode(bookLenses[axis] ?? [], keys);
-    if (!node) {
-      console.warn(`book ${bookId}: ruler.keys "${keys}" not under axis "${axis}"; skipping ruler`);
-      return undefined;
-    }
-  }
-  if (!linksRaw || typeof linksRaw !== 'object' || Array.isArray(linksRaw)) {
-    console.warn(`book ${bookId}: ruler.links must be an object; skipping ruler`);
-    return undefined;
-  }
-  const links: Record<string, string[]> = {};
-  for (const [key, val] of Object.entries(linksRaw as Record<string, unknown>)) {
-    if (!SAFE_SEGMENT.test(key)) {
-      console.warn(`book ${bookId}: ruler.links key "${key}" invalid; skipping`);
-      continue;
-    }
-    if (
-      !Array.isArray(val) ||
-      val.length === 0 ||
-      !val.every((s) => typeof s === 'string' && SAFE_SEGMENT.test(s))
-    ) {
-      console.warn(
-        `book ${bookId}: ruler.links["${key}"] must be a non-empty string array; skipping`,
-      );
-      continue;
-    }
-    links[key] = [...(val as string[])];
-  }
-  if (Object.keys(links).length === 0) {
-    console.warn(`book ${bookId}: ruler.links empty after validation; skipping ruler`);
-    return undefined;
-  }
-  return {
-    axis,
-    ...(typeof keys === 'string' ? { keys } : {}),
-    links,
-  };
 }
 
 /**
@@ -489,7 +428,7 @@ export async function getBookToc(bookId: string): Promise<BookToc | null> {
 
   const parsed = parseLenses(bookId, manifest.lenses);
   const bookLenses = parsed?.lenses;
-  const ruler = parseRuler(bookId, manifest.ruler, bookLenses);
+  const ruler = parseBookRuler(bookId, manifest.ruler, bookLenses);
   const tree: TocTreeNode[] = [];
   const pages: TocChapter[] = [];
   try {

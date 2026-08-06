@@ -38,6 +38,7 @@ import {
 } from '@shared/lenses';
 import {
   findRulerSkeletonChapter,
+  findRulerModuleIndexId,
   resolveRulerLensSwitchChapter,
   rulerSidebarKeepIds,
   selectionUsesRulerHang,
@@ -405,11 +406,12 @@ function onLensReadMode(mode: LensReadMode): void {
     return;
   }
 
-  // Manual 尺子: go to index skeleton.
+  // Manual 尺子: go to this module's index skeleton (not always the first in the book).
   const sel = activeSelection.value;
   if (!sel) return;
-  const index = findRulerSkeletonChapter(t);
-  const dest = index?.id ?? resolveRulerLensSwitchChapter(t, chapterId.value, sel);
+  const indexId =
+    findRulerModuleIndexId(t, chapterId.value) ?? findRulerSkeletonChapter(t)?.id;
+  const dest = indexId ?? resolveRulerLensSwitchChapter(t, chapterId.value, sel);
   if (dest !== chapterId.value) syncLensQueryToRoute(sel, t, 'replace', dest);
 }
 
@@ -571,6 +573,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
               :book-id="bookId"
               :toc="toc"
               :lens-selection="activeSelection"
+              :focus-chapter-id="chapterId"
             />
             <LensDigestView
               v-else-if="isDigestMode && toc"
@@ -592,6 +595,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
             :toc="toc"
             :book-id="bookId"
             :lens-selection="activeSelection"
+            :focus-chapter-id="chapterId"
           />
           <DigestOutline
             v-else-if="isDigestMode && toc"

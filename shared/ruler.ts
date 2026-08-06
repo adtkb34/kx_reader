@@ -245,6 +245,7 @@ export function buildRulerPreamble(
   toc: BookToc,
   selection: LensSelection | null,
   readerShowLevel?: ReaderShowLevel,
+  focusChapterId?: string | null,
 ): RulerPreamble[] {
   const ruler = toc.ruler;
   if (!ruler) return [];
@@ -258,6 +259,7 @@ export function buildRulerPreamble(
   // On key pages (index): content before the first ruler key only.
   // Do not dump the whole index as preamble — keys are the skeleton.
   for (const ch of toc.chapters) {
+    if (focusChapterId && ch.id !== focusChapterId) continue;
     const firstKeyIdx = ch.sections.findIndex((s) => keyIds.has(s.id) && visible.has(s.id));
     if (firstKeyIdx < 0) continue;
     seenChapter.add(ch.id);
@@ -273,6 +275,7 @@ export function buildRulerPreamble(
   // Always-visible pages (no layers): intro only — skip hang-off / key sections
   // already assembled under the ruler.
   for (const ch of visibleChapters) {
+    if (focusChapterId && ch.id !== focusChapterId) continue;
     if (seenChapter.has(ch.id)) continue;
     if (ch.layers && Object.keys(ch.layers).length > 0) continue;
     const ids = ch.sections
@@ -295,6 +298,7 @@ export function buildRulerTree(
   toc: BookToc,
   selection: LensSelection | null,
   readerShowLevel?: ReaderShowLevel,
+  focusChapterId?: string | null,
 ): RulerKeyBlock[] | null {
   const ruler = toc.ruler;
   if (!ruler) return null;
@@ -312,7 +316,7 @@ export function buildRulerTree(
   const seenKeys = new Set<string>();
   for (const ch of toc.chapters) {
     for (const s of ch.sections) {
-      if (!ruler.links[s.id]) continue;
+      if (!(s.id in ruler.links)) continue;
       if (seenKeys.has(s.id)) continue;
       seenKeys.add(s.id);
       keyOrder.push(s.id);
@@ -331,6 +335,7 @@ export function buildRulerTree(
     if (!visible.has(keyId)) continue;
     const hit = index.get(keyId);
     if (!hit) continue;
+    if (focusChapterId && hit.chapter.id !== focusChapterId) continue;
 
     const linkedIds = ruler.links[keyId] ?? [];
     const linked: RulerSectionRef[] = [];
@@ -406,8 +411,10 @@ export function preferRulerReadingChapters(
   if (!ruler || !selection) return filterChapters(toc.chapters, selection, toc);
   const keyIds = new Set(Object.keys(ruler.links));
   const visible = filterChapters(toc.chapters, selection, toc);
+  const indexes = visible.filter((c) => isRulerSkeletonChapter(c, keyIds));
+  // Skeleton book: no hang links yet — stay on index pages.
+  if (Object.keys(ruler.links).length === 0 && indexes.length) return indexes;
   if (hang) {
-    const indexes = visible.filter((c) => isRulerSkeletonChapter(c, keyIds));
     return indexes.length ? indexes : visible;
   }
   const nonSkeleton = visible.filter((c) => !isRulerSkeletonChapter(c, keyIds));
@@ -443,8 +450,57 @@ export function findRulerSkeletonChapter(toc: BookToc): TocChapter | undefined {
 }
 
 /**
+ * Ruler index page for the module that contains `chapterId` (sidebar leaf group).
+ * Used so hang-mode reading stays scoped to the open capability.
+ */
+export function findRulerModuleIndexId(
+  toc: BookToc,
+  chapterId: string,
+): string | undefined {
+  const ruler = toc.ruler;
+  if (!ruler) return undefined;
+  const keyIds = new Set(Object.keys(ruler.links));
+  const chapterById = new Map(toc.chapters.map((c) => [c.id, c]));
+  const current = chapterById.get(chapterId);
+  if (current && isRulerSkeletonChapter(current, keyIds)) return current.id;
+
+  const tree =
+    toc.tree?.length > 0
+      ? toc.tree
+      : toc.chapters.map(
+          (c): TocTreeNode => ({
+            type: 'page',
+            id: c.id,
+            title: c.title,
+            file: c.file,
+          }),
+        );
+
+  function walk(nodes: TocTreeNode[]): string | undefined {
+    for (const node of nodes) {
+      if (node.type === 'page') continue;
+      if (node.children.some((c) => c.type === 'group')) {
+        const hit = walk(node.children);
+        if (hit) return hit;
+        continue;
+      }
+      const pageIds = node.children.filter((c) => c.type === 'page').map((c) => c.id);
+      if (!pageIds.includes(chapterId)) continue;
+      const chapters = pageIds
+        .map((id) => chapterById.get(id))
+        .filter((c): c is TocChapter => !!c);
+      return chapters.find((c) => isRulerSkeletonChapter(c, keyIds))?.id;
+    }
+    return undefined;
+  }
+
+  return walk(tree);
+}
+
+/**
  * Sidebar: one page per page-only module directory (index when hanging,
  * otherwise the preferred dimension page). Parent folders of groups unchanged.
+ * When `ruler.links` is empty (skeleton book), always keep the index.
  */
 export function rulerSidebarKeepIds(
   toc: BookToc,
@@ -455,6 +511,7 @@ export function rulerSidebarKeepIds(
   const ruler = toc.ruler;
   if (!ruler) return keep;
   const keyIds = new Set(Object.keys(ruler.links));
+  const skeletonOnly = Object.keys(ruler.links).length === 0;
   const chapterById = new Map(toc.chapters.map((c) => [c.id, c]));
   const tree =
     toc.tree?.length > 0
@@ -474,8 +531,8 @@ export function rulerSidebarKeepIds(
       .filter((c): c is TocChapter => !!c)
       .filter((c) => pageVisibleInSelection(c, selection, toc));
     if (chapters.length === 0) return null;
-    if (hang) {
-      const index = chapters.find((c) => isRulerSkeletonChapter(c, keyIds));
+    const index = chapters.find((c) => isRulerSkeletonChapter(c, keyIds));
+    if (skeletonOnly || hang) {
       return index?.id ?? chapters[0].id;
     }
     const nonSkeleton = chapters.filter((c) => !isRulerSkeletonChapter(c, keyIds));
@@ -519,8 +576,9 @@ export function rulerOutlineEntries(
   toc: BookToc,
   selection: LensSelection | null,
   readerShowLevel?: ReaderShowLevel,
+  focusChapterId?: string | null,
 ): RulerOutlineEntry[] {
-  const tree = buildRulerTree(toc, selection, readerShowLevel);
+  const tree = buildRulerTree(toc, selection, readerShowLevel, focusChapterId);
   if (!tree) return [];
   const out: RulerOutlineEntry[] = [];
   for (const key of tree) {

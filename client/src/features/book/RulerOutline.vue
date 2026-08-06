@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { BookToc, LensSelection } from '@shared/types';
-import { rulerAnchorId, rulerOutlineEntries } from '@shared/ruler';
+import { rulerAnchorId, rulerOutlineEntries, findRulerModuleIndexId } from '@shared/ruler';
 import { annotationsFor, sectionKey } from '@/stores/annotations';
 import { getBookShowLevel } from '@/stores/ui';
 
@@ -9,11 +9,21 @@ const props = defineProps<{
   toc: BookToc;
   bookId: string;
   lensSelection?: LensSelection | null;
+  focusChapterId?: string | null;
 }>();
 
 const anns = computed(() => annotationsFor(props.bookId));
+const focusIndexId = computed(() => {
+  if (!props.focusChapterId) return null;
+  return findRulerModuleIndexId(props.toc, props.focusChapterId) ?? props.focusChapterId;
+});
 const entries = computed(() =>
-  rulerOutlineEntries(props.toc, props.lensSelection ?? null, getBookShowLevel(props.bookId)),
+  rulerOutlineEntries(
+    props.toc,
+    props.lensSelection ?? null,
+    getBookShowLevel(props.bookId),
+    focusIndexId.value,
+  ),
 );
 function noteCount(chapterId: string, sectionId: string): number {
   return anns.value[sectionKey(chapterId, sectionId)]?.notes.length ?? 0;

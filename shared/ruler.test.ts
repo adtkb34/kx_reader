@@ -303,6 +303,20 @@ describe('resolveRulerLensSwitchChapter / rulerSidebarKeepIds', () => {
     expect([...rulerSidebarKeepIds(book, { read: ['entity'] }, false)]).toEqual(['ent']);
     expect([...rulerSidebarKeepIds(book, { read: ['flow', 'entity'] }, true)]).toEqual(['idx']);
   });
+
+  it('keeps and opens index when ruler.links is still empty (skeleton book)', () => {
+    const skeleton: BookToc = {
+      ...book,
+      ruler: { axis: 'read', links: {} },
+      chapters: [
+        { ...index, sections: [] },
+        entity,
+        flow,
+      ],
+    };
+    expect([...rulerSidebarKeepIds(skeleton, { read: ['entity'] }, false)]).toEqual(['idx']);
+    expect(resolveRulerLensSwitchChapter(skeleton, 'ent', { read: ['entity'] })).toBe('idx');
+  });
 });
 
 describe('showLevel filters ruler keys and hang-offs', () => {
@@ -353,5 +367,61 @@ describe('showLevel filters ruler keys and hang-offs', () => {
     expect(tree?.[0].groups.flatMap((g) => g.blocks.map((b) => b.sectionId))).toEqual([
       'chart',
     ]);
+  });
+
+  it('focuses keys on one ruler index when the book has several modules', () => {
+    const idxA: TocChapter = {
+      id: 'idx-a',
+      title: '账号基础',
+      file: 'a/index.md',
+      role: 'ruler',
+      sections: [{ id: 'ka', title: '用户注册', level: 2 }],
+    };
+    const flowA: TocChapter = {
+      id: 'flow-a',
+      title: '账号 · 流程',
+      file: 'a/flow.md',
+      sections: [{ id: 'fa', title: '', level: 2 }],
+      layers: { read: ['flow'] },
+    };
+    const idxB: TocChapter = {
+      id: 'idx-b',
+      title: '存储规范',
+      file: 'b/index.md',
+      role: 'ruler',
+      sections: [{ id: 'kb', title: '持久化规范', level: 2 }],
+    };
+    const flowB: TocChapter = {
+      id: 'flow-b',
+      title: '存储 · 流程',
+      file: 'b/flow.md',
+      sections: [{ id: 'fb', title: '', level: 2 }],
+      layers: { read: ['flow'] },
+    };
+    const multi: BookToc = {
+      id: 'now',
+      title: 'now',
+      chapters: [idxA, flowA, idxB, flowB],
+      tree: [],
+      lensAxisOrder: ['read'],
+      lensAxisTitles: { read: '读法' },
+      lenses: { read: [{ id: 'flow', title: '流程' }] },
+      ruler: {
+        axis: 'read',
+        links: { ka: ['fa'], kb: ['fb'] },
+      },
+    };
+    expect(buildRulerTree(multi, { read: ['flow'] })?.map((k) => k.sectionId)).toEqual([
+      'ka',
+      'kb',
+    ]);
+    expect(
+      buildRulerTree(multi, { read: ['flow'] }, undefined, 'idx-b')?.map((k) => k.sectionId),
+    ).toEqual(['kb']);
+    expect(
+      rulerOutlineEntries(multi, { read: ['flow'] }, undefined, 'idx-b')
+        .filter((e) => e.isKey)
+        .map((e) => e.title),
+    ).toEqual(['持久化规范']);
   });
 });
