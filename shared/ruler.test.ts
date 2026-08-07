@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildRulerPreamble,
   buildRulerTree,
+  hangIdToKeyTitles,
   resolveRulerLensSwitchChapter,
   rulerKeyEligibleIds,
   rulerOutlineEntries,
@@ -423,5 +424,46 @@ describe('showLevel filters ruler keys and hang-offs', () => {
         .filter((e) => e.isKey)
         .map((e) => e.title),
     ).toEqual(['持久化规范']);
+  });
+});
+
+describe('hangIdToKeyTitles', () => {
+  it('maps hang-off ids to key section titles', () => {
+    const t: BookToc = {
+      id: 't',
+      title: 't',
+      chapters: [
+        {
+          id: 'idx',
+          title: 'index',
+          file: 'index.md',
+          role: 'ruler',
+          sections: [
+            { id: 'k1', title: '受理建单', level: 3 },
+            { id: 'k2', title: '分类派单', level: 3 },
+          ],
+        },
+        {
+          id: 'fb',
+          title: '兜底',
+          file: 'fallback.md',
+          sections: [
+            { id: 'r1', title: '', level: 3 },
+            { id: 'r2', title: '', level: 3 },
+          ],
+        },
+      ],
+      tree: [],
+      ruler: {
+        axis: 'read',
+        links: {
+          k1: ['r1'],
+          k2: ['r2', 'r1'],
+        },
+      },
+    };
+    const map = hangIdToKeyTitles(t);
+    expect(map.get('r2')).toBe('分类派单');
+    expect(map.get('r1')).toBe('受理建单、分类派单');
   });
 });

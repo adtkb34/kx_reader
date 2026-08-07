@@ -3,6 +3,9 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { api } from '@/api/client';
 import { renderChapter, splitSections, type RenderedSection } from '@/markdown';
 import { bindMermaidDetails, renderMermaidIn } from '@/mermaid';
+import { enhanceTableFiltersIn } from '@/tableFilters';
+import { enhanceTableRulerColIn } from '@/tableRulerCol';
+import { enhanceTableCellMergeIn } from '@/tableCellMerge';
 import { cloneDiagramHtml, diagramZoomTarget } from '@/diagramZoom';
 import SectionBlock from '@/features/book/SectionBlock.vue';
 import DiagramLightbox from '@/features/book/DiagramLightbox.vue';
@@ -128,6 +131,9 @@ async function load(): Promise<void> {
     applyDetailsPref();
     unbindMermaid = bindMermaidDetails(contentEl.value);
     await renderMermaidIn(contentEl.value);
+    enhanceTableRulerColIn(contentEl.value, props.toc);
+    enhanceTableCellMergeIn(contentEl.value);
+    enhanceTableFiltersIn(contentEl.value);
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e);
     groups.value = [];
@@ -167,6 +173,9 @@ watch(
     applyDetailsPref();
     await nextTick();
     await renderMermaidIn(contentEl.value);
+    enhanceTableRulerColIn(contentEl.value, props.toc);
+    enhanceTableCellMergeIn(contentEl.value);
+    enhanceTableFiltersIn(contentEl.value);
   },
 );
 

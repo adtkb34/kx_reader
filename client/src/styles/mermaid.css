@@ -82,11 +82,29 @@
   overflow-x: auto;
 }
 
+.md-body .table-ruler-cell {
+  color: var(--muted, #6b7280);
+  font-weight: 500;
+  white-space: nowrap;
+  vertical-align: top;
+  background: #faf8f4;
+}
+
+.md-body th.table-ruler-cell {
+  color: var(--ink, #1f2937);
+  font-weight: 600;
+}
+
 .md-body th,
 .md-body td {
   border: 1px solid var(--line);
   padding: 6px 12px;
   text-align: left;
+}
+
+.md-body td[rowspan],
+.md-body th[rowspan] {
+  vertical-align: middle;
 }
 
 .md-body th {

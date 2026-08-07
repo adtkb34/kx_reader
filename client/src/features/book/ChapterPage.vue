@@ -6,6 +6,9 @@ import { api } from '@/api/client';
 import { tocOf } from '@/stores/books';
 import { renderChapter, splitSections, type RenderedSection } from '@/markdown';
 import { bindMermaidDetails, renderMermaidIn } from '@/mermaid';
+import { enhanceTableFiltersIn } from '@/tableFilters';
+import { enhanceTableRulerColIn } from '@/tableRulerCol';
+import { enhanceTableCellMergeIn } from '@/tableCellMerge';
 import { cloneDiagramHtml, diagramZoomTarget } from '@/diagramZoom';
 import SectionBlock from '@/features/book/SectionBlock.vue';
 import DiagramLightbox from '@/features/book/DiagramLightbox.vue';
@@ -117,6 +120,9 @@ async function load(): Promise<void> {
     applyDetailsPref();
     unbindMermaid = bindMermaidDetails(contentEl.value);
     await renderMermaidIn(contentEl.value);
+    enhanceTableRulerColIn(contentEl.value, tocOf(props.bookId));
+    enhanceTableCellMergeIn(contentEl.value);
+    enhanceTableFiltersIn(contentEl.value);
     if (route.hash) scrollToHash(route.hash);
     else window.scrollTo({ top: 0 });
   } catch (e) {
@@ -156,6 +162,9 @@ watch(
     applyDetailsPref();
     await nextTick();
     await renderMermaidIn(contentEl.value);
+    enhanceTableRulerColIn(contentEl.value, tocOf(props.bookId));
+    enhanceTableCellMergeIn(contentEl.value);
+    enhanceTableFiltersIn(contentEl.value);
   },
 );
 

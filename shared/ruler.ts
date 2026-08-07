@@ -622,3 +622,49 @@ export function rulerOutlineEntries(
   }
   return out;
 }
+
+/** Reverse map: hang-off section/row id → ruler key section ids that link to it. */
+export function hangIdToKeyIds(ruler: BookRuler): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  for (const [keyId, hangIds] of Object.entries(ruler.links)) {
+    for (const hid of hangIds) {
+      const list = out.get(hid);
+      if (list) {
+        if (!list.includes(keyId)) list.push(keyId);
+      } else {
+        out.set(hid, [keyId]);
+      }
+    }
+  }
+  return out;
+}
+
+/** Section id → outline title from TOC (first wins). */
+export function sectionTitleById(toc: BookToc): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const ch of toc.chapters) {
+    for (const s of ch.sections) {
+      if (!out.has(s.id) && s.title) out.set(s.id, s.title);
+    }
+  }
+  return out;
+}
+
+/**
+ * Hang-off id → display label for the auto「尺子」column
+ * (key section titles joined with 、 when linked from multiple keys).
+ */
+export function hangIdToKeyTitles(toc: BookToc): Map<string, string> {
+  const ruler = toc.ruler;
+  const out = new Map<string, string>();
+  if (!ruler) return out;
+  const titles = sectionTitleById(toc);
+  for (const [hangId, keyIds] of hangIdToKeyIds(ruler)) {
+    const label = keyIds
+      .map((id) => titles.get(id) ?? id)
+      .filter(Boolean)
+      .join('、');
+    if (label) out.set(hangId, label);
+  }
+  return out;
+}

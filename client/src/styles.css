@@ -8,6 +8,7 @@
 @import './styles/markdown.css';
 @import './styles/photos.css';
 @import './styles/mermaid.css';
+@import './styles/table-filters.css';
 @import './styles/details.css';
 @import './styles/wireframe.css';
 @import './styles/diagram-lightbox.css';
