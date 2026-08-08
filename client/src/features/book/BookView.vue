@@ -58,6 +58,7 @@ import ComparePanel from '@/features/compare/ComparePanel.vue';
 import AgentPanel from '@/features/agent/AgentPanel.vue';
 import { loadToc, tocOf } from '@/stores/books';
 import { loadAnnotations } from '@/stores/annotations';
+import { useRulerOutlineKeySelection } from '@/composables/outlineKeys';
 import { Expand } from '@element-plus/icons-vue';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -93,17 +94,13 @@ function sanitizeSelection(
   const normalized = flatIdsToSelection(t, flat, flat, { allowEmpty });
   if (!normalized) return null;
   if (ui.lensPickMode === 'single' && !allowEmpty) {
-    return t.ruler
-      ? collapseEachAxisToSingleLeaf(t, normalized)
-      : collapseEachAxisToSingle(t, normalized);
+    return collapseEachAxisToSingle(t, normalized);
   }
   if (ui.lensPickMode === 'single' && allowEmpty) {
     // Single-pick still collapses when something is chosen; empty stays empty.
     const hasAny = selectionToFlatIds(t, normalized).length > 0;
     if (!hasAny) return normalized;
-    return t.ruler
-      ? collapseEachAxisToSingleLeaf(t, normalized)
-      : collapseEachAxisToSingle(t, normalized);
+    return collapseEachAxisToSingle(t, normalized);
   }
   return normalized;
 }
@@ -121,6 +118,18 @@ const activeSelection = computed<LensSelection | null>(() => {
   return sanitizeSelection(candidate, t);
 });
 
+const {
+  selectedIds: outlineKeyIds,
+  visibleKeyIds: outlineVisibleIds,
+  onToggleKey: onOutlineKeyToggle,
+  selectTopLevelKeys: onOutlineSelectTopLevel,
+} = useRulerOutlineKeySelection(
+  () => bookId.value,
+  () => toc.value,
+  () => activeSelection.value,
+  () => chapterId.value || null,
+);
+
 const hangUnderRuler = computed(
   () => !!toc.value && selectionUsesRulerHang(toc.value, activeSelection.value),
 );
@@ -137,10 +146,14 @@ const isRulerMode = computed(
 const filteredChapters = computed(() => {
   const t = toc.value;
   if (!t) return [];
-  const visible = filterChapters(t.chapters, activeSelection.value, t);
+  let visible = filterChapters(t.chapters, activeSelection.value, t);
+  const current = t.chapters.find((c) => c.id === chapterId.value);
+  if (current && !visible.some((c) => c.id === current.id)) {
+    visible = [...visible, current];
+  }
   if (!t.ruler) return visible;
   const keep = rulerSidebarKeepIds(t, activeSelection.value, isRulerMode.value);
-  const kept = visible.filter((c) => keep.has(c.id));
+  const kept = visible.filter((c) => keep.has(c.id) || c.id === chapterId.value);
   return kept.length ? kept : visible;
 });
 
@@ -239,34 +252,30 @@ async function ensureLoaded(): Promise<void> {
   if (!chapterId.value) {
     const sel = activeSelection.value;
     const last = localStorage.getItem(`reader.last.${bookId.value}`);
-    const seed = last ?? t.chapters[0].id;
-    const target =
-      t.ruler && sel
-        ? resolveRulerLensSwitchChapter(t, seed, sel)
-        : (() => {
-            const visible = filterChapters(t.chapters, sel, t);
-            return visible.find((c) => c.id === last)?.id ?? visible[0]?.id ?? t.chapters[0].id;
-          })();
-    router.replace(bookLocation(target, { selection: sel, t }));
+    const seed =
+      last && t.chapters.some((c) => c.id === last) ? last : t.chapters[0].id;
+    router.replace(bookLocation(seed, { selection: sel, t }));
     return;
   }
 
   const current = t.chapters.find((c) => c.id === chapterId.value);
   let sel = activeSelection.value;
-  if (current && hasLenses(t) && sel && !pageVisibleInSelection(current, sel, t)) {
+  if (!current) {
+    // Unknown id in the URL — fall back to last-read or first chapter.
+    const last = localStorage.getItem(`reader.last.${bookId.value}`);
+    const seed =
+      last && t.chapters.some((c) => c.id === last) ? last : t.chapters[0].id;
+    router.replace(bookLocation(seed, { selection: sel, t }));
+    return;
+  }
+  if (hasLenses(t) && sel && !pageVisibleInSelection(current, sel, t)) {
     const adopted = selectionFromPageLayers(t, current, sel);
     setBookLensSelection(bookId.value, adopted);
     sel = adopted;
   }
 
-  if (t.ruler && sel && chapterId.value) {
-    const target = resolveRulerLensSwitchChapter(t, chapterId.value, sel);
-    if (target !== chapterId.value) {
-      router.replace(bookLocation(target, { selection: sel, t }));
-      return;
-    }
-  }
-
+  // Keep the URL chapter on refresh / book load — do not auto-jump via ruler
+  // preference (that snapped the sidebar back to the first module).
   if (hasLenses(t) && sel) {
     syncLensQueryToRoute(sel, t, 'replace');
   }
@@ -322,18 +331,18 @@ function finalizeSelection(
 ): LensSelection {
   if (ui.lensPickMode !== 'single') return nextSel;
   if (allowEmpty && selectionToFlatIds(t, nextSel).length === 0) return nextSel;
-  return t.ruler
-    ? collapseEachAxisToSingleLeaf(t, nextSel, preferIds)
-    : collapseEachAxisToSingle(t, nextSel, preferIds);
+  // One node per axis — any depth (parent or leaf), not forced to a leaf.
+  return collapseEachAxisToSingle(t, nextSel, preferIds);
 }
 
 function resolveSwitchChapter(
   t: BookToc,
   currentId: string,
   nextSel: LensSelection,
+  prevSel?: LensSelection | null,
 ): string {
   if (t.ruler) return resolveRulerLensSwitchChapter(t, currentId, nextSel);
-  return resolveLensSwitchChapter(t, currentId, nextSel);
+  return resolveLensSwitchChapter(t, currentId, nextSel, prevSel);
 }
 
 function onLensSelect(options: PageLayer[]): void {
@@ -346,10 +355,9 @@ function onLensSelect(options: PageLayer[]): void {
   let nextSel = flatIdsToSelection(t, options, prevFlat, { allowEmpty });
   if (!nextSel) return;
   nextSel = finalizeSelection(t, nextSel, added, allowEmpty);
-  const target = resolveSwitchChapter(t, chapterId.value, nextSel);
+  // Never change chapter when toggling lenses — only update the selection query.
   setBookLensSelection(bookId.value, nextSel);
-  const mode = target !== chapterId.value ? 'push' : 'replace';
-  syncLensQueryToRoute(nextSel, t, mode, target);
+  syncLensQueryToRoute(nextSel, t, 'replace', chapterId.value);
 }
 
 function onLensPickMode(mode: LensAxisPickMode): void {
@@ -361,9 +369,9 @@ function onLensPickMode(mode: LensAxisPickMode): void {
     activeSelection.value;
   setLensPickMode(mode);
   if (!t || !raw || !chapterId.value || mode !== 'single') return;
-  const nextSel = collapseEachAxisToSingleLeaf(t, raw);
+  const nextSel = collapseEachAxisToSingle(t, raw);
   setBookLensSelection(bookId.value, nextSel);
-  const target = resolveSwitchChapter(t, chapterId.value, nextSel);
+  const target = resolveSwitchChapter(t, chapterId.value, nextSel, raw);
   syncLensQueryToRoute(nextSel, t, target !== chapterId.value ? 'push' : 'replace', target);
 }
 
@@ -431,9 +439,11 @@ const filteredTree = computed(() => {
   const t = toc.value;
   if (!t) return [];
   let ids = visibleIdSet(t.chapters, activeSelection.value, t);
+  // Keep the chapter being read even if it fell out of the lens filter (e.g. uncheck).
+  if (chapterId.value) ids.add(chapterId.value);
   if (t.ruler) {
     const keep = rulerSidebarKeepIds(t, activeSelection.value, isRulerMode.value);
-    ids = new Set([...ids].filter((id) => keep.has(id)));
+    ids = new Set([...ids].filter((id) => keep.has(id) || id === chapterId.value));
   }
   const base = t.tree?.length
     ? t.tree
@@ -574,6 +584,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
               :toc="toc"
               :lens-selection="activeSelection"
               :focus-chapter-id="chapterId"
+              :outline-key-ids="outlineKeyIds"
             />
             <LensDigestView
               v-else-if="isDigestMode && toc"
@@ -583,6 +594,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
             />
             <ChapterPage
               v-else-if="chapterId"
+              :key="chapterId"
               :book-id="bookId"
               :chapter-id="chapterId"
               :prev-chapter="prevChapter"
@@ -596,6 +608,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
             :book-id="bookId"
             :lens-selection="activeSelection"
             :focus-chapter-id="chapterId"
+            :outline-selected-ids="outlineKeyIds"
+            :outline-visible-ids="outlineVisibleIds"
+            @toggle-key="onOutlineKeyToggle"
+            @select-top-level="onOutlineSelectTopLevel"
           />
           <DigestOutline
             v-else-if="isDigestMode && toc"

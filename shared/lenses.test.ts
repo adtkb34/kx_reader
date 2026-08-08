@@ -174,6 +174,34 @@ describe('collapseEachAxisToSingle', () => {
       collapseEachAxisToSingle(tocWithLenses, { read: ['scenario', 'impl'], audience: ['tenant'] }),
     ).toEqual({ read: ['impl'], audience: ['tenant'] });
   });
+
+  it('keeps a non-leaf parent as the single pick (does not force a leaf)', () => {
+    const nested: BookToc = {
+      ...tocWithLenses,
+      lenses: {
+        read: [
+          {
+            id: 'biz',
+            title: '业务',
+            children: [
+              { id: 'scenario', title: '场景' },
+              { id: 'flow', title: '流程' },
+            ],
+          },
+        ],
+        audience: tocWithLenses.lenses!.audience,
+      },
+    };
+    expect(collapseEachAxisToSingle(nested, { read: ['biz'], audience: ['tenant'] })).toEqual({
+      read: ['biz'],
+      audience: ['tenant'],
+    });
+    // Contrast: leaf-collapse would narrow biz → one child
+    expect(collapseEachAxisToSingleLeaf(nested, { read: ['biz'], audience: ['tenant'] })).toEqual({
+      read: ['flow'],
+      audience: ['tenant'],
+    });
+  });
 });
 
 describe('collapseEachAxisToSingleLeaf', () => {
@@ -319,6 +347,12 @@ describe('resolveLensSwitchChapter', () => {
     lensAxisOrder: tocWithLenses.lensAxisOrder,
     chapters: [
       {
+        id: 'overview',
+        title: '项目概览',
+        file: 'overview.md',
+        sections: [],
+      },
+      {
         id: 'auth',
         title: 'Auth',
         file: 'auth.md',
@@ -332,6 +366,13 @@ describe('resolveLensSwitchChapter', () => {
         layers: { read: 'scenario' },
         sections: [],
       },
+      {
+        id: 'only-impl',
+        title: '账号基础',
+        file: 'impl.md',
+        layers: { read: 'impl' },
+        sections: [],
+      },
     ],
   };
 
@@ -339,8 +380,22 @@ describe('resolveLensSwitchChapter', () => {
     expect(resolveLensSwitchChapter(toc, 'auth', { read: ['impl'] })).toBe('auth');
   });
 
-  it('falls back to the first visible page when current is hidden', () => {
-    expect(resolveLensSwitchChapter(toc, 'only-scenario', { read: ['impl'] })).toBe('auth');
+  it('stays on the current page when selecting a lens that would hide it', () => {
+    expect(
+      resolveLensSwitchChapter(toc, 'only-scenario', { read: ['impl'] }, { read: ['scenario'] }),
+    ).toBe('only-scenario');
+  });
+
+  it('does not jump to the first chapter when only unchecking a lens', () => {
+    // on impl-only page with scenario+impl selected; uncheck impl → must stay
+    expect(
+      resolveLensSwitchChapter(
+        toc,
+        'only-impl',
+        { read: ['scenario'] },
+        { read: ['scenario', 'impl'] },
+      ),
+    ).toBe('only-impl');
   });
 });
 

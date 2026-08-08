@@ -232,7 +232,7 @@ export function flatIdsToSelection(
   return Object.keys(out).length > 0 ? out : null;
 }
 
-/** Keep at most one selected id per axis (for single-select mode). */
+/** Keep at most one selected id per axis (single-pick: any depth, parent or leaf). */
 export function collapseEachAxisToSingle(
   toc: BookToc,
   selection: LensSelection,
@@ -698,16 +698,18 @@ export function sameLensSelection(
 }
 
 /**
- * After changing lens selection, stay on the current page if still visible;
- * otherwise go to the first visible page.
+ * After changing lens selection, keep the current chapter whenever it still
+ * exists in the book. Lens changes must not auto-jump to the first visible page
+ * (that felt like “snap back to 第一章” when unchecking a lens).
  */
 export function resolveLensSwitchChapter(
   toc: BookToc,
   currentId: string,
-  nextSelection: LensSelection,
+  _nextSelection: LensSelection,
+  _prevSelection?: LensSelection | null,
 ): string {
-  const visible = filterChapters(toc.chapters, nextSelection, toc);
-  if (visible.some((c) => c.id === currentId)) return currentId;
+  if (toc.chapters.some((c) => c.id === currentId)) return currentId;
+  const visible = filterChapters(toc.chapters, _nextSelection, toc);
   return visible[0]?.id ?? currentId;
 }
 

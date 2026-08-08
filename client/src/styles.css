@@ -3,6 +3,7 @@
 @import './styles/home.css';
 @import './styles/book-layout.css';
 @import './styles/toc.css';
+@import './styles/toc-lightbox.css';
 @import './styles/chapter.css';
 @import './styles/sections.css';
 @import './styles/markdown.css';

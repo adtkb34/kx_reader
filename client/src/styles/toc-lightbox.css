@@ -1,0 +1,166 @@
+/* ---------- toc enlarge lightbox ---------- */
+
+.toc-lightbox-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 20px;
+  background: rgba(28, 25, 20, 0.45);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  overflow: hidden;
+  cursor: default;
+  animation: toc-lightbox-fade-in 180ms ease-out;
+}
+
+.toc-lightbox-close {
+  position: fixed;
+  top: 16px;
+  right: 18px;
+  z-index: 101;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #1f2937;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(24, 24, 22, 0.18);
+}
+
+.toc-lightbox-close:hover {
+  background: #fff;
+}
+
+.toc-lightbox-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(560px, 92vw);
+  max-height: min(80vh, 900px);
+  margin: auto;
+  padding: 22px 18px 28px;
+  box-sizing: border-box;
+  background: #faf8f4;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  box-shadow: 0 20px 56px rgba(24, 24, 22, 0.22);
+  animation: toc-lightbox-rise-in 200ms ease-out;
+}
+
+.toc-lightbox-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 2px 14px;
+  flex: none;
+}
+
+.toc-lightbox-title {
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.3;
+  padding: 4px 8px 0;
+  color: var(--ink);
+  flex: 1;
+  min-width: 0;
+}
+
+.toc-lightbox-tree {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 4px 8px;
+}
+
+.toc-lightbox-footer {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 12px 4px 0;
+  border-top: 1px solid var(--line);
+  margin-top: 4px;
+}
+
+.toc-lightbox-footer .toc-expand-mode {
+  margin-top: 0;
+  padding: 3px;
+  border-radius: 10px;
+}
+
+.toc-lightbox-footer .toc-expand-mode-btn {
+  font-size: 12px;
+  padding: 7px 10px;
+  border-radius: 7px;
+}
+
+/* Larger type / spacing inside the lightbox only */
+.toc-lightbox-tree .toc-row-label {
+  padding: 10px 12px;
+  border-radius: 10px;
+}
+
+.toc-lightbox-tree .toc-row-title {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  line-height: 1.45;
+}
+
+.toc-lightbox-tree .toc-row--depth-0 > .toc-row-label {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.toc-lightbox-tree .toc-row--depth-1 > .toc-row-label {
+  font-size: 15px;
+}
+
+.toc-lightbox-tree .toc-row--depth-2 > .toc-row-label,
+.toc-lightbox-tree .toc-row--depth-3 > .toc-row-label {
+  font-size: 14px;
+}
+
+.toc-lightbox-tree .toc-group-body {
+  padding-left: 12px;
+  margin-left: 16px;
+}
+
+.toc-lightbox-tree .badge {
+  font-size: 12px;
+  padding: 2px 8px;
+}
+
+@keyframes toc-lightbox-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes toc-lightbox-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toc-lightbox-mask,
+  .toc-lightbox-panel {
+    animation: none;
+  }
+}

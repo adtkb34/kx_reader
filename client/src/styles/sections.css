@@ -19,7 +19,7 @@
 }
 
 .doc-section.section-cluster-child {
-  margin-left: 4px;
+  margin-left: 0;
 }
 
 /* 右下角维度标签：默认隐藏，悬停显示；底边与末行内容齐平 */
@@ -89,6 +89,18 @@
 /* 右侧状态标签不压住标题文字 */
 .doc-section .section-body :is(h1, h2, h3, h4, h5, h6) {
   padding-right: 6.5em;
+}
+
+/* Ruler hang: outline labels match title weight */
+.doc-section.outline-numbered .section-body > .section-marker + :is(h1, h2, h3, h4, h5, h6)::before,
+.doc-section.outline-numbered .section-body > :is(h1, h2, h3, h4, h5, h6):first-child::before,
+.ruler-key-title.outline-numbered::before {
+  content: var(--outline-num) '\00a0';
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: inherit;
 }
 
 .doc-section:hover {

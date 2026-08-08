@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue';
-import { Fold } from '@element-plus/icons-vue';
+import { computed, ref } from 'vue';
+import { Fold, ZoomIn } from '@element-plus/icons-vue';
 import type { BookToc, LensSelection, TocChapter, TocTreeNode } from '@shared/types';
 import TocTreeNodes from '@/features/book/TocTreeNodes.vue';
-import { toggleTocOpen } from '@/stores/ui';
+import TocLightbox from '@/features/book/TocLightbox.vue';
+import TocExpandModeSwitch from '@/features/book/TocExpandModeSwitch.vue';
+import { toggleTocOpen, ui } from '@/stores/ui';
 
 const props = defineProps<{
   toc: BookToc;
@@ -13,6 +15,8 @@ const props = defineProps<{
   tree: TocTreeNode[];
   lensSelection?: LensSelection | null;
 }>();
+
+const lightboxOpen = ref(false);
 
 const pageById = computed(() => {
   const map: Record<string, TocChapter> = {};
@@ -42,7 +46,30 @@ const pageById = computed(() => {
         :current-chapter-id="currentChapterId"
         :page-by-id="pageById"
         :lens-selection="lensSelection"
+        :sibling-expand="ui.tocSiblingExpand"
       />
     </nav>
+    <div class="toc-footer">
+      <TocExpandModeSwitch compact />
+      <button
+        class="toc-enlarge"
+        type="button"
+        title="放大目录"
+        aria-label="放大目录"
+        @click="lightboxOpen = true"
+      >
+        <el-icon :size="16"><ZoomIn /></el-icon>
+      </button>
+    </div>
+    <TocLightbox
+      v-if="lightboxOpen"
+      :book-title="toc.title"
+      :nodes="tree"
+      :book-id="bookId"
+      :current-chapter-id="currentChapterId"
+      :page-by-id="pageById"
+      :lens-selection="lensSelection"
+      @close="lightboxOpen = false"
+    />
   </aside>
 </template>

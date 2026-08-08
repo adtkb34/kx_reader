@@ -28,6 +28,8 @@ import {
   rulerAnchorId,
   type RulerKeyBlock,
 } from '@shared/ruler';
+import { filterRulerKeysBySelection } from '@shared/outlineKeys';
+import { outlineNumbers } from '@shared/outlineNumbers';
 import type { BookToc, LensSelection, PageLayer, TocChapter } from '@shared/types';
 
 const props = defineProps<{
@@ -36,6 +38,8 @@ const props = defineProps<{
   lensSelection?: LensSelection | null;
   /** Current route chapter — scopes keys to that module's ruler index. */
   focusChapterId?: string | null;
+  /** Selected ruler-key section ids; omit / empty = show all keys. */
+  outlineKeyIds?: string[];
 }>();
 
 interface SectionHit {
@@ -66,15 +70,22 @@ const focusIndexId = computed(() => {
   if (!props.focusChapterId) return null;
   return findRulerModuleIndexId(props.toc, props.focusChapterId) ?? props.focusChapterId;
 });
-const tree = computed(
-  () =>
+
+const moduleTitle = computed(() => {
+  const id = focusIndexId.value;
+  if (!id) return '';
+  return props.toc.chapters.find((c) => c.id === id)?.title ?? '';
+});
+const tree = computed(() => {
+  const full =
     buildRulerTree(
       props.toc,
       props.lensSelection ?? null,
       readerShowLevel.value,
       focusIndexId.value,
-    ) ?? [],
-);
+    ) ?? [];
+  return filterRulerKeysBySelection(full, props.outlineKeyIds ?? []);
+});
 const preambleSpec = computed(() =>
   buildRulerPreamble(
     props.toc,
@@ -90,6 +101,36 @@ const activeLeaves = computed(
 
 const lensChrome = computed(() => activeLeaves.value.size > 1);
 const lensColors = computed(() => lensColorMap(props.toc));
+
+/** Composite key so the same section id across chapters stays unique. */
+function outlineKey(chapterId: string, sectionId: string): string {
+  return `${chapterId}#${sectionId}`;
+}
+
+/**
+ * Stable numbers from the module index.md section order (not the filtered
+ * visible set — unchecking a sibling must not renumber the rest).
+ */
+const outlineNumMap = computed(() => {
+  const id = focusIndexId.value;
+  if (!id) return new Map<string, string>();
+  const ch = props.toc.chapters.find((c) => c.id === id);
+  if (!ch) return new Map<string, string>();
+  const items = ch.sections
+    .filter((s) => s.title)
+    .map((s) => ({ id: outlineKey(ch.id, s.id), level: s.level }));
+  return outlineNumbers(items);
+});
+
+function outlineNum(chapterId: string, sectionId: string): string {
+  return outlineNumMap.value.get(outlineKey(chapterId, sectionId)) ?? '';
+}
+
+function outlineStyle(chapterId: string, sectionId: string): Record<string, string> | undefined {
+  const n = outlineNum(chapterId, sectionId);
+  if (!n) return undefined;
+  return { '--outline-num': `"${n}"` };
+}
 
 function leavesFor(chapter: TocChapter, sectionId: string): PageLayer[] {
   return sectionLensLeaves(chapter, sectionId, props.toc);
@@ -315,6 +356,7 @@ function onContentClick(e: MouseEvent): void {
         <button class="btn" @click="load()">重试</button>
       </div>
       <template v-else>
+        <h1 v-if="moduleTitle" class="chapter-title">{{ moduleTitle }}</h1>
         <div v-if="loading && views.length === 0 && preamble.length === 0" class="muted">
           加载尺子…
         </div>
@@ -333,6 +375,7 @@ function onContentClick(e: MouseEvent): void {
           :lens-colors="lensColors"
           :lens-chrome="false"
           :cluster="null"
+          :outline-number="outlineNum(hit.chapter.id, hit.section.id)"
         />
         <div v-for="v in views" :key="v.key.sectionId" class="ruler-key">
           <SectionBlock
@@ -346,11 +389,14 @@ function onContentClick(e: MouseEvent): void {
             :lens-colors="lensColors"
             :lens-chrome="lensChrome"
             :cluster="clusterFor(v.body.chapter, v.body.section, 0)"
+            :outline-number="outlineNum(v.body.chapter.id, v.body.section.id)"
           />
           <div
             v-else
             :id="rulerAnchorId(v.key.chapterId, v.key.sectionId)"
             class="ruler-key-title"
+            :class="{ 'outline-numbered': !!outlineNum(v.key.chapterId, v.key.sectionId) }"
+            :style="outlineStyle(v.key.chapterId, v.key.sectionId)"
           >
             {{ v.key.title }}
           </div>
@@ -372,6 +418,7 @@ function onContentClick(e: MouseEvent): void {
               :lens-colors="lensColors"
               :lens-chrome="false"
               :cluster="null"
+              :outline-number="outlineNum(hit.chapter.id, hit.section.id)"
             />
           </div>
         </div>

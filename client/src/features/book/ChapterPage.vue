@@ -19,7 +19,6 @@ import {
   lensColorMap,
   lensNodeTitle,
   sectionAllowlistFor,
-  sectionClusterRole,
   sectionLensLeaves,
   selectionLegendLeaves,
 } from '@shared/lenses';
@@ -46,10 +45,20 @@ const previewUrlList = ref<string[]>([]);
 const previewIndex = ref(0);
 const diagramHtml = ref('');
 let unbindMermaid: (() => void) | null = null;
+/** Ignore stale async load results when chapter/lens changes mid-flight. */
+let loadSeq = 0;
+/** Chapter id whose `title` / `sections` currently match the DOM. */
+const loadedChapterId = ref('');
 
 const tocChapter = computed(() =>
   tocOf(props.bookId)?.chapters.find((c) => c.id === props.chapterId),
 );
+
+/** Title follows loaded content — never show a new TOC name over old body. */
+const pageTitle = computed(() => {
+  if (loadedChapterId.value === props.chapterId && title.value) return title.value;
+  return title.value || tocChapter.value?.title || '';
+});
 
 const activeLeaves = computed(() => {
   const toc = tocOf(props.bookId);
@@ -84,52 +93,62 @@ function leavesFor(sectionId: string): PageLayer[] {
   return sectionLensLeaves(ch, sectionId, toc);
 }
 
-function clusterFor(section: RenderedSection, index: number) {
-  if (!lensChrome.value) return null;
-  return sectionClusterRole(section, index);
-}
-
 async function load(): Promise<void> {
+  const seq = ++loadSeq;
+  const reqBookId = props.bookId;
+  const reqChapterId = props.chapterId;
+  const reqLens = props.lensSelection ?? null;
+  const reqShowLevel = getBookShowLevel(reqBookId);
+
   loading.value = true;
   error.value = '';
   unbindMermaid?.();
   unbindMermaid = null;
   previewVisible.value = false;
   diagramHtml.value = '';
+  // Chapter switch: drop stale body immediately so title/content cannot diverge.
+  if (loadedChapterId.value && loadedChapterId.value !== reqChapterId) {
+    sections.value = [];
+  }
   try {
-    const chapter = await api.chapter(props.bookId, props.chapterId);
+    const chapter = await api.chapter(reqBookId, reqChapterId);
+    if (seq !== loadSeq) return;
     title.value = chapter.title;
-    const toc = tocOf(props.bookId);
+    const toc = tocOf(reqBookId);
     const fileToChapter: Record<string, string> = {};
     for (const c of toc?.chapters ?? []) {
       fileToChapter[c.file] = c.id;
       const base = c.file.split('/').pop();
       if (base) fileToChapter[base] = c.id;
     }
-    const html = renderChapter(chapter.markdown, { bookId: props.bookId, fileToChapter });
-    const tocChapter = toc?.chapters.find((c) => c.id === props.chapterId);
-    const allow = tocChapter
-      ? sectionAllowlistFor(tocChapter, props.lensSelection ?? null, toc)
-      : null;
-    sections.value = filterSectionsByShowLevel(
+    const html = renderChapter(chapter.markdown, { bookId: reqBookId, fileToChapter });
+    const chapterMeta = toc?.chapters.find((c) => c.id === reqChapterId);
+    const allow = chapterMeta ? sectionAllowlistFor(chapterMeta, reqLens, toc) : null;
+    const nextSections = filterSectionsByShowLevel(
       filterSectionsByAllowlist(splitSections(html), allow),
-      tocChapter,
-      getBookShowLevel(props.bookId),
+      chapterMeta,
+      reqShowLevel,
     );
+    if (seq !== loadSeq) return;
+    sections.value = nextSections;
+    loadedChapterId.value = reqChapterId;
     await nextTick();
+    if (seq !== loadSeq) return;
     applyDetailsPref();
     unbindMermaid = bindMermaidDetails(contentEl.value);
     await renderMermaidIn(contentEl.value);
-    enhanceTableRulerColIn(contentEl.value, tocOf(props.bookId));
+    if (seq !== loadSeq) return;
+    enhanceTableRulerColIn(contentEl.value, tocOf(reqBookId));
     enhanceTableCellMergeIn(contentEl.value);
     enhanceTableFiltersIn(contentEl.value);
     if (route.hash) scrollToHash(route.hash);
     else window.scrollTo({ top: 0 });
   } catch (e) {
+    if (seq !== loadSeq) return;
     error.value = e instanceof Error ? e.message : String(e);
     sections.value = [];
   } finally {
-    loading.value = false;
+    if (seq === loadSeq) loading.value = false;
   }
 }
 
@@ -298,7 +317,7 @@ function goNext(): void {
         <button class="btn" @click="load()">重试</button>
       </div>
       <template v-else>
-        <h1 class="chapter-title">{{ title }}</h1>
+        <h1 v-if="pageTitle" class="chapter-title">{{ pageTitle }}</h1>
         <SectionBlock
           v-for="(s, i) in sections"
           :key="chapterId + '#' + s.id"
@@ -309,7 +328,7 @@ function goNext(): void {
           :lens-titles="lensTitleMap"
           :lens-colors="lensColors"
           :lens-chrome="lensChrome"
-          :cluster="clusterFor(s, i)"
+          :cluster="null"
         />
         <div v-if="!loading && sections.length === 0" class="muted">（本章暂无内容）</div>
       </template>

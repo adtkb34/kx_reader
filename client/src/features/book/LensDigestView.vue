@@ -19,7 +19,6 @@ import {
   lensColorMap,
   lensNodeTitle,
   sectionAllowlistFor,
-  sectionClusterRole,
   sectionLensLeaves,
   selectionLegendLeaves,
 } from '@shared/lenses';
@@ -75,11 +74,6 @@ function titlesFor(chapter: TocChapter): Record<string, string> {
 }
 
 const lensColors = computed(() => lensColorMap(props.toc));
-
-function clusterFor(_chapter: TocChapter, section: RenderedSection, index: number) {
-  if (!lensChrome.value) return null;
-  return sectionClusterRole(section, index);
-}
 
 async function load(): Promise<void> {
   loading.value = true;
@@ -206,11 +200,10 @@ function onContentClick(e: MouseEvent): void {
           当前透镜下没有可见小节。
         </div>
         <div v-for="(g, gi) in groups" :key="g.groupTitle ?? `ungrouped-${gi}`" class="digest-group">
-          <div v-if="g.groupTitle" class="digest-group-title">{{ g.groupTitle }}</div>
+          <h1 v-if="g.groupTitle" class="digest-group-title">{{ g.groupTitle }}</h1>
           <div v-for="page in g.pages" :key="page.chapter.id" class="digest-page">
-            <div :class="g.groupTitle ? 'digest-page-title' : 'digest-group-title'">
-              {{ page.title }}
-            </div>
+            <h1 v-if="!g.groupTitle" class="digest-group-title">{{ page.title }}</h1>
+            <h2 v-else class="digest-page-title">{{ page.title }}</h2>
             <SectionBlock
               v-for="(s, i) in page.sections"
               :id="digestAnchorId(page.chapter.id, s.id)"
@@ -222,7 +215,7 @@ function onContentClick(e: MouseEvent): void {
               :lens-titles="titlesFor(page.chapter)"
               :lens-colors="lensColors"
               :lens-chrome="lensChrome"
-              :cluster="clusterFor(page.chapter, s, i)"
+              :cluster="null"
             />
           </div>
         </div>

@@ -26,6 +26,8 @@ const props = withDefaults(
     lensChrome?: boolean;
     /** Step-cluster visual role. */
     cluster?: 'start' | 'child' | null;
+    /** Display-only outline label (e.g. `1.2`); not written to markdown. */
+    outlineNumber?: string;
   }>(),
   {
     lensLeaves: () => [],
@@ -33,6 +35,7 @@ const props = withDefaults(
     lensColors: () => ({}),
     lensChrome: false,
     cluster: null,
+    outlineNumber: '',
   },
 );
 
@@ -56,12 +59,18 @@ function resolveLensColor(id: string): string {
 }
 
 const sectionStyle = computed(() => {
-  if (!tintLens.value) return undefined;
-  const color =
-    props.lensLeaves.length === 1
-      ? resolveLensColor(props.lensLeaves[0]!)
-      : 'var(--lens-default)';
-  return { '--section-lens': color } as Record<string, string>;
+  const style: Record<string, string> = {};
+  if (tintLens.value) {
+    const color =
+      props.lensLeaves.length === 1
+        ? resolveLensColor(props.lensLeaves[0]!)
+        : 'var(--lens-default)';
+    style['--section-lens'] = color;
+  }
+  if (props.outlineNumber) {
+    style['--outline-num'] = `"${props.outlineNumber}"`;
+  }
+  return Object.keys(style).length ? style : undefined;
 });
 const lensTags = computed(() =>
   props.lensLeaves.map((id) => ({
@@ -172,11 +181,13 @@ onBeforeUnmount(() => {
         'has-lens-tags': lensTags.length > 0,
         'section-cluster-start': cluster === 'start',
         'section-cluster-child': cluster === 'child',
+        'outline-numbered': !!outlineNumber,
       },
     ]"
     :data-section-id="section.id"
     :data-lenses="lensAttr || undefined"
     :data-primary-lens="primaryLens || undefined"
+    :data-outline-num="outlineNumber || undefined"
     :style="sectionStyle"
   >
     <div v-if="!editing" class="section-tools">
