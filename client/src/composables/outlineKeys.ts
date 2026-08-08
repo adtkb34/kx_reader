@@ -155,7 +155,7 @@ export function useRulerOutlineKeySelection(
       return;
     }
 
-    const next = toggleOutlineKeyId(selectedIds.value, id, checked);
+    const next = toggleOutlineKeyId(keyItems.value, selectedIds.value, id, checked);
     onPick(next);
   }
 

@@ -115,9 +115,27 @@ describe('expandOutlineKeySelection', () => {
 });
 
 describe('toggleOutlineKeyId', () => {
-  it('adds or removes without touching other ids', () => {
-    expect(toggleOutlineKeyId(['a'], 'a1', true)).toEqual(['a', 'a1']);
-    expect(toggleOutlineKeyId(['a', 'a1'], 'a1', false)).toEqual(['a']);
+  const items = [
+    { id: 'a', level: 2 },
+    { id: 'a1', level: 3 },
+    { id: 'a2', level: 3 },
+    { id: 'b', level: 2 },
+  ];
+
+  it('checking a child clears selected ancestors', () => {
+    expect(toggleOutlineKeyId(items, ['a'], 'a1', true)).toEqual(['a1']);
+  });
+
+  it('checking a parent clears selected descendants', () => {
+    expect(toggleOutlineKeyId(items, ['a1', 'b'], 'a', true)).toEqual(['b', 'a']);
+  });
+
+  it('unchecking only removes that id', () => {
+    expect(toggleOutlineKeyId(items, ['a', 'b'], 'a', false)).toEqual(['b']);
+  });
+
+  it('keeps unrelated branches when checking a child', () => {
+    expect(toggleOutlineKeyId(items, ['a', 'b'], 'a1', true)).toEqual(['b', 'a1']);
   });
 });
 

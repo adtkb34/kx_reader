@@ -166,16 +166,60 @@ export function expandOutlineKeySelection(
   return items.filter((i) => want.has(i.id)).map((i) => i.id);
 }
 
-/** Add/remove one id without cascading to parents or children. */
+/** Ancestor id chains for each item (document-order stack). */
+function outlineAncestorMap(
+  items: { id: string; level: number }[],
+): Map<string, string[]> {
+  const ancestors = new Map<string, string[]>();
+  const stack: { id: string; level: number }[] = [];
+  for (const item of items) {
+    while (stack.length && stack[stack.length - 1]!.level >= item.level) {
+      stack.pop();
+    }
+    ancestors.set(
+      item.id,
+      stack.map((s) => s.id),
+    );
+    stack.push({ id: item.id, level: item.level });
+  }
+  return ancestors;
+}
+
+function outlineDescendantIds(
+  items: { id: string; level: number }[],
+  id: string,
+): Set<string> {
+  const idx = items.findIndex((i) => i.id === id);
+  const out = new Set<string>();
+  if (idx < 0) return out;
+  const level = items[idx]!.level;
+  for (let i = idx + 1; i < items.length; i++) {
+    const cur = items[i]!;
+    if (cur.level <= level) break;
+    out.add(cur.id);
+  }
+  return out;
+}
+
+/**
+ * Toggle one key. Checking clears ancestors and descendants on the same branch
+ * (parent and child are never both checked); unrelated branches stay.
+ */
 export function toggleOutlineKeyId(
+  items: { id: string; level: number }[],
   selectedIds: string[],
   id: string,
   checked: boolean,
 ): string[] {
-  if (checked) {
-    return selectedIds.includes(id) ? [...selectedIds] : [...selectedIds, id];
+  if (!checked) {
+    return selectedIds.filter((x) => x !== id);
   }
-  return selectedIds.filter((x) => x !== id);
+  const ancestors = new Set(outlineAncestorMap(items).get(id) ?? []);
+  const descendants = outlineDescendantIds(items, id);
+  const kept = selectedIds.filter(
+    (x) => x !== id && !ancestors.has(x) && !descendants.has(x),
+  );
+  return unique([...kept, id]);
 }
 
 /**
