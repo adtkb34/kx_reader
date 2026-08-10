@@ -9,6 +9,7 @@ import { bindMermaidDetails, renderMermaidIn } from '@/mermaid';
 import { activateFigmaEmbedsIn, bindFigmaEmbedDetails } from '@/figmaEmbed';
 import { enhanceTableFiltersIn } from '@/tableFilters';
 import { enhanceTableCellMergeIn } from '@/tableCellMerge';
+import { enhanceTableRulerColIn } from '@/tableRulerCol';
 import { cloneDiagramHtml, diagramZoomTarget } from '@/diagramZoom';
 import SectionBlock from '@/features/book/SectionBlock.vue';
 import DiagramLightbox from '@/features/book/DiagramLightbox.vue';
@@ -223,6 +224,7 @@ async function load(): Promise<void> {
     await renderMermaidIn(contentEl.value);
     activateFigmaEmbedsIn(contentEl.value);
     if (seq !== loadSeq) return;
+    enhanceTableRulerColIn(contentEl.value, tocOf(props.bookId));
     enhanceTableCellMergeIn(contentEl.value);
     enhanceTableFiltersIn(contentEl.value);
     if (route.hash) scrollToHash(route.hash);
@@ -268,6 +270,7 @@ watch(
     await nextTick();
     await renderMermaidIn(contentEl.value);
     activateFigmaEmbedsIn(contentEl.value);
+    enhanceTableRulerColIn(contentEl.value, tocOf(props.bookId));
     enhanceTableCellMergeIn(contentEl.value);
     enhanceTableFiltersIn(contentEl.value);
   },

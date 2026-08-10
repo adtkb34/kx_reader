@@ -8,6 +8,7 @@ import {
   findLeafModule,
   findRulerModuleIndexId,
   findRulerSkeletonChapter,
+  hangIdToKeyTitles,
   listLeafModules,
   listRulerTicks,
   moduleHasEmptyTicks,
@@ -300,5 +301,47 @@ describe('rulerAxisLeaves / moduleMatchesRulerLeaf', () => {
     expect(moduleMatchesRulerLeaf(book, 'flow', 'priority', 'p0')).toBe(true);
     expect(moduleMatchesRulerLeaf(book, 'flow', 'priority', 'p1')).toBe(true);
     expect(moduleMatchesRulerLeaf(book, 'ent', 'priority', 'p1')).toBe(true);
+  });
+});
+
+describe('hangIdToKeyTitles', () => {
+  it('maps hang-off ids to key section titles', () => {
+    const t: BookToc = {
+      id: 't',
+      title: 't',
+      chapters: [
+        page({
+          id: 'idx',
+          title: 'index',
+          file: 'index.md',
+          role: 'ruler',
+          sections: [
+            { id: 'k1', title: '受理建单', level: 2 },
+            { id: 'k2', title: '分类派单', level: 2 },
+          ],
+        }),
+        page({
+          id: 'flow',
+          title: 'flow',
+          file: 'flow.md',
+          layers: ['flow'],
+          sections: [
+            { id: 'r1', title: '', level: 2 },
+            { id: 'r2', title: '', level: 2 },
+          ],
+        }),
+      ],
+      tree: [{ type: 'page', id: 'idx' }],
+      ruler: {
+        axes: [],
+        links: {
+          k1: ['r1'],
+          k2: ['r2', 'r1'],
+        },
+      },
+    };
+    const map = hangIdToKeyTitles(t);
+    expect(map.get('r2')).toBe('分类派单');
+    expect(map.get('r1')).toBe('受理建单、分类派单');
   });
 });

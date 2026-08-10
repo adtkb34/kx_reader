@@ -430,8 +430,9 @@ function profile(): string {
     profileIdentityCard() +
       profileOrgCard(true) +
       `<div class="su-menu">` +
-      `<div class="su-menu-row"><span>组织申请</span><span class="su-menu-trail"><span class="su-count">1</span>›</span></div>` +
-      `<div class="su-menu-row"><span>加入审批</span><span class="su-menu-trail"><span class="su-count">2</span>›</span></div>` +
+      `<div class="su-menu-row"><span>组织申请</span><span class="su-menu-trail"><span class="su-count">1</span><span class="su-menu-chev" aria-hidden="true"></span></span></div>` +
+      `<div class="su-menu-row"><span>加入审批</span><span class="su-menu-trail"><span class="su-count">2</span><span class="su-menu-chev" aria-hidden="true"></span></span></div>` +
+      `<div class="su-menu-row"><span>成员清单</span><span class="su-menu-trail"><span class="su-menu-num">3</span><span class="su-menu-chev" aria-hidden="true"></span></span></div>` +
       `</div>` +
       `<div class="su-btn su-btn-danger">退出登录</div>`,
   );
@@ -447,6 +448,7 @@ function profilePc(): string {
       `<div class="su-menu">` +
       `<div class="su-menu-row su-menu-row-shell">${layoutLabel('组织申请')}</div>` +
       `<div class="su-menu-row su-menu-row-shell">${layoutLabel('加入审批')}</div>` +
+      `<div class="su-menu-row su-menu-row-shell">${layoutLabel('成员清单')}</div>` +
       `</div>` +
       `<div class="su-pc-foot">` +
       `<div class="su-btn su-btn-danger su-btn-inline">退出登录</div>` +
@@ -556,69 +558,364 @@ function approveCard(opts: {
   name: string;
   meta: string;
   role?: string;
+  status?: 'pending' | 'approved' | 'rejected';
 }): string {
-  const role = opts.role ?? '成员';
-  return (
-    `<div class="su-approve-card">` +
+  const status = opts.status ?? 'pending';
+  const head =
     `<div class="su-approve-person">` +
     `<div class="su-avatar" aria-hidden="true">${esc(opts.initial)}</div>` +
     `<div class="su-approve-person-text">` +
     `<div class="su-approve-name">${esc(opts.name)}</div>` +
     `<div class="su-approve-meta">${esc(opts.meta)}</div>` +
-    `</div></div>` +
+    `</div></div>`;
+  if (status === 'pending') {
+    const role = opts.role ?? '成员';
+    return (
+      `<div class="su-approve-card">` +
+      head +
+      `<div class="su-approve-foot">` +
+      `<div class="su-approve-role">` +
+      `<span class="su-approve-label">通过为</span>` +
+      `<div class="su-input su-select su-select-sm"><span>${esc(role)}</span><span class="su-chev">▾</span></div>` +
+      `</div>` +
+      `<div class="su-approve-actions">` +
+      `<div class="su-btn su-btn-danger su-btn-sm">拒绝</div>` +
+      `<div class="su-btn su-btn-primary su-btn-sm">通过</div>` +
+      `</div>` +
+      `</div></div>`
+    );
+  }
+  if (status === 'approved') {
+    const role = opts.role ?? '成员';
+    return (
+      `<div class="su-approve-card">` +
+      head +
+      `<div class="su-approve-foot">` +
+      `<div class="su-approve-role">` +
+      `<span class="su-approve-label">赋予角色</span>` +
+      `<span class="su-approve-role-val">${esc(role)}</span>` +
+      `</div>` +
+      `</div></div>`
+    );
+  }
+  // rejected — 可重新选择角色后通过
+  const role = opts.role ?? '成员';
+  return (
+    `<div class="su-approve-card">` +
+    head +
     `<div class="su-approve-foot">` +
     `<div class="su-approve-role">` +
     `<span class="su-approve-label">通过为</span>` +
     `<div class="su-input su-select su-select-sm"><span>${esc(role)}</span><span class="su-chev">▾</span></div>` +
     `</div>` +
     `<div class="su-approve-actions">` +
-    `<div class="su-btn su-btn-ghost su-btn-sm">拒绝</div>` +
     `<div class="su-btn su-btn-primary su-btn-sm">通过</div>` +
     `</div>` +
     `</div></div>`
   );
 }
 
+function approveAccordion(
+  label: string,
+  count: number,
+  open: boolean,
+  body: string,
+  kind: 'pending' | 'approved' | 'rejected',
+): string {
+  const openAttr = open ? ' open' : '';
+  return (
+    `<details class="su-accord su-accord-${kind}"${openAttr}>` +
+    `<summary class="su-accord-sum">` +
+    `<span class="su-accord-title">${esc(label)}</span>` +
+    `<span class="su-accord-count">${count}</span>` +
+    `<span class="su-accord-chev" aria-hidden="true"></span>` +
+    `</summary>` +
+    `<div class="su-accord-body">` +
+    body +
+    `<div class="su-paging">` +
+    `<span class="su-paging-btn su-paging-btn-disabled">上一页</span>` +
+    `<span class="su-paging-pages">` +
+    `<span class="su-paging-num su-paging-num-on">1</span>` +
+    `<span class="su-paging-num">2</span>` +
+    `</span>` +
+    `<span class="su-paging-btn">下一页</span>` +
+    `</div>` +
+    `</div></details>`
+  );
+}
+
 function joinApproval(): string {
   return shellApp(
     '加入审批',
-    `<div class="su-approve-summary">待审 <span class="su-approve-count">2</span></div>` +
-      `<div class="su-approve-list">` +
-      approveCard({
-        initial: '李',
-        name: '李明',
-        meta: 'li.ming@example.com · 2026-08-08',
-        role: '成员',
-      }) +
-      approveCard({
-        initial: '王',
-        name: '王芳',
-        meta: 'wang.fang@example.com · 2026-08-07',
-        role: '管理员',
-      }) +
+    `<div class="su-accord-list">` +
+      approveAccordion(
+        '待审',
+        1,
+        true,
+        `<div class="su-approve-list">` +
+          approveCard({
+            initial: '李',
+            name: '李明',
+            meta: 'li.ming@example.com · 2026-08-08',
+            role: '成员',
+            status: 'pending',
+          }) +
+          `</div>`,
+        'pending',
+      ) +
+      approveAccordion(
+        '已通过',
+        1,
+        false,
+        `<div class="su-approve-list">` +
+          approveCard({
+            initial: '王',
+            name: '王芳',
+            meta: 'wang.fang@example.com · 2026-08-07',
+            role: '管理员',
+            status: 'approved',
+          }) +
+          `</div>`,
+        'approved',
+      ) +
+      approveAccordion(
+        '已拒绝',
+        1,
+        false,
+        `<div class="su-approve-list">` +
+          approveCard({
+            initial: '陈',
+            name: '陈强',
+            meta: 'chen.qiang@example.com · 2026-08-01',
+            role: '成员',
+            status: 'rejected',
+          }) +
+          `</div>`,
+        'rejected',
+      ) +
       `</div>`,
   );
 }
 
+function approveCardGhost(withFoot: boolean): string {
+  const foot = withFoot
+    ? `<div class="su-approve-foot su-approve-foot-ghost">` +
+      `<div class="su-ghost-bar su-ghost-bar-role"></div>` +
+      `<div class="su-ghost-bar su-ghost-bar-btns"></div>` +
+      `</div>`
+    : '';
+  return (
+    `<div class="su-approve-card su-approve-card-layout" aria-hidden="true">` +
+    `<div class="su-approve-person">` +
+    `<div class="su-avatar su-avatar-ghost"></div>` +
+    `<div class="su-approve-person-text">` +
+    `<div class="su-ghost-bar su-ghost-bar-title"></div>` +
+    `<div class="su-ghost-bar su-ghost-bar-meta"></div>` +
+    `</div></div>` +
+    foot +
+    `</div>`
+  );
+}
+
+/** PC：Tab 分状态；内容仅布局骨架（明细见移动端）。 */
 function joinApprovalPc(): string {
   return shellApp(
     '加入审批',
-    `<div class="su-approve-summary">待审 <span class="su-approve-count">2</span></div>` +
+    `<div class="su-tabs">` +
+      `<div class="su-tab su-tab-pending su-tab-on">待审</div>` +
+      `<div class="su-tab su-tab-approved">已通过</div>` +
+      `<div class="su-tab su-tab-rejected">已拒绝</div>` +
+      `</div>` +
       `<div class="su-approve-list su-approve-list-pc">` +
-      approveCard({
-        initial: '李',
-        name: '李明',
-        meta: 'li.ming@example.com · 2026-08-08',
-        role: '成员',
-      }) +
-      approveCard({
-        initial: '王',
-        name: '王芳',
-        meta: 'wang.fang@example.com · 2026-08-07',
-        role: '管理员',
-      }) +
+      approveCardGhost(true) +
+      approveCardGhost(true) +
+      `</div>` +
+      `<div class="su-paging su-paging-ghost" aria-hidden="true">` +
+      `<div class="su-ghost-bar su-ghost-bar-page"></div>` +
+      `<div class="su-ghost-bar su-ghost-bar-pages"></div>` +
+      `<div class="su-ghost-bar su-ghost-bar-page"></div>` +
       `</div>`,
     { wide: true },
+  );
+}
+
+function memberRow(opts: {
+  initial: string;
+  name: string;
+  meta: string;
+  role: string;
+}): string {
+  return (
+    `<div class="su-member-row">` +
+    `<div class="su-member-top">` +
+    `<div class="su-avatar" aria-hidden="true">${esc(opts.initial)}</div>` +
+    `<div class="su-member-main">` +
+    `<div class="su-member-name">${esc(opts.name)}</div>` +
+    `<div class="su-member-meta">${esc(opts.meta)}</div>` +
+    `</div></div>` +
+    `<div class="su-member-foot">` +
+    `<div class="su-member-role">` +
+    `<span class="su-member-role-label">角色</span>` +
+    `<div class="su-input su-select su-select-sm"><span>${esc(opts.role)}</span><span class="su-chev">▾</span></div>` +
+    `</div>` +
+    `<div class="su-btn su-btn-danger su-btn-sm">移除</div>` +
+    `</div></div>`
+  );
+}
+
+function memberAccordion(
+  label: string,
+  count: number,
+  open: boolean,
+  body: string,
+  kind: 'owner' | 'admin' | 'member',
+  opts?: { paging?: boolean },
+): string {
+  const openAttr = open ? ' open' : '';
+  const paging =
+    opts?.paging === false
+      ? ''
+      : `<div class="su-paging">` +
+        `<span class="su-paging-btn su-paging-btn-disabled">上一页</span>` +
+        `<span class="su-paging-pages">` +
+        `<span class="su-paging-num su-paging-num-on">1</span>` +
+        `<span class="su-paging-num">2</span>` +
+        `</span>` +
+        `<span class="su-paging-btn">下一页</span>` +
+        `</div>`;
+  return (
+    `<details class="su-accord su-accord-${kind}"${openAttr}>` +
+    `<summary class="su-accord-sum">` +
+    `<span class="su-accord-title">${esc(label)}</span>` +
+    `<span class="su-accord-count">${count}</span>` +
+    `<span class="su-accord-chev" aria-hidden="true"></span>` +
+    `</summary>` +
+    `<div class="su-accord-body">` +
+    body +
+    paging +
+    `</div></details>`
+  );
+}
+
+/** 成员清单 — 按预设角色分风琴；行内可改角色。 */
+function memberList(): string {
+  return shellApp(
+    '成员清单',
+    `<div class="su-accord-list">` +
+      memberAccordion(
+        '负责人',
+        1,
+        true,
+        `<div class="su-member-list">` +
+          memberRow({
+            initial: '张',
+            name: '张伟',
+            meta: 'you@company.com',
+            role: '负责人',
+          }) +
+          `</div>`,
+        'owner',
+        { paging: false },
+      ) +
+      memberAccordion(
+        '管理员',
+        1,
+        false,
+        `<div class="su-member-list">` +
+          memberRow({
+            initial: '王',
+            name: '王芳',
+            meta: 'wang.fang@example.com',
+            role: '管理员',
+          }) +
+          `</div>`,
+        'admin',
+      ) +
+      memberAccordion(
+        '成员',
+        1,
+        false,
+        `<div class="su-member-list">` +
+          memberRow({
+            initial: '李',
+            name: '李明',
+            meta: 'li.ming@example.com',
+            role: '成员',
+          }) +
+          `</div>`,
+        'member',
+      ) +
+      `</div>`,
+  );
+}
+
+/** PC：Tab 分角色；内容仅布局骨架（明细见移动端）。负责人无分页。 */
+function memberListPc(): string {
+  return shellApp(
+    '成员清单',
+    `<div class="su-tabs">` +
+      `<div class="su-tab su-tab-owner su-tab-on">负责人</div>` +
+      `<div class="su-tab su-tab-admin">管理员</div>` +
+      `<div class="su-tab su-tab-member">成员</div>` +
+      `</div>` +
+      `<div class="su-member-list su-member-list-pc">` +
+      `<div class="su-member-row su-member-row-ghost" aria-hidden="true">` +
+      `<div class="su-ghost-bar su-ghost-bar-member"></div>` +
+      `<div class="su-member-foot su-member-foot-ghost">` +
+      `<div class="su-ghost-bar su-ghost-bar-role"></div>` +
+      `<div class="su-ghost-bar su-ghost-bar-remove"></div>` +
+      `</div></div>` +
+      `</div>`,
+    { wide: true },
+  );
+}
+
+/** 切换角色确认。 */
+function memberRoleConfirm(): string {
+  return shellModal(
+    '确认变更角色',
+    `<div class="su-confirm-text">将 <strong>王芳</strong> 的角色从「管理员」变更为「成员」？</div>` +
+      `<div class="su-actions">${btnGhost('取消')}${btnPrimary('确认变更')}</div>`,
+  );
+}
+
+/** 赋予负责人：操作者（当前负责人）将降为管理员。 */
+function memberRoleOwnerConfirm(): string {
+  return shellModal(
+    '确认移交负责人',
+    `<div class="su-confirm-text">将 <strong>王芳</strong> 设为负责人后，你将自动降级为管理员。</div>` +
+      `<div class="su-actions">${btnGhost('取消')}${btnPrimary('确认移交')}</div>`,
+  );
+}
+
+/** 移除成员确认。 */
+function memberRemoveConfirm(): string {
+  return shellModal(
+    '确认移除',
+    `<div class="su-confirm-text">将 <strong>李明</strong> 移出本组织？移除后其将失去本组织访问权限。</div>` +
+      `<div class="su-actions">${btnGhost('取消')}<div class="su-btn su-btn-danger">确认移除</div></div>`,
+  );
+}
+
+/** 移除自身确认（非负责人）。 */
+function memberRemoveSelfConfirm(): string {
+  return shellModal(
+    '确认离开组织',
+    `<div class="su-confirm-text">将自己移出本组织？离开后你将失去本组织访问权限。</div>` +
+      `<div class="su-actions">${btnGhost('取消')}<div class="su-btn su-btn-danger">确认离开</div></div>`,
+  );
+}
+
+/** 负责人移除自身：须先移交或解散。 */
+function memberRemoveOwnerBlock(): string {
+  return shellModal(
+    '无法直接移除',
+    `<div class="su-confirm-text">负责人移除自身前，须完成负责人移交或解散组织。</div>` +
+      `<div class="su-actions-stack">` +
+      `${btnPrimary('移交负责人')}` +
+      `<div class="su-btn su-btn-danger">解散组织</div>` +
+      `${btnGhost('取消')}` +
+      `</div>`,
   );
 }
 
@@ -642,6 +939,13 @@ const TEMPLATES: Record<string, () => string> = {
   'org-applications-pc': orgApplicationsPc,
   'join-approval': joinApproval,
   'join-approval-pc': joinApprovalPc,
+  'member-list': memberList,
+  'member-list-pc': memberListPc,
+  'member-role-confirm': memberRoleConfirm,
+  'member-role-owner-confirm': memberRoleOwnerConfirm,
+  'member-remove-confirm': memberRemoveConfirm,
+  'member-remove-self-confirm': memberRemoveSelfConfirm,
+  'member-remove-owner-block': memberRemoveOwnerBlock,
 };
 
 export function renderScreenUi(source: string): string {

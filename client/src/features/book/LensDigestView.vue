@@ -13,6 +13,7 @@ import { bindMermaidDetails, renderMermaidIn } from '@/mermaid';
 import { activateFigmaEmbedsIn, bindFigmaEmbedDetails } from '@/figmaEmbed';
 import { enhanceTableFiltersIn } from '@/tableFilters';
 import { enhanceTableCellMergeIn } from '@/tableCellMerge';
+import { enhanceTableRulerColIn } from '@/tableRulerCol';
 import { cloneDiagramHtml, diagramZoomTarget } from '@/diagramZoom';
 import SectionBlock from '@/features/book/SectionBlock.vue';
 import DiagramLightbox from '@/features/book/DiagramLightbox.vue';
@@ -667,6 +668,7 @@ async function load(): Promise<void> {
     await renderMermaidIn(contentEl.value);
     if (gen !== loadGen) return;
     activateFigmaEmbedsIn(contentEl.value);
+    enhanceTableRulerColIn(contentEl.value, props.toc);
     enhanceTableCellMergeIn(contentEl.value);
     enhanceTableFiltersIn(contentEl.value);
   } catch (e) {
@@ -713,6 +715,7 @@ watch(
     await nextTick();
     await renderMermaidIn(contentEl.value);
     activateFigmaEmbedsIn(contentEl.value);
+    enhanceTableRulerColIn(contentEl.value, props.toc);
     enhanceTableCellMergeIn(contentEl.value);
     enhanceTableFiltersIn(contentEl.value);
   },

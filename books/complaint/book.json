@@ -1,6 +1,6 @@
 {
   "title": "客诉处理系统",
-  "description": "成书切法同内容练习：index（role=ruler）为尺子骨架；流程/实体/权限/界面/兜底分页；小节可标 rank。",
+  "description": "成书切法同内容练习：index（role=ruler）为尺子骨架；流程/权限/实体/界面/异常分页；小节可标 rank。",
   "lenses": [
     {
       "id": "read",
@@ -10,7 +10,8 @@
           "id": "biz",
           "title": "业务",
           "children": [
-            { "id": "flow", "title": "流程", "color": "#6d86a0" }
+            { "id": "flow", "title": "流程", "color": "#6d86a0" },
+            { "id": "permission", "title": "权限", "color": "#5f9090" }
           ]
         },
         {
@@ -18,9 +19,8 @@
           "title": "规格",
           "children": [
             { "id": "entity", "title": "实体", "color": "#6a9478" },
-            { "id": "permission", "title": "权限", "color": "#5f9090" },
             { "id": "ui", "title": "界面", "color": "#a88b55" },
-            { "id": "fallback", "title": "兜底", "color": "#9a7482" }
+            { "id": "fallback", "title": "异常", "color": "#9a7482" }
           ]
         }
       ]

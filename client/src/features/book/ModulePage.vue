@@ -13,6 +13,7 @@ import { bindMermaidDetails, renderMermaidIn } from '@/mermaid';
 import { activateFigmaEmbedsIn, bindFigmaEmbedDetails } from '@/figmaEmbed';
 import { enhanceTableFiltersIn } from '@/tableFilters';
 import { enhanceTableCellMergeIn } from '@/tableCellMerge';
+import { enhanceTableRulerColIn } from '@/tableRulerCol';
 import { cloneDiagramHtml, diagramZoomTarget } from '@/diagramZoom';
 import SectionBlock from '@/features/book/SectionBlock.vue';
 import DiagramLightbox from '@/features/book/DiagramLightbox.vue';
@@ -429,6 +430,7 @@ async function load(): Promise<void> {
     await renderMermaidIn(contentEl.value);
     if (gen !== loadGen) return;
     activateFigmaEmbedsIn(contentEl.value);
+    enhanceTableRulerColIn(contentEl.value, props.toc);
     enhanceTableCellMergeIn(contentEl.value);
     enhanceTableFiltersIn(contentEl.value);
   } catch (e) {
@@ -560,7 +562,12 @@ function go(ch: TocChapter | null): void {
             >
               {{ bucket.leafTitle }}
             </h2>
-            <div v-for="v in bucket.keys" :key="v.key.sectionId" class="ruler-key">
+            <div
+              v-for="v in bucket.keys"
+              :key="v.key.sectionId"
+              class="ruler-key"
+              :data-ruler-key-id="v.key.sectionId"
+            >
               <SectionBlock
                 v-if="v.body"
                 :id="rulerAnchorId(v.body.chapter.id, v.body.section.id)"

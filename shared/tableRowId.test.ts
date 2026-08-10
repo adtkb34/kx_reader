@@ -15,6 +15,16 @@ describe('collectTableRowMarkers', () => {
 `;
     expect(collectTableRowMarkers(md).map((m) => m.id)).toEqual(['h', 'a', 'b']);
   });
+
+  it('accepts {#id} as last cell with closing pipe', () => {
+    const md = `
+| 场景 | 操作 | 系统 | {#h} |
+| --- | --- | --- | --- |
+| 待审 | 打开 | 列出 | {#a} |
+| 通过 | 确认 | 写入 | {#b} |
+`;
+    expect(collectTableRowMarkers(md).map((m) => m.id)).toEqual(['h', 'a', 'b']);
+  });
 });
 
 describe('tableRowIdPlugin', () => {

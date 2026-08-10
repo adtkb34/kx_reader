@@ -313,9 +313,24 @@ function extractTableRowFragment(
   const out = doc.createElement('table');
   const headRows = slice.filter((r) => r.parentElement?.tagName === 'THEAD');
   const bodyRows = slice.filter((r) => r.parentElement?.tagName !== 'THEAD');
-  if (headRows.length) {
+  // Shared header: when the group starts mid-tbody, still copy the source thead
+  // so hung fragments keep column names.
+  const sourceHead =
+    headRows.length === 0 && table
+      ? (Array.from(table.querySelectorAll('thead tr')) as HTMLTableRowElement[])
+      : [];
+  const theadRows = headRows.length ? headRows : sourceHead;
+  if (theadRows.length) {
     const thead = doc.createElement('thead');
-    for (const r of headRows) thead.appendChild(r.cloneNode(true));
+    for (const r of theadRows) {
+      const clone = r.cloneNode(true) as HTMLTableRowElement;
+      // Avoid duplicate section ids when the header itself is a row marker.
+      if (headRows.length === 0) {
+        clone.removeAttribute('id');
+        clone.classList.remove(SECTION_ROW_CLASS);
+      }
+      thead.appendChild(clone);
+    }
     out.appendChild(thead);
   }
   if (bodyRows.length) {
@@ -323,9 +338,11 @@ function extractTableRowFragment(
     for (const r of bodyRows) tbody.appendChild(r.cloneNode(true));
     out.appendChild(tbody);
   }
-  if (!headRows.length && !bodyRows.length) {
+  if (!theadRows.length && !bodyRows.length) {
     out.appendChild(startRow.cloneNode(true));
   }
+
+  pruneEmptyTableColumns(out);
 
   return {
     id: sectionId,
@@ -333,6 +350,28 @@ function extractTableRowFragment(
     level: 2,
     html: out.outerHTML,
   };
+}
+
+/** Drop columns whose body cells are all blank (header alone does not keep a column). */
+function pruneEmptyTableColumns(table: HTMLTableElement): void {
+  const rows = Array.from(table.querySelectorAll('tr')) as HTMLTableRowElement[];
+  if (rows.length === 0) return;
+  const colCount = Math.max(0, ...rows.map((r) => r.cells.length));
+  if (colCount === 0) return;
+
+  const bodyRows = rows.filter((r) => r.parentElement?.tagName !== 'THEAD');
+  const sample = bodyRows.length > 0 ? bodyRows : rows;
+  const keep: boolean[] = [];
+  for (let c = 0; c < colCount; c++) {
+    keep[c] = sample.some((r) => (r.cells[c]?.textContent ?? '').trim() !== '');
+  }
+  if (!keep.some(Boolean) || keep.every(Boolean)) return;
+
+  for (const row of rows) {
+    for (let c = colCount - 1; c >= 0; c--) {
+      if (!keep[c] && c < row.cells.length) row.deleteCell(c);
+    }
+  }
 }
 
 /** Join several section fragments; consecutive bare tables are merged into one. */
@@ -345,6 +384,15 @@ export function joinSectionFragments(
   if (parts.length === 0) return null;
   const mergedHtml = mergeAdjacentTables(parts.map((p) => p.html).join(''));
   return { id, title: title || parts[0]!.title, level, html: mergedHtml };
+}
+
+/** Header cell texts for comparing whether two tables share one `| --- |` header. */
+function tableHeaderSignature(table: HTMLTableElement): string | null {
+  const head = table.tHead?.rows[0];
+  if (!head) return null;
+  return Array.from(head.cells)
+    .map((c) => (c.textContent ?? '').trim())
+    .join('\0');
 }
 
 function mergeAdjacentTables(html: string): string {
@@ -380,8 +428,12 @@ function mergeAdjacentTables(html: string): string {
   for (const node of nodes) {
     if (node.nodeType === Node.ELEMENT_NODE && (node as Element).tagName === 'TABLE') {
       const table = node as HTMLTableElement;
-      if (table.tHead && pendingTable) {
-        flushTable();
+      // Flatten into the table above when the lower one has no `| --- |` header,
+      // or when it has the same header (hang-off slices each copy thead).
+      if (pendingTable && table.tHead) {
+        const a = tableHeaderSignature(pendingTable);
+        const b = tableHeaderSignature(table);
+        if (a == null || b == null || a !== b) flushTable();
       }
       if (!pendingTable) {
         pendingTable = table.cloneNode(true) as HTMLTableElement;
@@ -399,6 +451,10 @@ function mergeAdjacentTables(html: string): string {
       node.nodeType === Node.ELEMENT_NODE &&
       (node as Element).classList?.contains(SECTION_MARKER_CLASS)
     ) {
+      continue;
+    }
+    // Whitespace between tables does not break a flatten.
+    if (node.nodeType === Node.TEXT_NODE && !/\S/.test(node.textContent ?? '')) {
       continue;
     }
     flushTable();

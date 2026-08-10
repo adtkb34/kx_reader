@@ -3,8 +3,8 @@ import type MarkdownIt from 'markdown-it';
 /** Class on <tr> that starts a row-group interval for table section markers. */
 export const SECTION_ROW_CLASS = 'section-row-marker';
 
-/** Trailing `{#id}` on a GFM table row (last cell or after final pipe). */
-export const TABLE_ROW_ID_LINE_RE = /^(\|.*)\{\#([A-Za-z0-9_-]+)\}\s*$/;
+/** Trailing `{#id}` on a GFM table row (last cell, with or without final `|`). */
+export const TABLE_ROW_ID_LINE_RE = /^(\|.*)\{\#([A-Za-z0-9_-]+)\}\s*\|?\s*$/;
 
 export interface TableRowMarker {
   id: string;
