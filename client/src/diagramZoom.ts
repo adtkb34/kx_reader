@@ -3,6 +3,8 @@ export function diagramZoomTarget(el: EventTarget | null): HTMLElement | null {
   if (!(el instanceof Element)) return null;
   const mermaid = el.closest('.mermaid-wrap.is-rendered');
   if (mermaid instanceof HTMLElement && mermaid.querySelector('svg')) return mermaid;
+  const screen = el.closest('.screen-ui:not(.screen-ui-error)');
+  if (screen instanceof HTMLElement) return screen;
   const wireframe = el.closest('.wireframe');
   if (wireframe instanceof HTMLElement) return wireframe;
   return null;

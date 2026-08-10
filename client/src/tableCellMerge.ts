@@ -1,5 +1,7 @@
 /** Merge adjacent equal body cells (rowspan + colspan); explode for filter/sort. */
 
+import { planSameCellMerges, type MergeBlock } from '@shared/tableCellMergePlan';
+
 const ATTR = 'data-cell-merge';
 
 export function hasCellMerge(table: HTMLTableElement): boolean {
@@ -89,17 +91,10 @@ export function explodeAllRowspans(table: HTMLTableElement): void {
   }
 }
 
-interface MergeBlock {
-  r: number;
-  c: number;
-  rs: number;
-  cs: number;
-  text: string;
-}
-
 /**
  * Merge contiguous equal non-empty cells into rowspan/colspan rectangles.
  * Hidden rows act as barriers and stay 1×1. Empty cells are never merged.
+ * Vertical merges are preferred over horizontal when both are possible.
  */
 export function mergeSameCells(table: HTMLTableElement): void {
   const tbody = table.tBodies[0];
@@ -119,50 +114,7 @@ export function mergeSameCells(table: HTMLTableElement): void {
     return row;
   });
   const hidden = rows.map((r) => r.style.display === 'none');
-  const covered: boolean[][] = Array.from({ length: n }, () =>
-    Array.from({ length: cols }, () => false),
-  );
-  const blocks: MergeBlock[] = [];
-
-  for (let r = 0; r < n; r++) {
-    for (let c = 0; c < cols; c++) {
-      if (covered[r]![c]) continue;
-      const text = values[r]![c]!;
-
-      if (hidden[r] || text === '') {
-        covered[r]![c] = true;
-        blocks.push({ r, c, rs: 1, cs: 1, text });
-        continue;
-      }
-
-      let cs = 1;
-      while (
-        c + cs < cols &&
-        !covered[r]![c + cs] &&
-        values[r]![c + cs] === text
-      ) {
-        cs += 1;
-      }
-
-      let rs = 1;
-      outer: while (r + rs < n) {
-        if (hidden[r + rs]) break;
-        for (let dc = 0; dc < cs; dc++) {
-          if (covered[r + rs]![c + dc] || values[r + rs]![c + dc] !== text) {
-            break outer;
-          }
-        }
-        rs += 1;
-      }
-
-      for (let dr = 0; dr < rs; dr++) {
-        for (let dc = 0; dc < cs; dc++) {
-          covered[r + dr]![c + dc] = true;
-        }
-      }
-      blocks.push({ r, c, rs, cs, text });
-    }
-  }
+  const blocks: MergeBlock[] = planSameCellMerges(values, hidden);
 
   const meta = rows.map(readRowMeta);
   const hasRuler = table.getAttribute('data-ruler-col') === '1';

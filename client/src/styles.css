@@ -12,6 +12,8 @@
 @import './styles/table-filters.css';
 @import './styles/details.css';
 @import './styles/wireframe.css';
+@import './styles/screen-ui.css';
+@import './styles/figma-embed.css';
 @import './styles/diagram-lightbox.css';
 @import './styles/pager.css';
 @import './styles/notes.css';

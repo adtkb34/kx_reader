@@ -8,6 +8,7 @@ import {
   type RenderedSection,
 } from '@/markdown';
 import { bindMermaidDetails, renderMermaidIn } from '@/mermaid';
+import { activateFigmaEmbedsIn, bindFigmaEmbedDetails } from '@/figmaEmbed';
 import { enhanceTableFiltersIn } from '@/tableFilters';
 import { enhanceTableCellMergeIn } from '@/tableCellMerge';
 import { cloneDiagramHtml, diagramZoomTarget } from '@/diagramZoom';
@@ -64,6 +65,7 @@ const loading = ref(false);
 const contentEl = ref<HTMLElement | null>(null);
 const diagramHtml = ref('');
 let unbindMermaid: (() => void) | null = null;
+let unbindFigma: (() => void) | null = null;
 
 const readerShowLevel = computed(() => getBookShowLevel(props.bookId));
 const focusIndexId = computed(() => {
@@ -157,6 +159,8 @@ async function load(): Promise<void> {
   error.value = '';
   unbindMermaid?.();
   unbindMermaid = null;
+  unbindFigma?.();
+  unbindFigma = null;
   try {
     const keys = tree.value;
     const pre = preambleSpec.value;
@@ -281,7 +285,9 @@ async function load(): Promise<void> {
     await nextTick();
     applyDetailsPref();
     unbindMermaid = bindMermaidDetails(contentEl.value);
+    unbindFigma = bindFigmaEmbedDetails(contentEl.value);
     await renderMermaidIn(contentEl.value);
+    activateFigmaEmbedsIn(contentEl.value);
     enhanceTableCellMergeIn(contentEl.value);
     enhanceTableFiltersIn(contentEl.value);
   } catch (e) {
@@ -329,6 +335,7 @@ watch(
     applyDetailsPref();
     await nextTick();
     await renderMermaidIn(contentEl.value);
+    activateFigmaEmbedsIn(contentEl.value);
     enhanceTableCellMergeIn(contentEl.value);
     enhanceTableFiltersIn(contentEl.value);
   },
@@ -337,6 +344,8 @@ watch(
 onBeforeUnmount(() => {
   unbindMermaid?.();
   unbindMermaid = null;
+  unbindFigma?.();
+  unbindFigma = null;
   diagramHtml.value = '';
 });
 

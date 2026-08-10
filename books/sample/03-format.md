@@ -199,7 +199,7 @@ title: 结构思想
 - `alt` 文案同时作为图下说明；读者点击图片可放大预览。
 - 一组照片：同一小节里连续写多张 `![]()` 即可，不必另造相册实体。
 - 图片随书走（进该书 `.git`）；阅读器只开放 `assets/`，不会把整本目录挂成静态站。
-- **分工**：真实照片/截图用 `assets/`；架构关系与数据流用 Mermaid；界面屏示意用 wireframe。不要用照片冒充结构图，也不要用 Mermaid 画真实 UI。
+- **分工**：真实照片/截图用 `assets/`；架构关系与数据流用 Mermaid；界面屏示意用 wireframe；可交互原型用 <code>```figma</code>。不要用照片冒充结构图，也不要用 Mermaid 画真实 UI。
 
 ![样例插图：阅读器照片能力](assets/photo-demo.png)
 
@@ -256,6 +256,26 @@ flowchart LR
 | `@btn a · b` | 按钮行（`·` 分隔） |
 | `@footer` | 页底操作区 |
 | 普通行 | 卡片/菜单内一行文案 |
+
+{#figma}
+### Figma 原型
+
+可点击的原型流程用 <code>```figma</code>，**不要**用静态截图冒充可点流程。默认放在 `:::details 原型`；正文仍写结构 / 屏表。与 wireframe 可同页并存：结构用 wireframe，可点用 figma。
+
+分享链接须为 **Anyone with the link** 的 Prototype（`/proto/`）。块内第一行是 URL，可选第二行作标题：
+
+````markdown
+:::details 原型
+```figma
+https://www.figma.com/proto/FILEKEY/Name?node-id=1-2
+登录流程
+```
+:::
+````
+
+- 允许：`www.figma.com/proto/...`、`figma.com/proto/...`、`embed.figma.com/proto/...`。
+- 不允许：Design / FigJam / Slides 链接，或非 Figma 域；非法时显示错误文案与原文外链，不渲染 iframe。
+- 阅读器会改写成 `embed.figma.com` 并带上 `embed-host=kx-reader`。读者需能访问 Figma。
 
 {#markdown-misc}
 ## 其它 Markdown 约定

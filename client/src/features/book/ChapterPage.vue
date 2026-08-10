@@ -6,6 +6,7 @@ import { api } from '@/api/client';
 import { tocOf } from '@/stores/books';
 import { renderChapter, splitSections, type RenderedSection } from '@/markdown';
 import { bindMermaidDetails, renderMermaidIn } from '@/mermaid';
+import { activateFigmaEmbedsIn, bindFigmaEmbedDetails } from '@/figmaEmbed';
 import { enhanceTableFiltersIn } from '@/tableFilters';
 import { enhanceTableRulerColIn } from '@/tableRulerCol';
 import { enhanceTableCellMergeIn } from '@/tableCellMerge';
@@ -45,6 +46,7 @@ const previewUrlList = ref<string[]>([]);
 const previewIndex = ref(0);
 const diagramHtml = ref('');
 let unbindMermaid: (() => void) | null = null;
+let unbindFigma: (() => void) | null = null;
 /** Ignore stale async load results when chapter/lens changes mid-flight. */
 let loadSeq = 0;
 /** Chapter id whose `title` / `sections` currently match the DOM. */
@@ -104,6 +106,8 @@ async function load(): Promise<void> {
   error.value = '';
   unbindMermaid?.();
   unbindMermaid = null;
+  unbindFigma?.();
+  unbindFigma = null;
   previewVisible.value = false;
   diagramHtml.value = '';
   // Chapter switch: drop stale body immediately so title/content cannot diverge.
@@ -136,7 +140,9 @@ async function load(): Promise<void> {
     if (seq !== loadSeq) return;
     applyDetailsPref();
     unbindMermaid = bindMermaidDetails(contentEl.value);
+    unbindFigma = bindFigmaEmbedDetails(contentEl.value);
     await renderMermaidIn(contentEl.value);
+    activateFigmaEmbedsIn(contentEl.value);
     if (seq !== loadSeq) return;
     enhanceTableRulerColIn(contentEl.value, tocOf(reqBookId));
     enhanceTableCellMergeIn(contentEl.value);
@@ -181,6 +187,7 @@ watch(
     applyDetailsPref();
     await nextTick();
     await renderMermaidIn(contentEl.value);
+    activateFigmaEmbedsIn(contentEl.value);
     enhanceTableRulerColIn(contentEl.value, tocOf(props.bookId));
     enhanceTableCellMergeIn(contentEl.value);
     enhanceTableFiltersIn(contentEl.value);
@@ -190,6 +197,8 @@ watch(
 onBeforeUnmount(() => {
   unbindMermaid?.();
   unbindMermaid = null;
+  unbindFigma?.();
+  unbindFigma = null;
   previewVisible.value = false;
   diagramHtml.value = '';
 });

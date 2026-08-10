@@ -52,7 +52,7 @@ onBeforeUnmount(() => {
         ×
       </button>
       <div class="diagram-lightbox-stage" @click.stop>
-        <!-- 内容来自本页已渲染的 mermaid / wireframe，与 Mermaid 相同：原样放大展示 -->
+        <!-- 内容来自本页已渲染的 mermaid / screen / wireframe，原样放大展示 -->
         <div class="diagram-lightbox-body" v-html="html" />
       </div>
     </div>

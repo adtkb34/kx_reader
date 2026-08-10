@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { api } from '@/api/client';
 import { renderChapter, splitSections, type RenderedSection } from '@/markdown';
 import { bindMermaidDetails, renderMermaidIn } from '@/mermaid';
+import { activateFigmaEmbedsIn, bindFigmaEmbedDetails } from '@/figmaEmbed';
 import { enhanceTableFiltersIn } from '@/tableFilters';
 import { enhanceTableRulerColIn } from '@/tableRulerCol';
 import { enhanceTableCellMergeIn } from '@/tableCellMerge';
@@ -47,6 +48,7 @@ const loading = ref(false);
 const contentEl = ref<HTMLElement | null>(null);
 const diagramHtml = ref('');
 let unbindMermaid: (() => void) | null = null;
+let unbindFigma: (() => void) | null = null;
 
 const visibleChapters = computed(() =>
   filterChapters(props.toc.chapters, props.lensSelection ?? null, props.toc),
@@ -80,6 +82,8 @@ async function load(): Promise<void> {
   error.value = '';
   unbindMermaid?.();
   unbindMermaid = null;
+  unbindFigma?.();
+  unbindFigma = null;
   try {
     const chapters = visibleChapters.value;
     const fileToChapter: Record<string, string> = {};
@@ -124,7 +128,9 @@ async function load(): Promise<void> {
     await nextTick();
     applyDetailsPref();
     unbindMermaid = bindMermaidDetails(contentEl.value);
+    unbindFigma = bindFigmaEmbedDetails(contentEl.value);
     await renderMermaidIn(contentEl.value);
+    activateFigmaEmbedsIn(contentEl.value);
     enhanceTableRulerColIn(contentEl.value, props.toc);
     enhanceTableCellMergeIn(contentEl.value);
     enhanceTableFiltersIn(contentEl.value);
@@ -167,6 +173,7 @@ watch(
     applyDetailsPref();
     await nextTick();
     await renderMermaidIn(contentEl.value);
+    activateFigmaEmbedsIn(contentEl.value);
     enhanceTableRulerColIn(contentEl.value, props.toc);
     enhanceTableCellMergeIn(contentEl.value);
     enhanceTableFiltersIn(contentEl.value);
@@ -176,6 +183,8 @@ watch(
 onBeforeUnmount(() => {
   unbindMermaid?.();
   unbindMermaid = null;
+  unbindFigma?.();
+  unbindFigma = null;
   diagramHtml.value = '';
 });
 

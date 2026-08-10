@@ -7,6 +7,8 @@ import { slugify } from '@shared/sections';
 import { SECTION_MARKER_CLASS, sectionMarkerPlugin } from '@shared/sectionMarker';
 import { SECTION_ROW_CLASS, tableRowIdPlugin } from '@shared/tableRowId';
 import { renderWireframe } from '@/wireframe';
+import { renderFigmaEmbed } from '@shared/figmaEmbed';
+import { renderScreenUi } from '@shared/screenUi';
 
 export interface RenderEnv {
   bookId: string;
@@ -35,6 +37,12 @@ const md: MarkdownIt = new MarkdownIt({
     }
     if (lang === 'wireframe') {
       return renderWireframe(code);
+    }
+    if (lang === 'screen') {
+      return renderScreenUi(code);
+    }
+    if (lang === 'figma') {
+      return renderFigmaEmbed(code);
     }
     if (lang && hljs.getLanguage(lang)) {
       try {
