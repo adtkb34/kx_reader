@@ -91,15 +91,17 @@
   padding-right: 6.5em;
 }
 
-/* Outline labels match title weight */
+/* Outline labels: same face as title; lift a hair so Latin digits meet CJK baseline. */
 .doc-section.outline-numbered .section-body > .section-marker + :is(h1, h2, h3, h4, h5, h6)::before,
 .doc-section.outline-numbered .section-body > :is(h1, h2, h3, h4, h5, h6):first-child::before,
 .ruler-key-title.outline-numbered::before {
   content: var(--outline-num) '\00a0';
   font-family: inherit;
   font-size: inherit;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
+  font-weight: inherit;
+  font-variant-numeric: lining-nums;
+  line-height: inherit;
+  vertical-align: baseline;
   color: inherit;
 }
 
