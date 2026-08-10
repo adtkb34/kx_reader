@@ -5,6 +5,9 @@ import { normalizeAxisSelection } from '@shared/lenses';
 /** Same-axis multi-select vs single-select for the lens tree. */
 export type LensAxisPickMode = 'multi' | 'single';
 
+/** Outline key multi-select vs single-select (independent from lens). */
+export type OutlinePickMode = 'multi' | 'single';
+
 /** Single-page (leaf module) reading vs lens digest. */
 export type LensReadMode = 'page' | 'digest';
 
@@ -16,6 +19,7 @@ export type LensContentFilter = 'all' | 'content' | 'empty';
 
 const LENS_PICK_KEY = 'reader.lensPickMode';
 const LENS_READ_KEY = 'reader.lensReadMode';
+const OUTLINE_PICK_KEY = 'reader.outlinePickMode';
 const TOC_EXPAND_KEY = 'reader.tocSiblingExpand';
 const TOC_EXPAND_LEGACY_KEY = 'reader.tocLightboxExpand';
 const LENS_CONTENT_FILTER_KEY = 'reader.lensContentFilter';
@@ -25,6 +29,12 @@ function readLensPickMode(): LensAxisPickMode {
   const raw = localStorage.getItem(LENS_PICK_KEY);
   if (raw === 'multi') return 'multi';
   return 'single';
+}
+
+function readOutlinePickMode(): OutlinePickMode {
+  const raw = localStorage.getItem(OUTLINE_PICK_KEY);
+  if (raw === 'single') return 'single';
+  return 'multi';
 }
 
 function readLensReadMode(): LensReadMode {
@@ -74,6 +84,8 @@ export const ui = reactive({
   rulerPickByBook: {} as Record<string, string>,
   /** 多选 = same-axis multi; 单选 = one id per axis. */
   lensPickMode: readLensPickMode() as LensAxisPickMode,
+  /** Outline keys: default multi; independent from lensPickMode. */
+  outlinePickMode: readOutlinePickMode() as OutlinePickMode,
   /** 单页 = leaf module; 汇总 = all visible modules. */
   lensReadMode: readLensReadMode() as LensReadMode,
   /** TOC groups: 单开 = one sibling; 多开 = many siblings open. */
@@ -83,6 +95,8 @@ export const ui = reactive({
    * empty = only pages without lens content. Default all.
    */
   lensContentFilter: readLensContentFilter() as LensContentFilter,
+  /** Selected ruler outline keys per `bookId::moduleIndexId`. */
+  outlineKeysByScope: {} as Record<string, string[]>,
 });
 
 /** Load per-book content rank ceiling; `null` = 全部. */
@@ -121,6 +135,11 @@ export function setBookRulerPick(bookId: string, pick: string): void {
 export function setLensPickMode(mode: LensAxisPickMode): void {
   ui.lensPickMode = mode;
   localStorage.setItem(LENS_PICK_KEY, mode);
+}
+
+export function setOutlinePickMode(mode: OutlinePickMode): void {
+  ui.outlinePickMode = mode;
+  localStorage.setItem(OUTLINE_PICK_KEY, mode);
 }
 
 export function setLensReadMode(mode: LensReadMode): void {
@@ -205,4 +224,54 @@ export function setBookAxisLens(
   const next = { ...base, [axis]: [...options] };
   setBookLensSelection(bookId, next);
   return next;
+}
+
+function outlineKeysStorageKey(bookId: string, moduleId: string): string {
+  return `reader.outlineKeys.${bookId}.${moduleId}`;
+}
+
+function outlineScopeKey(bookId: string, moduleId: string): string {
+  return `${bookId}::${moduleId}`;
+}
+
+/** Last reconciled available key ids (memory only — for detecting newly appeared tops). */
+export const outlineAvailableByScope: Record<string, string[]> = {};
+
+function readStoredOutlineKeys(bookId: string, moduleId: string): string[] | null {
+  const raw = localStorage.getItem(outlineKeysStorageKey(bookId, moduleId));
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return null;
+    return parsed.filter((x): x is string => typeof x === 'string' && x.length > 0);
+  } catch {
+    return null;
+  }
+}
+
+/** Selected ruler-key section ids for a book module (reactive). */
+export function getOutlineKeySelection(bookId: string, moduleId: string): string[] | null {
+  if (!bookId || !moduleId) return null;
+  const scope = outlineScopeKey(bookId, moduleId);
+  if (!(scope in ui.outlineKeysByScope)) {
+    ui.outlineKeysByScope[scope] = readStoredOutlineKeys(bookId, moduleId) ?? [];
+  }
+  const cur = ui.outlineKeysByScope[scope]!;
+  return cur.length ? cur : null;
+}
+
+export function setOutlineKeySelection(
+  bookId: string,
+  moduleId: string,
+  ids: string[],
+  availableIds?: string[],
+): void {
+  if (!bookId || !moduleId) return;
+  const scope = outlineScopeKey(bookId, moduleId);
+  const copy = [...ids];
+  ui.outlineKeysByScope[scope] = copy;
+  localStorage.setItem(outlineKeysStorageKey(bookId, moduleId), JSON.stringify(copy));
+  if (availableIds) {
+    outlineAvailableByScope[scope] = [...availableIds];
+  }
 }

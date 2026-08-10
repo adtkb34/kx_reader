@@ -16,6 +16,7 @@ import {
   type LensReadMode,
 } from '@/stores/ui';
 import { useOrphans } from '@/composables/orphans';
+import { useRulerOutlineKeySelection } from '@/composables/outlineKeys';
 import {
   allowedAxisSelectionIds,
   bookContentRanks,
@@ -115,6 +116,18 @@ const activeSelection = computed<LensSelection | null>(() => {
   const candidate = ui.lensByBook[bookId.value] ?? getStoredLensSelection(bookId.value);
   return sanitizeSelection(candidate, t);
 });
+
+const {
+  selectedIds: outlineKeyIds,
+  visibleKeyIds: outlineVisibleIds,
+  onToggleKey: onOutlineKeyToggle,
+  selectTopLevelKeys: onOutlineSelectTopLevel,
+} = useRulerOutlineKeySelection(
+  () => bookId.value,
+  () => toc.value,
+  () => activeSelection.value,
+  () => chapterId.value || null,
+);
 
 const isModuleBook = computed(() => !!toc.value?.ruler);
 
@@ -660,6 +673,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
               :prev-chapter="prevChapter"
               :next-chapter="nextChapter"
               :lens-selection="activeSelection"
+              :outline-key-ids="outlineKeyIds"
               @outline="moduleOutlineSync = $event"
             />
             <ChapterPage
@@ -686,6 +700,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
             :lens-selection="activeSelection"
             :focus-chapter-id="chapterId"
             :sync-rows="moduleOutlineSync"
+            :outline-selected-ids="outlineKeyIds"
+            :outline-visible-ids="outlineVisibleIds"
+            @toggle-key="onOutlineKeyToggle"
+            @select-top-level="onOutlineSelectTopLevel"
           />
           <ChapterOutline
             v-else-if="currentChapter && !currentChapterHiddenByContentFilter"

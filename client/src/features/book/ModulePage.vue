@@ -39,6 +39,7 @@ import {
   type RulerTickHangFilter,
 } from '@shared/ruler';
 import { outlineNumbers } from '@shared/outlineNumbers';
+import { filterRulerKeysBySelection, expandOutlineKeySelection } from '@shared/outlineKeys';
 import type { BookToc, LensSelection, PageLayer, TocChapter } from '@shared/types';
 import type { DigestOutlineRow } from '@/features/book/outlineTypes';
 
@@ -49,6 +50,8 @@ const props = defineProps<{
   prevChapter: TocChapter | null;
   nextChapter: TocChapter | null;
   lensSelection?: LensSelection | null;
+  /** Selected ruler-key section ids; omit = show all keys. */
+  outlineKeyIds?: string[];
 }>();
 
 const emit = defineEmits<{
@@ -114,13 +117,21 @@ const assemble = computed(() => {
     rulerPick.value,
   );
   if (!raw) return null;
-  return filterRulerAssembleView(
+  const filtered = filterRulerAssembleView(
     props.toc,
     props.lensSelection ?? null,
     readerShowLevel.value,
     raw,
     hangFilter.value,
   );
+  if (props.outlineKeyIds == null) return filtered;
+  return {
+    ...filtered,
+    buckets: filtered.buckets.map((b) => ({
+      ...b,
+      keys: filterRulerKeysBySelection(b.keys, props.outlineKeyIds),
+    })),
+  };
 });
 
 /** Outline numbers from assembled module structure (keys + titled hang-offs + axis buckets). */
@@ -181,7 +192,28 @@ function emitSyncedOutline(): void {
     ),
     hangFilter.value,
   );
-  const list = entries.filter((e) => e.title);
+  const keyItems = entries
+    .filter((e) => e.isKey && e.title && !e.anchorId?.startsWith('ruler-bucket-'))
+    .map((e) => ({ id: e.sectionId, level: e.level }));
+  const visible =
+    props.outlineKeyIds == null
+      ? null
+      : new Set(expandOutlineKeySelection(keyItems, props.outlineKeyIds));
+
+  const list: typeof entries = [];
+  let keyVisible = true;
+  for (const e of entries) {
+    if (!e.title) continue;
+    if (e.isKey) {
+      keyVisible = visible == null || visible.has(e.sectionId);
+      if (visible == null || e.anchorId?.startsWith('ruler-bucket-') || visible.has(e.sectionId)) {
+        list.push(e);
+      }
+      continue;
+    }
+    if (keyVisible) list.push(e);
+  }
+
   const nums = outlineNumbers(
     list.map((e) => ({
       id: e.anchorId ?? e.sectionId,
