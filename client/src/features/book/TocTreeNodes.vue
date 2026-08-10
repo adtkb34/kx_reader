@@ -3,11 +3,12 @@ import { computed, ref, watch } from 'vue';
 import type { RouteLocationRaw } from 'vue-router';
 import type { LensSelection, TocChapter, TocTreeNode } from '@shared/types';
 import { visibleTocSections } from '@shared/lenses';
+import { tocOutlineKey } from '@shared/outlineNumbers';
 import { annotationsFor, sectionKey } from '@/stores/annotations';
 import { DEFAULT_STATUS } from '@shared/annotations';
 import TocTreeNodes from '@/features/book/TocTreeNodes.vue';
 import { tocOf } from '@/stores/books';
-import { getBookShowLevel, type TocSiblingExpand } from '@/stores/ui';
+import { getBookShowLevel, ui, type TocSiblingExpand } from '@/stores/ui';
 
 const props = withDefaults(
   defineProps<{
@@ -25,8 +26,10 @@ const props = withDefaults(
      * When null, open follows the active chapter trail (sidebar default).
      */
     siblingExpand?: TocSiblingExpand | null;
+    /** Outline labels from the full filtered tree (`group:id` / `page:id` → `1.2`). */
+    outlineNums?: ReadonlyMap<string, string> | null;
   }>(),
-  { depth: 0, lensSelection: null, siblingExpand: null },
+  { depth: 0, lensSelection: null, siblingExpand: null, outlineNums: null },
 );
 
 const anns = computed(() => annotationsFor(props.bookId));
@@ -149,6 +152,7 @@ function chapterStats(pageId: string): { unread: number; question: number } {
     props.lensSelection ?? null,
     bookToc.value,
     getBookShowLevel(props.bookId),
+    ui.lensContentFilter === 'content',
   )) {
     const st = anns.value[sectionKey(ch.id, s.id)]?.status ?? DEFAULT_STATUS;
     if (st === 'unread') unread++;
@@ -175,6 +179,10 @@ function chapterLocation(chapterId: string): RouteLocationRaw {
     query,
   };
 }
+
+function outlineNum(type: 'group' | 'page', id: string): string {
+  return props.outlineNums?.get(tocOutlineKey(type, id)) ?? '';
+}
 </script>
 
 <template>
@@ -190,7 +198,12 @@ function chapterLocation(chapterId: string): RouteLocationRaw {
         class="toc-row-label toc-group-summary"
         @click="siblingExpand ? ($event.preventDefault(), toggleGroup(node)) : undefined"
       >
-        <span class="toc-row-title">{{ node.title }}</span>
+        <span class="toc-row-title">
+          <span v-if="outlineNum('group', node.id)" class="toc-outline-num">{{
+            outlineNum('group', node.id)
+          }}</span>
+          {{ node.title }}
+        </span>
         <span class="toc-badges">
           <span
             v-if="groupStats(node).question"
@@ -213,6 +226,7 @@ function chapterLocation(chapterId: string): RouteLocationRaw {
           :lens-selection="lensSelection"
           :depth="depth + 1"
           :sibling-expand="siblingExpand"
+          :outline-nums="outlineNums"
         />
       </div>
     </details>
@@ -229,7 +243,12 @@ function chapterLocation(chapterId: string): RouteLocationRaw {
         :to="chapterLocation(node.id)"
         class="toc-row-label toc-chapter-link"
       >
-        <span class="toc-row-title">{{ node.title }}</span>
+        <span class="toc-row-title">
+          <span v-if="outlineNum('page', node.id)" class="toc-outline-num">{{
+            outlineNum('page', node.id)
+          }}</span>
+          {{ node.title }}
+        </span>
         <span class="toc-badges">
           <span
             v-if="chapterStats(node.id).question"

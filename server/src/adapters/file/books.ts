@@ -5,6 +5,7 @@ import { BOOKS_DIR } from '../../config';
 import { extractSections } from '../../../../shared/sections';
 import type {
   BookLens,
+  BookRuler,
   BookSummary,
   BookToc,
   ChapterContent,
@@ -29,6 +30,8 @@ interface BookManifest {
   contents?: unknown[];
   /** Top-level array of axes; each node has `id` + `title` (+ optional `children`). */
   lenses?: BookLens[];
+  /** Optional ruler: links hang-off + axes selectable as ruler. */
+  ruler?: unknown;
 }
 
 /** Book id / single path segment. */
@@ -177,6 +180,70 @@ function parseLenses(bookId: string, raw: unknown): ParsedLenses | undefined {
 }
 
 /**
+ * Parse `ruler: { axes?, links }`.
+ * `links` may be empty (index-only skeleton books). `axes` lists selectable ruler axes.
+ */
+function parseRuler(
+  bookId: string,
+  raw: unknown,
+  bookLenses: Record<LensAxisId, BookLens[]> | undefined,
+): BookRuler | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+
+  const axesRaw = (raw as { axes?: unknown }).axes;
+  const linksRaw = (raw as { links?: unknown }).links;
+
+  const axes: LensAxisId[] = [];
+  if (axesRaw != null) {
+    if (!Array.isArray(axesRaw)) {
+      console.warn(`book ${bookId}: ruler.axes must be an array; ignoring`);
+    } else {
+      for (const a of axesRaw) {
+        if (typeof a !== 'string' || !SAFE_SEGMENT.test(a)) {
+          console.warn(`book ${bookId}: ruler.axes entry invalid; skipping`);
+          continue;
+        }
+        if (bookLenses && !bookLenses[a]) {
+          console.warn(`book ${bookId}: ruler.axes "${a}" not in lenses; skipping`);
+          continue;
+        }
+        if (axes.includes(a)) continue;
+        axes.push(a);
+      }
+    }
+  }
+
+  const links: Record<string, string[]> = {};
+  if (linksRaw != null) {
+    if (typeof linksRaw !== 'object' || Array.isArray(linksRaw)) {
+      console.warn(`book ${bookId}: ruler.links must be an object; ignoring`);
+    } else {
+      for (const [key, val] of Object.entries(linksRaw as Record<string, unknown>)) {
+        if (!SAFE_SEGMENT.test(key)) {
+          console.warn(`book ${bookId}: ruler.links key "${key}" invalid; skipping`);
+          continue;
+        }
+        if (
+          !Array.isArray(val) ||
+          !val.every((s) => typeof s === 'string' && SAFE_SEGMENT.test(s))
+        ) {
+          console.warn(
+            `book ${bookId}: ruler.links["${key}"] must be a string array; skipping`,
+          );
+          continue;
+        }
+        links[key] = [...(val as string[])];
+      }
+    }
+  }
+
+  return {
+    links,
+    ...(axes.length > 0 ? { axes } : {}),
+  };
+}
+
+/**
  * Apply page `lenses` from the contents tree onto TocChapter.layers / sectionAllowlists.
  */
 function applyPageLenses(
@@ -208,6 +275,7 @@ function applyPageLenses(
         continue;
       }
       if (spec === true) {
+        // Whole-page membership → constrains TOC visibility on this axis.
         membership.push(optionId);
         continue;
       }
@@ -232,7 +300,8 @@ function applyPageLenses(
         valid.push(sid);
       }
       if (valid.length === 0) continue;
-      membership.push(optionId);
+      // Section allowlist only — does NOT make the page exclusive to this leaf.
+      // Otherwise unchecking「流程」would hide the whole module from the TOC.
       page.sectionAllowlists ??= {};
       page.sectionAllowlists[axis] ??= {};
       page.sectionAllowlists[axis][optionId] = valid;
@@ -425,6 +494,7 @@ export async function getBookToc(bookId: string): Promise<BookToc | null> {
 
   const parsed = parseLenses(bookId, manifest.lenses);
   const bookLenses = parsed?.lenses;
+  let ruler = parseRuler(bookId, manifest.ruler, bookLenses);
   const tree: TocTreeNode[] = [];
   const pages: TocChapter[] = [];
   try {
@@ -436,6 +506,9 @@ export async function getBookToc(bookId: string): Promise<BookToc | null> {
   }
 
   const hasRulerPage = pages.some((p) => p.role === 'ruler');
+  if (!ruler && hasRulerPage) {
+    ruler = { links: {} };
+  }
 
   return {
     id: bookId,
@@ -448,7 +521,7 @@ export async function getBookToc(bookId: string): Promise<BookToc | null> {
           lensAxisOrder: parsed.lensAxisOrder,
         }
       : {}),
-    ...(hasRulerPage ? { ruler: true as const } : {}),
+    ...(ruler ? { ruler } : {}),
     tree,
     chapters: pages,
   };

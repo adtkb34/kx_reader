@@ -1,71 +1,261 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { BookToc, LensSelection } from '@shared/types';
+import type { BookToc, LensAxisId, LensSelection, PageLayer, RulerPick } from '@shared/types';
 import {
   digestAnchorId,
+  digestPageDisplayLevel,
+  digestPathAnchorId,
+  digestSectionDisplayLevel,
   filterChapters,
+  filterChaptersWithContent,
+  filterChaptersWithoutContent,
   groupChaptersForDigest,
+  lensNodeTitle,
+  selectionToFlatIds,
   visibleTocSections,
 } from '@shared/lenses';
+import { outlineNumbers } from '@shared/outlineNumbers';
+import {
+  axisBucketAnchorId,
+  filterRulerModuleIndexIds,
+  filterRulerOutlineEntries,
+  listLeafModules,
+  moduleMatchesRulerLeaf,
+  normalizeRulerPick,
+  rulerOutlineEntries,
+  rulerAxisLeaves,
+  rulerSidebarKeepIds,
+  type RulerTickHangFilter,
+} from '@shared/ruler';
 import { annotationsFor, sectionKey } from '@/stores/annotations';
-import { getBookShowLevel } from '@/stores/ui';
+import { getBookShowLevel, ui } from '@/stores/ui';
+import type { DigestOutlineRow } from '@/features/book/outlineTypes';
+
+export type { DigestOutlineRow };
 
 const props = defineProps<{
   toc: BookToc;
   bookId: string;
   lensSelection?: LensSelection | null;
+  rulerPick?: RulerPick;
+  /**
+   * When provided, render these rows (kept in lockstep with body).
+   * Omit to compute locally (fallback).
+   */
+  syncRows?: DigestOutlineRow[];
 }>();
 
-interface OutlineSection {
-  chapterId: string;
-  sectionId: string;
-  title: string;
-  level: number;
-}
-
-interface OutlinePage {
-  chapterId: string;
-  title: string;
-  sections: OutlineSection[];
-}
-
-interface OutlineGroup {
-  groupTitle: string | null;
-  pages: OutlinePage[];
-}
-
 const anns = computed(() => annotationsFor(props.bookId));
+const pick = computed(() => normalizeRulerPick(props.toc, props.rulerPick ?? 'index'));
+const hangFilter = computed(
+  (): RulerTickHangFilter => ui.lensContentFilter as RulerTickHangFilter,
+);
 
-const groups = computed((): OutlineGroup[] => {
-  const chapters = filterChapters(props.toc.chapters, props.lensSelection ?? null, props.toc);
+const computedRows = computed((): DigestOutlineRow[] => {
+  const sel = props.lensSelection ?? null;
   const showLevel = getBookShowLevel(props.bookId);
-  return groupChaptersForDigest(props.toc, chapters)
-    .map((g) => ({
-      groupTitle: g.groupTitle,
-      pages: g.pages
-        .map((ch) => ({
-          chapterId: ch.id,
-          title: ch.title,
-          sections: visibleTocSections(ch, props.lensSelection ?? null, props.toc, showLevel).map(
-            (s) => ({
-              chapterId: ch.id,
-              sectionId: s.id,
-              title: s.title,
-              level: s.level,
-            }),
+  const items: { id: string; title: string; level: number; chapterId?: string; sectionId?: string }[] =
+    [];
+
+  if (props.toc.ruler) {
+    const keep = rulerSidebarKeepIds(props.toc, sel);
+    let modules = listLeafModules(props.toc).filter((m) => keep.has(m.indexChapterId));
+    if (hangFilter.value === 'content' || hangFilter.value === 'empty') {
+      const ids = filterRulerModuleIndexIds(
+        props.toc,
+        sel,
+        showLevel,
+        hangFilter.value,
+      );
+      modules = modules.filter((m) => ids.has(m.indexChapterId));
+    }
+
+    if (pick.value === 'index') {
+      const emitted = new Set<string>();
+      for (const mod of modules) {
+        for (let i = 0; i < mod.groupPath.length; i++) {
+          const key = mod.groupPath.slice(0, i + 1).join('/');
+          if (emitted.has(key)) continue;
+          emitted.add(key);
+          items.push({
+            id: digestPathAnchorId(key),
+            title: mod.groupPath[i]!,
+            level: i + 1,
+          });
+        }
+        const pageLevel = digestPageDisplayLevel(mod.groupPath.length);
+        items.push({
+          id: `page-${mod.indexChapterId}`,
+          title: mod.title,
+          level: pageLevel,
+          chapterId: mod.indexChapterId,
+        });
+        const entries = filterRulerOutlineEntries(
+          props.toc,
+          sel,
+          showLevel,
+          rulerOutlineEntries(
+            props.toc,
+            sel,
+            showLevel,
+            mod.indexChapterId,
+            pick.value,
           ),
-        }))
-        .filter((p) => p.sections.length > 0),
-    }))
-    .filter((g) => g.pages.length > 0);
+          hangFilter.value,
+        );
+        for (const e of entries) {
+          if (!e.title) continue;
+          const level = digestSectionDisplayLevel(mod.groupPath.length, e.level);
+          items.push({
+            id: e.anchorId ?? digestAnchorId(e.chapterId, e.sectionId),
+            title: e.title,
+            level,
+            chapterId: e.chapterId,
+            sectionId: e.sectionId,
+          });
+        }
+      }
+    } else {
+      const axis = pick.value as LensAxisId;
+      for (const leaf of rulerAxisLeaves(props.toc, axis)) {
+        const leafMods = modules.filter((m) =>
+          moduleMatchesRulerLeaf(props.toc, m.indexChapterId, axis, leaf),
+        );
+        if (leafMods.length === 0) continue;
+
+        const axisId = axisBucketAnchorId(leaf);
+        items.push({
+          id: axisId,
+          title: lensNodeTitle(props.toc, leaf),
+          level: 1,
+        });
+
+        const emitted = new Set<string>();
+        const boost = 1;
+        let leafHasRows = false;
+        for (const mod of leafMods) {
+          const entries = filterRulerOutlineEntries(
+            props.toc,
+            sel,
+            showLevel,
+            rulerOutlineEntries(
+              props.toc,
+              sel,
+              showLevel,
+              mod.indexChapterId,
+              pick.value,
+            ),
+            hangFilter.value,
+          );
+          const leafEntries = [];
+          let bucketLeaf: PageLayer | null = null;
+          for (const e of entries) {
+            if (e.anchorId?.startsWith('ruler-bucket-')) {
+              bucketLeaf = e.sectionId as PageLayer;
+              continue;
+            }
+            if (bucketLeaf !== leaf) continue;
+            if (!e.title) continue;
+            leafEntries.push(e);
+          }
+          if (leafEntries.length === 0 && hangFilter.value !== 'all') continue;
+
+          for (let i = 0; i < mod.groupPath.length; i++) {
+            const key = mod.groupPath.slice(0, i + 1).join('/');
+            const emitKey = `${leaf}/${key}`;
+            if (emitted.has(emitKey)) continue;
+            emitted.add(emitKey);
+            items.push({
+              id: `${axisId}--${digestPathAnchorId(key)}`,
+              title: mod.groupPath[i]!,
+              level: i + 1 + boost,
+            });
+          }
+          const pageLevel = digestPageDisplayLevel(mod.groupPath.length) + boost;
+          items.push({
+            id: `page-${leaf}-${mod.indexChapterId}`,
+            title: mod.title,
+            level: pageLevel,
+            chapterId: mod.indexChapterId,
+          });
+          leafHasRows = true;
+          for (const e of leafEntries) {
+            const level = digestSectionDisplayLevel(mod.groupPath.length, e.level) + boost;
+            items.push({
+              id: `${axisId}--${digestAnchorId(e.chapterId, e.sectionId)}`,
+              title: e.title,
+              level,
+              chapterId: e.chapterId,
+              sectionId: e.sectionId,
+            });
+          }
+        }
+        if (!leafHasRows && hangFilter.value !== 'all') {
+          items.pop(); // drop empty axis header
+        }
+      }
+    }
+  } else {
+    const filterOn =
+      ui.lensContentFilter !== 'all' && selectionToFlatIds(props.toc, sel).length > 0;
+    const chapters = !filterOn
+      ? filterChapters(props.toc.chapters, sel, props.toc)
+      : ui.lensContentFilter === 'empty'
+        ? filterChaptersWithoutContent(props.toc.chapters, sel, props.toc, showLevel)
+        : filterChaptersWithContent(props.toc.chapters, sel, props.toc, showLevel);
+    const explicitOnly = ui.lensContentFilter === 'content';
+    const emitted = new Set<string>();
+    for (const g of groupChaptersForDigest(props.toc, chapters)) {
+      for (let i = 0; i < g.groupPath.length; i++) {
+        const key = g.groupPath.slice(0, i + 1).join('/');
+        if (emitted.has(key)) continue;
+        emitted.add(key);
+        items.push({
+          id: digestPathAnchorId(key),
+          title: g.groupPath[i]!,
+          level: i + 1,
+        });
+      }
+      for (const ch of g.pages) {
+        const sections = visibleTocSections(ch, sel, props.toc, showLevel, explicitOnly);
+        if (sections.length === 0 && ui.lensContentFilter !== 'empty') continue;
+        items.push({
+          id: `page-${ch.id}`,
+          title: ch.title,
+          level: digestPageDisplayLevel(g.groupPath.length),
+          chapterId: ch.id,
+        });
+        for (const s of sections) {
+          items.push({
+            id: digestAnchorId(ch.id, s.id),
+            title: s.title,
+            level: digestSectionDisplayLevel(g.groupPath.length, s.level),
+            chapterId: ch.id,
+            sectionId: s.id,
+          });
+        }
+      }
+    }
+  }
+
+  const nums = outlineNumbers(items.map((i) => ({ id: i.id, level: i.level })));
+  return items.map((i) => ({
+    ...i,
+    number: nums.get(i.id) ?? '',
+  }));
 });
 
-function noteCount(chapterId: string, sectionId: string): number {
+const rows = computed((): DigestOutlineRow[] =>
+  props.syncRows !== undefined ? props.syncRows : computedRows.value,
+);
+
+function noteCount(chapterId?: string, sectionId?: string): number {
+  if (!chapterId || !sectionId) return 0;
   return anns.value[sectionKey(chapterId, sectionId)]?.notes.length ?? 0;
 }
 
-function goSection(chapterId: string, sectionId: string): void {
-  const el = document.getElementById(digestAnchorId(chapterId, sectionId));
+function go(row: DigestOutlineRow): void {
+  const el = document.getElementById(row.id);
   if (!el) return;
   const topbarOffset = 64;
   const y = el.getBoundingClientRect().top + window.scrollY - topbarOffset;
@@ -74,28 +264,23 @@ function goSection(chapterId: string, sectionId: string): void {
 </script>
 
 <template>
-  <aside v-if="groups.length" class="chapter-outline">
+  <aside v-if="rows.length" class="chapter-outline">
     <nav class="chapter-outline-nav">
-      <div v-for="(g, gi) in groups" :key="g.groupTitle ?? `g-${gi}`" class="digest-outline-group">
-        <div v-if="g.groupTitle" class="digest-outline-group-title">{{ g.groupTitle }}</div>
-        <div v-for="page in g.pages" :key="page.chapterId" class="digest-outline-page-block">
-          <div class="digest-outline-page-title">{{ page.title }}</div>
-          <ul class="toc-sections digest-outline">
-            <li
-              v-for="s in page.sections"
-              :key="s.chapterId + '#' + s.sectionId"
-              :class="`lvl-${s.level}`"
-            >
-              <a href="#" @click.prevent="goSection(s.chapterId, s.sectionId)">
-                <span class="toc-sec-title">{{ s.title }}</span>
-                <span v-if="noteCount(s.chapterId, s.sectionId)" class="note-count">
-                  {{ noteCount(s.chapterId, s.sectionId) }}
-                </span>
-              </a>
-            </li>
-          </ul>
-        </div>
-      </div>
+      <ul class="toc-sections digest-outline">
+        <li
+          v-for="r in rows"
+          :key="r.id"
+          :class="`lvl-${r.level}`"
+        >
+          <a href="#" @click.prevent="go(r)">
+            <span v-if="r.number" class="digest-outline-num">{{ r.number }}</span>
+            <span class="toc-sec-title">{{ r.title }}</span>
+            <span v-if="noteCount(r.chapterId, r.sectionId)" class="note-count">
+              {{ noteCount(r.chapterId, r.sectionId) }}
+            </span>
+          </a>
+        </li>
+      </ul>
     </nav>
   </aside>
 </template>

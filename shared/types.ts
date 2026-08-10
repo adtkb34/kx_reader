@@ -34,6 +34,20 @@ export interface TocSection {
 /** Leaf page role in a ruler module. */
 export type PageRole = 'ruler' | 'page';
 
+/**
+ * Ruler assemble config from book.json.
+ * Default pick is always「按 index」; `axes` lists lens axes that may replace it.
+ */
+export interface BookRuler {
+  /** Lens axes selectable as ruler (declaration order = dropdown order). */
+  axes?: LensAxisId[];
+  /** index.md section id → hung section ids from other files (display order). */
+  links: Record<string, string[]>;
+}
+
+/** Active ruler pick: index skeleton, or a lens axis id from `ruler.axes`. */
+export type RulerPick = 'index' | LensAxisId;
+
 /** Leaf page (one markdown file = one flipable page). */
 export interface TocChapter {
   id: string;
@@ -41,7 +55,7 @@ export interface TocChapter {
   file: string;
   sections: TocSection[];
   /**
-   * `ruler` = module index skeleton; preferred landing for「尺子」mode.
+   * `ruler` = module index skeleton (default assemble backbone).
    * `page` or omit = normal dimension/content page. Manifest page item wins over frontmatter.
    */
   role?: PageRole;
@@ -85,10 +99,11 @@ export interface BookToc {
   /** Axis ids from `lenses[]` in declaration order. */
   lensAxisOrder?: LensAxisId[];
   /**
-   * True when the book has at least one `role: "ruler"` page (module index skeleton).
-   * Top-bar「尺子」reads those index pages; no axis/links hang-off config.
+   * Optional module assemble config (`ruler.links` / `ruler.axes`).
+   * Also set (with empty links) when the book has `role: "ruler"` pages but no
+   * explicit `ruler` object — enables leaf-module navigation + index assemble.
    */
-  ruler?: true;
+  ruler?: BookRuler;
   /** Nested sidebar tree (groups + pages). */
   tree: TocTreeNode[];
   /** Leaf pages in DFS reading / prev-next order (always flat). */

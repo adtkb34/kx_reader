@@ -82,7 +82,7 @@ flowchart TD
 - **`contents`**：有 `file` = 页（`id` 须与 frontmatter 一致；可选 `lenses`、`showLevel`、`role`）；有 `title` + `children` = 目录组。
 - **页项 `lenses`**：按轴声明归属，**key 必须是叶子** option id。省略则各轴常显。`true` = 整页；`string[]` = 可见小节 id。
 - **页项 / frontmatter `showLevel`**：该页最多显示到哪一档内容 `rank`（页项优先）。见 [稳定 ID](#stable-ids)。
-- **页项 / frontmatter `role`**：`ruler` = 模块尺子骨架（`index.md`；顶栏「尺子」读这些页）；`page` 或省略 = 普通内容页。页项优先于 frontmatter。有任一 `role: "ruler"` 页时顶栏出现「尺子」。
+- **页项 / frontmatter `role`**：`ruler` = 模块 `index.md` 骨架；`page` 或省略 = 普通内容页。页项优先于 frontmatter。有 `ruler` 配置或任一 `role: "ruler"` 页时顶栏出现「尺子」下拉（默认按 index 组装，可选 `ruler.axes`）。
 - 翻页（←/→）只在**当前透镜可见的**叶子页之间按 DFS 顺序走动；组节点被跳过。
 - 组可再嵌套组；深度不限。TOC 里**同一深度样式相同**（组与叶子页无关）；更深一层再弱一档。
 - 删除叶子页：从 `contents` 树移除；该页标注进入「孤立标注」面板。

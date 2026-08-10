@@ -6,11 +6,17 @@ import {
   collapseSingletonGroups,
   defaultSelection,
   digestAnchorId,
+  digestPageDisplayLevel,
+  digestPathAnchorId,
+  digestSectionDisplayLevel,
   effectiveAxisLeaves,
   effectiveLeaves,
   expandSectionAllowlist,
   filterChapters,
+  filterChaptersWithContent,
+  filterChaptersWithoutContent,
   filterSectionsByShowLevel,
+  filterTree,
   flatIdsToSelection,
   groupChaptersForDigest,
   leavesUnder,
@@ -27,7 +33,7 @@ import {
   selectionLegendLeaves,
   selectionToFlatIds,
 } from './lenses';
-import type { BookToc, TocChapter, TocSection } from './types';
+import type { BookToc, TocChapter, TocSection, TocTreeNode } from './types';
 
 const tocWithLenses: BookToc = {
   id: 'demo',
@@ -287,6 +293,153 @@ describe('filterChapters', () => {
   });
 });
 
+describe('filterChaptersWithContent', () => {
+  const chapters: TocChapter[] = [
+    {
+      id: 'empty-allow',
+      title: 'Empty under lens',
+      file: 'e.md',
+      layers: { read: ['scenario', 'impl'] },
+      sections: [
+        { id: 'a', title: 'A', level: 2 },
+        { id: 'b', title: 'B', level: 2 },
+      ],
+      sectionAllowlists: {
+        read: {
+          // Both sections tagged; scenario points at a missing id → no visible content.
+          scenario: ['missing-id'],
+          impl: ['a', 'b'],
+        },
+      },
+    },
+    {
+      id: 'whole-page',
+      title: 'Whole page',
+      file: 'w.md',
+      layers: { read: ['scenario', 'impl'] },
+      sections: [
+        { id: 'x', title: 'X', level: 2 },
+        { id: 'y', title: 'Y', level: 2 },
+      ],
+      // scenario has no allowlist entry → whole page for that leaf (via layers)
+      sectionAllowlists: {
+        read: {
+          impl: ['y'],
+        },
+      },
+    },
+    {
+      id: 'has-content',
+      title: 'Has content',
+      file: 'h.md',
+      layers: { read: ['scenario', 'impl'] },
+      sections: [
+        { id: 'flow', title: 'Flow', level: 2 },
+        { id: 'other', title: 'Other', level: 2 },
+      ],
+      sectionAllowlists: {
+        read: {
+          scenario: ['flow'],
+          impl: ['other'],
+        },
+      },
+    },
+  ];
+
+  it('drops chapters whose allowlist leaves no titled sections', () => {
+    expect(
+      filterChaptersWithContent(chapters, { read: ['scenario'] }, tocWithLenses).map((c) => c.id),
+    ).toEqual(['whole-page', 'has-content']);
+  });
+
+  it('keeps whole-page chapters (no allowlist for the leaf)', () => {
+    expect(
+      filterChaptersWithContent([chapters[1]], { read: ['scenario'] }, tocWithLenses).map(
+        (c) => c.id,
+      ),
+    ).toEqual(['whole-page']);
+  });
+
+  it('keeps chapters with matching section content', () => {
+    expect(
+      filterChaptersWithContent(chapters, { read: ['impl'] }, tocWithLenses).map((c) => c.id),
+    ).toEqual(['empty-allow', 'whole-page', 'has-content']);
+  });
+
+  it('drops always-visible pages that have no layers', () => {
+    const untagged: TocChapter = {
+      id: 'overview',
+      title: 'Overview',
+      file: 'o.md',
+      sections: [{ id: 'intro', title: 'Intro', level: 2 }],
+    };
+    expect(
+      filterChaptersWithContent(
+        [untagged, chapters[2]],
+        { read: ['scenario'] },
+        tocWithLenses,
+      ).map((c) => c.id),
+    ).toEqual(['has-content']);
+  });
+});
+
+describe('filterChaptersWithoutContent', () => {
+  it('keeps pages that lack lens content and drops those with content', () => {
+    const untagged: TocChapter = {
+      id: 'overview',
+      title: 'Overview',
+      file: 'o.md',
+      sections: [{ id: 'intro', title: 'Intro', level: 2 }],
+    };
+    const tagged: TocChapter = {
+      id: 'has-content',
+      title: 'Has content',
+      file: 'h.md',
+      layers: { read: ['scenario'] },
+      sections: [{ id: 'flow', title: 'Flow', level: 2 }],
+      sectionAllowlists: { read: { scenario: ['flow'] } },
+    };
+    expect(
+      filterChaptersWithoutContent(
+        [untagged, tagged],
+        { read: ['scenario'] },
+        tocWithLenses,
+      ).map((c) => c.id),
+    ).toEqual(['overview']);
+  });
+});
+
+describe('filterTree empty groups', () => {
+  it('drops groups whose children are all filtered out', () => {
+    const tree: TocTreeNode[] = [
+      {
+        type: 'group',
+        id: 'g-empty',
+        title: 'Empty group',
+        children: [{ type: 'page', id: 'gone', title: 'Gone', file: 'g.md' }],
+      },
+      {
+        type: 'group',
+        id: 'g-keep',
+        title: 'Keep group',
+        children: [
+          { type: 'page', id: 'keep', title: 'Keep', file: 'k.md' },
+          { type: 'page', id: 'gone2', title: 'Gone2', file: 'g2.md' },
+        ],
+      },
+    ];
+    const visible = new Set(['keep']);
+    expect(filterTree(tree, visible)).toEqual([
+      {
+        type: 'group',
+        id: 'g-keep',
+        title: 'Keep group',
+        children: [{ type: 'page', id: 'keep', title: 'Keep', file: 'k.md' }],
+      },
+    ]);
+  });
+});
+
 describe('lensSelectionFromQuery', () => {
   it('reads multi-value axis from query', () => {
     expect(
@@ -434,6 +587,43 @@ describe('sectionAllowlistFor', () => {
       sectionAllowlists: undefined,
     };
     expect(sectionAllowlistFor(whole, { read: ['scenario'] }, tocWithLenses)).toBeNull();
+  });
+
+  it('hides allowlisted sections when their leaf is unchecked', () => {
+    // Page has no layers on biz — only section tags. Unchecking flow keeps untagged stubs.
+    const process: TocChapter = {
+      id: 'process',
+      title: '工艺',
+      file: 'p.md',
+      sections: [
+        { id: 'flow-a', title: 'A', level: 2 },
+        { id: 'flow-b', title: 'B', level: 2 },
+        { id: 'stub', title: 'Stub', level: 2 },
+      ],
+      sectionAllowlists: {
+        biz: { flow: ['flow-a', 'flow-b'] },
+      },
+    };
+    const toc = {
+      ...tocWithLenses,
+      lenses: {
+        ...tocWithLenses.lenses!,
+        biz: [
+          { id: 'overview', title: '概览' },
+          { id: 'flow', title: '流程' },
+          { id: 'permission', title: '权限' },
+        ],
+      },
+    };
+    // 概览 = whole-page overview of the module (index / hang-offs stay visible).
+    expect(sectionAllowlistFor(process, { biz: ['overview'] }, toc)).toBeNull();
+    expect(sectionAllowlistFor(process, { biz: ['flow'] }, toc)?.sort()).toEqual([
+      'flow-a',
+      'flow-b',
+      'stub',
+    ]);
+    // 权限 has no allowlist and is not overview → hide flow-tagged, keep untagged.
+    expect(sectionAllowlistFor(process, { biz: ['permission'] }, toc)?.sort()).toEqual(['stub']);
   });
 });
 
@@ -585,15 +775,27 @@ describe('pageGroupPath / groupChaptersForDigest', () => {
 
   it('merges consecutive pages under the same group', () => {
     const grouped = groupChaptersForDigest(toc, toc.chapters);
-    expect(grouped.map((g) => ({ title: g.groupTitle, pages: g.pages.map((p) => p.id) }))).toEqual([
-      { title: '身份', pages: ['login', 'register'] },
-      { title: '导航', pages: ['home'] },
-      { title: null, pages: ['overview'] },
+    expect(grouped.map((g) => ({ title: g.groupTitle, path: g.groupPath, pages: g.pages.map((p) => p.id) }))).toEqual([
+      { title: '身份', path: ['身份'], pages: ['login', 'register'] },
+      { title: '导航', path: ['导航'], pages: ['home'] },
+      { title: null, path: [], pages: ['overview'] },
     ]);
+  });
+
+  it('demotes section levels by group depth', () => {
+    expect(digestSectionDisplayLevel(0, 2)).toBe(2);
+    expect(digestSectionDisplayLevel(1, 2)).toBe(3);
+    expect(digestSectionDisplayLevel(2, 2)).toBe(4);
+    expect(digestPageDisplayLevel(1)).toBe(2);
   });
 
   it('builds digest anchor ids', () => {
     expect(digestAnchorId('login', 'flow')).toBe('digest-login--flow');
+  });
+
+  it('keeps Chinese group paths unique for numbering', () => {
+    expect(digestPathAnchorId('计划调度')).not.toBe(digestPathAnchorId('资源支撑'));
+    expect(digestPathAnchorId('计划调度')).toMatch(/^digest-path-/);
   });
 });
 

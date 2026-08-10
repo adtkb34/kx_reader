@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { Fold, ZoomIn } from '@element-plus/icons-vue';
 import type { BookToc, LensSelection, TocChapter, TocTreeNode } from '@shared/types';
+import { tocTreeOutlineNumbers } from '@shared/outlineNumbers';
 import TocTreeNodes from '@/features/book/TocTreeNodes.vue';
 import TocLightbox from '@/features/book/TocLightbox.vue';
 import TocExpandModeSwitch from '@/features/book/TocExpandModeSwitch.vue';
@@ -23,6 +24,8 @@ const pageById = computed(() => {
   for (const ch of props.toc.chapters) map[ch.id] = ch;
   return map;
 });
+
+const outlineNums = computed(() => tocTreeOutlineNumbers(props.tree));
 </script>
 
 <template>
@@ -47,6 +50,7 @@ const pageById = computed(() => {
         :page-by-id="pageById"
         :lens-selection="lensSelection"
         :sibling-expand="ui.tocSiblingExpand"
+        :outline-nums="outlineNums"
       />
     </nav>
     <div class="toc-footer">
@@ -69,6 +73,7 @@ const pageById = computed(() => {
       :current-chapter-id="currentChapterId"
       :page-by-id="pageById"
       :lens-selection="lensSelection"
+      :outline-nums="outlineNums"
       @close="lightboxOpen = false"
     />
   </aside>

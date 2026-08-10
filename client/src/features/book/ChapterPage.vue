@@ -12,15 +12,18 @@ import { enhanceTableCellMergeIn } from '@/tableCellMerge';
 import { cloneDiagramHtml, diagramZoomTarget } from '@/diagramZoom';
 import SectionBlock from '@/features/book/SectionBlock.vue';
 import DiagramLightbox from '@/features/book/DiagramLightbox.vue';
-import { ui, getBookShowLevel } from '@/stores/ui';
+import { ui, getBookShowLevel, setLensContentFilter } from '@/stores/ui';
 import {
+  chapterHasVisibleLensSections,
   filterSectionsByAllowlist,
   filterSectionsByShowLevel,
   lensColorMap,
   lensNodeTitle,
+  pageVisibleInSelection,
   sectionAllowlistFor,
   sectionLensLeaves,
   selectionLegendLeaves,
+  selectionToFlatIds,
 } from '@shared/lenses';
 import { outlineNumbers } from '@shared/outlineNumbers';
 import type { LensSelection, PageLayer, TocChapter } from '@shared/types';
@@ -56,11 +59,44 @@ const tocChapter = computed(() =>
   tocOf(props.bookId)?.chapters.find((c) => c.id === props.chapterId),
 );
 
-/** Title follows loaded content — never show a new TOC name over old body. */
-const pageTitle = computed(() => {
-  if (loadedChapterId.value === props.chapterId && title.value) return title.value;
-  return title.value || tocChapter.value?.title || '';
+/** Chapter metadata for the body currently on screen (may lag the route while loading). */
+const displayChapter = computed(() => {
+  const toc = tocOf(props.bookId);
+  const id = loadedChapterId.value || props.chapterId;
+  return toc?.chapters.find((c) => c.id === id) ?? null;
 });
+
+/** Title follows rendered body — never show a new TOC name over old sections. */
+const pageTitle = computed(() => {
+  if (loadedChapterId.value && title.value) return title.value;
+  return tocChapter.value?.title || '';
+});
+
+/** True once load finished with no sections under「仅有内容」. */
+const lensEmptyState = computed(
+  () =>
+    !loading.value &&
+    !error.value &&
+    sections.value.length === 0 &&
+    !!loadedChapterId.value &&
+    loadedChapterId.value === props.chapterId &&
+    ui.lensContentFilter === 'content',
+);
+
+/** Current page has content but「仅无内容」hides it. */
+const lensHasContentHiddenState = computed(() => {
+  if (loading.value || error.value || ui.lensContentFilter !== 'empty') return false;
+  if (!loadedChapterId.value || loadedChapterId.value !== props.chapterId) return false;
+  const toc = tocOf(props.bookId);
+  const ch = tocChapter.value;
+  const sel = props.lensSelection ?? null;
+  if (!toc || !ch || !sel || selectionToFlatIds(toc, sel).length === 0) return false;
+  return chapterHasVisibleLensSections(ch, sel, toc, getBookShowLevel(props.bookId));
+});
+
+const contentFilterBlocked = computed(
+  () => lensEmptyState.value || lensHasContentHiddenState.value,
+);
 
 const activeLeaves = computed(() => {
   const toc = tocOf(props.bookId);
@@ -72,7 +108,7 @@ const lensChrome = computed(() => activeLeaves.value.size > 1);
 
 const lensTitleMap = computed(() => {
   const toc = tocOf(props.bookId);
-  const ch = tocChapter.value;
+  const ch = displayChapter.value;
   if (!toc || !ch?.sectionAllowlists) return {} as Record<string, string>;
   const map: Record<string, string> = {};
   for (const byLeaf of Object.values(ch.sectionAllowlists)) {
@@ -93,7 +129,7 @@ const lensColors = computed(() => {
  * hiding a sibling must not renumber the rest).
  */
 const outlineNumMap = computed(() => {
-  const ch = tocChapter.value;
+  const ch = displayChapter.value;
   if (!ch) return new Map<string, string>();
   const items = ch.sections
     .filter((s) => s.title)
@@ -107,7 +143,7 @@ function outlineNum(sectionId: string): string {
 
 function leavesFor(sectionId: string): PageLayer[] {
   const toc = tocOf(props.bookId);
-  const ch = tocChapter.value;
+  const ch = displayChapter.value;
   if (!toc || !ch) return [];
   return sectionLensLeaves(ch, sectionId, toc);
 }
@@ -127,10 +163,7 @@ async function load(): Promise<void> {
   unbindFigma = null;
   previewVisible.value = false;
   diagramHtml.value = '';
-  // Chapter switch: drop stale body immediately so title/content cannot diverge.
-  if (loadedChapterId.value && loadedChapterId.value !== reqChapterId) {
-    sections.value = [];
-  }
+  // Keep the previous body visible until the next chapter is ready (avoids blank flash).
   try {
     const chapter = await api.chapter(reqBookId, reqChapterId);
     if (seq !== loadSeq) return;
@@ -144,13 +177,42 @@ async function load(): Promise<void> {
     }
     const html = renderChapter(chapter.markdown, { bookId: reqBookId, fileToChapter });
     const chapterMeta = toc?.chapters.find((c) => c.id === reqChapterId);
-    const allow = chapterMeta ? sectionAllowlistFor(chapterMeta, reqLens, toc) : null;
-    const nextSections = filterSectionsByShowLevel(
-      filterSectionsByAllowlist(splitSections(html), allow),
-      chapterMeta,
-      reqShowLevel,
-    );
+    const contentOnly =
+      ui.lensContentFilter === 'content' &&
+      !!toc &&
+      selectionToFlatIds(toc, reqLens).length > 0;
+    const emptyOnly =
+      ui.lensContentFilter === 'empty' &&
+      !!toc &&
+      selectionToFlatIds(toc, reqLens).length > 0;
+    let nextSections: RenderedSection[];
+    if (
+      contentOnly &&
+      chapterMeta &&
+      (!chapterMeta.layers || !pageVisibleInSelection(chapterMeta, reqLens, toc))
+    ) {
+      nextSections = [];
+    } else if (emptyOnly && chapterMeta) {
+      // 「仅无内容」: hide pages that already have lens content; otherwise show raw body.
+      if (chapterHasVisibleLensSections(chapterMeta, reqLens, toc, reqShowLevel)) {
+        nextSections = [];
+      } else {
+        nextSections = filterSectionsByShowLevel(
+          splitSections(html),
+          chapterMeta,
+          reqShowLevel,
+        );
+      }
+    } else {
+      const allow = chapterMeta ? sectionAllowlistFor(chapterMeta, reqLens, toc) : null;
+      nextSections = filterSectionsByShowLevel(
+        filterSectionsByAllowlist(splitSections(html), allow),
+        chapterMeta,
+        reqShowLevel,
+      );
+    }
     if (seq !== loadSeq) return;
+    // Swap title + body together once the new chapter is ready.
     sections.value = nextSections;
     loadedChapterId.value = reqChapterId;
     await nextTick();
@@ -169,6 +231,7 @@ async function load(): Promise<void> {
     if (seq !== loadSeq) return;
     error.value = e instanceof Error ? e.message : String(e);
     sections.value = [];
+    loadedChapterId.value = reqChapterId;
   } finally {
     if (seq === loadSeq) loading.value = false;
   }
@@ -181,6 +244,7 @@ watch(
       props.chapterId,
       JSON.stringify(props.lensSelection ?? null),
       getBookShowLevel(props.bookId),
+      ui.lensContentFilter,
     ] as const,
   load,
   { immediate: true },
@@ -335,18 +399,43 @@ function goNext(): void {
 
 <template>
   <div class="chapter-wrap">
-    <article ref="contentEl" class="page-card" @click="onContentClick">
+    <article
+      ref="contentEl"
+      class="page-card"
+      :class="{ 'chapter-empty': contentFilterBlocked }"
+      @click="onContentClick"
+    >
       <div v-if="error" class="error-box">
         加载失败：{{ error }}
         <button class="btn" @click="load()">重试</button>
       </div>
+      <template v-else-if="lensEmptyState">
+        <p class="chapter-empty-code">无内容</p>
+        <h1 class="chapter-empty-title">当前维度下没有可显示的内容</h1>
+        <p class="chapter-empty-desc muted">
+          此页未挂载所选透镜，或相关小节已被过滤。可切换为「不隐藏」，或换一个维度。
+        </p>
+        <button class="btn" type="button" @click="setLensContentFilter('all')">
+          不隐藏
+        </button>
+      </template>
+      <template v-else-if="lensHasContentHiddenState">
+        <p class="chapter-empty-code">有内容</p>
+        <h1 class="chapter-empty-title">当前页在「仅无内容」下不可见</h1>
+        <p class="chapter-empty-desc muted">
+          此页在所选维度下已有内容。可切换为「不隐藏」或「仅有内容」查看。
+        </p>
+        <button class="btn" type="button" @click="setLensContentFilter('all')">
+          不隐藏
+        </button>
+      </template>
       <template v-else>
         <h1 v-if="pageTitle" class="chapter-title">{{ pageTitle }}</h1>
         <SectionBlock
-          v-for="(s, i) in sections"
-          :key="chapterId + '#' + s.id"
+          v-for="s in sections"
+          :key="(loadedChapterId || chapterId) + '#' + s.id"
           :book-id="bookId"
-          :chapter-id="chapterId"
+          :chapter-id="loadedChapterId || chapterId"
           :section="s"
           :lens-leaves="leavesFor(s.id)"
           :lens-titles="lensTitleMap"
@@ -359,7 +448,7 @@ function goNext(): void {
       </template>
     </article>
 
-    <nav class="pager">
+    <nav v-if="!contentFilterBlocked" class="pager">
       <button class="pager-btn" :disabled="!prevChapter" @click="goPrev()">
         <span class="pager-dir">‹ 上一章</span>
         <span class="pager-title">{{ prevChapter?.title ?? '—' }}</span>

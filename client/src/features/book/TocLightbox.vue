@@ -12,6 +12,7 @@ defineProps<{
   currentChapterId: string;
   pageById: Record<string, TocChapter>;
   lensSelection?: LensSelection | null;
+  outlineNums?: ReadonlyMap<string, string> | null;
 }>();
 
 const emit = defineEmits<{
@@ -81,6 +82,7 @@ onBeforeUnmount(() => {
             :page-by-id="pageById"
             :lens-selection="lensSelection"
             :sibling-expand="ui.tocSiblingExpand"
+            :outline-nums="outlineNums"
           />
         </nav>
         <div class="toc-lightbox-footer">

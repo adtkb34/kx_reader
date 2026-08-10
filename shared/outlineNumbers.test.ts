@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { outlineNumbers } from './outlineNumbers';
+import { outlineNumbers, tocOutlineKey, tocTreeOutlineNumbers } from './outlineNumbers';
 
 describe('outlineNumbers', () => {
   it('numbers by relative heading level among visible items', () => {
@@ -41,5 +41,30 @@ describe('outlineNumbers', () => {
       { id: 'a', level: 3 },
     ]);
     expect(map.get('a')).toBe('1');
+  });
+});
+
+describe('tocTreeOutlineNumbers', () => {
+  it('numbers groups and leaf pages by tree depth', () => {
+    const map = tocTreeOutlineNumbers([
+      {
+        type: 'group',
+        id: 'plan',
+        children: [
+          { type: 'page', id: 'sched' },
+          { type: 'page', id: 'dispatch' },
+        ],
+      },
+      {
+        type: 'group',
+        id: 'resource',
+        children: [{ type: 'page', id: 'process' }],
+      },
+    ]);
+    expect(map.get(tocOutlineKey('group', 'plan'))).toBe('1');
+    expect(map.get(tocOutlineKey('page', 'sched'))).toBe('1.1');
+    expect(map.get(tocOutlineKey('page', 'dispatch'))).toBe('1.2');
+    expect(map.get(tocOutlineKey('group', 'resource'))).toBe('2');
+    expect(map.get(tocOutlineKey('page', 'process'))).toBe('2.1');
   });
 });

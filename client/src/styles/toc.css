@@ -189,6 +189,12 @@
   white-space: nowrap;
 }
 
+.toc-outline-num {
+  margin-right: 0.35em;
+  opacity: 0.55;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Same depth → same type style (group or page). */
 .toc-row--depth-0 > .toc-row-label {
   font-size: 13px;
@@ -483,42 +489,70 @@
 /* ---------- lens digest ---------- */
 
 .digest-group {
-  margin-bottom: 40px;
-}
-
-.digest-group:not(:first-child) {
-  margin-top: 8px;
-  padding-top: 8px;
-}
-
-.page-card.digest-card .digest-group-title {
-  display: block;
-  font-family: var(--serif);
-  font-size: 30px;
-  line-height: 1.25;
-  font-weight: 700;
-  color: #111;
-  margin: 0 0 22px;
-  padding: 0 0 14px;
-  border: none;
-  border-bottom: 1px solid var(--line);
-  opacity: 1;
-  letter-spacing: -0.01em;
-}
-
-.digest-page {
   margin-bottom: 28px;
 }
 
-.page-card.digest-card .digest-page-title {
-  display: block;
-  font-family: var(--sans);
-  font-size: 16px;
-  line-height: 1.4;
-  font-weight: 600;
+.digest-group:not(:first-child) {
+  margin-top: 4px;
+}
+
+/* Same scale as .md-body headings — only tag level changes, no special weight. */
+.page-card.digest-card .digest-heading {
+  font-family: var(--serif);
+  font-weight: 700;
   color: #111;
-  margin: 0 0 14px;
-  opacity: 1;
+  margin: 18px 0 12px;
+  padding: 0;
+  border: none;
+  letter-spacing: normal;
+}
+
+.page-card.digest-card h1.digest-heading {
+  font-size: 30px;
+  line-height: 1.25;
+  margin: 0 0 16px;
+}
+
+.page-card.digest-card h2.digest-heading {
+  font-size: 22px;
+  line-height: 1.3;
+}
+
+.page-card.digest-card h3.digest-heading {
+  font-size: 18.5px;
+  line-height: 1.35;
+}
+
+.page-card.digest-card h4.digest-heading,
+.page-card.digest-card h5.digest-heading,
+.page-card.digest-card h6.digest-heading {
+  font-size: 16.5px;
+  line-height: 1.4;
+}
+
+.digest-outline-num {
+  margin-right: 0.4em;
+  opacity: 0.55;
+  font-variant-numeric: tabular-nums;
+}
+
+.ruler-bucket-title {
+  font-family: var(--serif);
+  font-size: 18.5px;
+  font-weight: 700;
+  margin: 20px 0 12px;
+  color: #111;
+}
+
+.ruler-bucket-title.outline-numbered::before {
+  content: var(--outline-num) '\00a0';
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  font-variant-numeric: lining-nums;
+  line-height: inherit;
+  vertical-align: baseline;
+  color: inherit;
 }
 
 /* ---------- ruler mode ---------- */

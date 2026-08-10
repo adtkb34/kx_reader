@@ -346,8 +346,12 @@ export function expandSectionAllowlist(
 
 /**
  * Section ids to show for the current selection, or null = no filter (all).
- * Per axis: union of allowlists for effective leaves; if any leaf is whole-page
- * (no allowlist), that axis contributes no filter.
+ * Per axis:
+ * - Selected leaf with no allowlist on this page:
+ *   - `overview`, or a leaf in page `layers` → whole-page (no section filter).
+ *     So「概览」+ 按 index keeps skeleton / hang-off body visible.
+ *   - otherwise → no tagged ids (hide other leaves' allowlisted sections).
+ * - Selected leaf with an allowlist → those sections (+ untagged) are visible.
  * Across axes, intersecting lists still apply.
  */
 export function sectionAllowlistFor(
@@ -366,18 +370,34 @@ export function sectionAllowlistFor(
     const axisAllows = chapter.sectionAllowlists[axis];
     if (!axisAllows) continue;
 
+    const layerOpts = layerOptions(chapter.layers?.[axis]);
     let wholePage = false;
-    const union = new Set<string>();
+    const selectedTagged = new Set<string>();
     for (const leaf of leaves) {
       const allow = axisAllows[leaf];
       if (!allow) {
-        wholePage = true;
-        break;
+        // 概览 = 整页总览；`layers` 整页叶同理。其它未配小节表的叶不打开整页。
+        if (leaf === 'overview' || layerOpts.includes(leaf)) {
+          wholePage = true;
+          break;
+        }
+        continue;
       }
-      for (const id of allow) union.add(id);
+      for (const id of allow) selectedTagged.add(id);
     }
     if (wholePage) continue;
-    if (union.size > 0) lists.push([...union]);
+
+    const allTagged = new Set<string>();
+    for (const list of Object.values(axisAllows)) {
+      if (!list) continue;
+      for (const id of list) allTagged.add(id);
+    }
+
+    const allowed: string[] = [];
+    for (const s of chapter.sections) {
+      if (!allTagged.has(s.id) || selectedTagged.has(s.id)) allowed.push(s.id);
+    }
+    if (allTagged.size > 0) lists.push(allowed);
   }
   if (lists.length === 0) return null;
   const expanded = lists.map((list) => expandSectionAllowlist(chapter.sections, list) ?? list);
@@ -562,6 +582,44 @@ export function filterChapters(
   return chapters.filter((c) => pageVisibleInSelection(c, selection, toc));
 }
 
+/** True when the chapter has at least one titled section under「仅有内容」rules. */
+export function chapterHasVisibleLensSections(
+  chapter: TocChapter,
+  selection: LensSelection | null,
+  toc?: BookToc | null,
+  readerShowLevel?: ReaderShowLevel,
+): boolean {
+  return visibleTocSections(chapter, selection, toc, readerShowLevel, true).length > 0;
+}
+
+/**
+ * Like `filterChapters`, then drop pages with no titled sections for the selection
+ * (section allowlist + showLevel). Use when「仅有内容」mode is on.
+ * Untagged pages (no `layers`) are treated as empty under an active selection.
+ */
+export function filterChaptersWithContent(
+  chapters: TocChapter[],
+  selection: LensSelection | null,
+  toc?: BookToc | null,
+  readerShowLevel?: ReaderShowLevel,
+): TocChapter[] {
+  return filterChapters(chapters, selection, toc).filter((c) =>
+    chapterHasVisibleLensSections(c, selection, toc, readerShowLevel),
+  );
+}
+
+/** Inverse of `filterChaptersWithContent` — pages visible in lens but without content. */
+export function filterChaptersWithoutContent(
+  chapters: TocChapter[],
+  selection: LensSelection | null,
+  toc?: BookToc | null,
+  readerShowLevel?: ReaderShowLevel,
+): TocChapter[] {
+  return filterChapters(chapters, selection, toc).filter(
+    (c) => !chapterHasVisibleLensSections(c, selection, toc, readerShowLevel),
+  );
+}
+
 /** Drop pages not in lens; drop groups with no remaining leaves. */
 export function filterTree(nodes: TocTreeNode[], visibleIds: Set<string>): TocTreeNode[] {
   const out: TocTreeNode[] = [];
@@ -740,13 +798,25 @@ export function selectionFromPageLayers(
   return sel;
 }
 
-/** TOC sections visible under the current lens selection (untitled sections omitted). */
+/** TOC sections visible under the current lens selection (untitled sections omitted).
+ * When `explicitOnly`, untagged pages (no `layers`) yield no sections — used by「仅有内容」.
+ */
 export function visibleTocSections(
   chapter: TocChapter,
   selection: LensSelection | null,
   toc?: BookToc | null,
   readerShowLevel?: ReaderShowLevel,
+  explicitOnly?: boolean,
 ): TocSection[] {
+  if (explicitOnly && selection) {
+    const active = toc
+      ? selectionToFlatIds(toc, selection).length > 0
+      : Object.keys(selection).length > 0;
+    if (active) {
+      if (!chapter.layers) return [];
+      if (!pageVisibleInSelection(chapter, selection, toc)) return [];
+    }
+  }
   return filterSectionsByShowLevel(
     filterSectionsByAllowlist(
       chapter.sections,
@@ -776,6 +846,8 @@ export function pageGroupPath(tree: TocTreeNode[], pageId: string): string[] {
 export interface DigestChapterGroup {
   /** Stable key for consecutive same-group merging. */
   groupKey: string;
+  /** Full ancestor path outer → inner (all group names). */
+  groupPath: string[];
   /** Innermost group title, or null when page has no group. */
   groupTitle: string | null;
   pages: TocChapter[];
@@ -803,10 +875,28 @@ export function groupChaptersForDigest(
     if (last && last.groupKey === groupKey) {
       last.pages.push(ch);
     } else {
-      out.push({ groupKey, groupTitle, pages: [ch] });
+      out.push({ groupKey, groupPath: path, groupTitle, pages: [ch] });
     }
   }
   return out;
+}
+
+/**
+ * Digest display level for a section.
+ * With ancestor groups: demote by path depth (## under one group → level 3).
+ * Without groups: keep markdown heading level.
+ */
+export function digestSectionDisplayLevel(
+  groupPathLen: number,
+  sectionLevel: number,
+): number {
+  if (groupPathLen <= 0) return sectionLevel;
+  return groupPathLen + sectionLevel;
+}
+
+/** Module / page title level under a group path (pathLen+1, or 1 if ungrouped). */
+export function digestPageDisplayLevel(groupPathLen: number): number {
+  return groupPathLen + 1;
 }
 
 /** Digest outline entries in reading order. */
@@ -814,6 +904,7 @@ export interface DigestOutlineEntry {
   chapterId: string;
   chapterTitle: string;
   groupTitle: string | null;
+  groupPath: string[];
   sectionId: string;
   sectionTitle: string;
   level: number;
@@ -833,9 +924,10 @@ export function digestOutlineEntries(
           chapterId: ch.id,
           chapterTitle: ch.title,
           groupTitle: g.groupTitle,
+          groupPath: g.groupPath,
           sectionId: s.id,
           sectionTitle: s.title,
-          level: s.level,
+          level: digestSectionDisplayLevel(g.groupPath.length, s.level),
         });
       }
     }
@@ -845,4 +937,14 @@ export function digestOutlineEntries(
 
 export function digestAnchorId(chapterId: string, sectionId: string): string {
   return `digest-${chapterId}--${sectionId}`;
+}
+
+/**
+ * Stable DOM / outline id for a TOC group path key (`外层/内层`).
+ * Must stay unique for non-ASCII titles — a bare `\w` strip would collapse
+ * all Chinese paths to the same id and break outline numbering (1, 2, …).
+ */
+export function digestPathAnchorId(pathKey: string): string {
+  const safe = encodeURIComponent(pathKey).replace(/%/g, '');
+  return `digest-path-${safe || '_'}`;
 }

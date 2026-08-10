@@ -5,16 +5,21 @@ import { normalizeAxisSelection } from '@shared/lenses';
 /** Same-axis multi-select vs single-select for the lens tree. */
 export type LensAxisPickMode = 'multi' | 'single';
 
-/** Single-page reading vs lens digest vs ruler index skeleton. */
-export type LensReadMode = 'page' | 'digest' | 'ruler';
+/** Single-page (leaf module) reading vs lens digest. */
+export type LensReadMode = 'page' | 'digest';
 
 /** TOC group expand: one sibling at a time vs many. */
 export type TocSiblingExpand = 'single' | 'multi';
+
+/** Filter TOC/body by whether pages have content under the current lens. */
+export type LensContentFilter = 'all' | 'content' | 'empty';
 
 const LENS_PICK_KEY = 'reader.lensPickMode';
 const LENS_READ_KEY = 'reader.lensReadMode';
 const TOC_EXPAND_KEY = 'reader.tocSiblingExpand';
 const TOC_EXPAND_LEGACY_KEY = 'reader.tocLightboxExpand';
+const LENS_CONTENT_FILTER_KEY = 'reader.lensContentFilter';
+const LENS_CONTENT_FILTER_LEGACY_KEY = 'reader.hideEmptyLens';
 
 function readLensPickMode(): LensAxisPickMode {
   const raw = localStorage.getItem(LENS_PICK_KEY);
@@ -24,7 +29,8 @@ function readLensPickMode(): LensAxisPickMode {
 
 function readLensReadMode(): LensReadMode {
   const raw = localStorage.getItem(LENS_READ_KEY);
-  if (raw === 'digest' || raw === 'ruler') return raw;
+  // Migrate removed「尺子」read mode → 单页.
+  if (raw === 'digest') return 'digest';
   return 'page';
 }
 
@@ -34,8 +40,20 @@ function readTocSiblingExpand(): TocSiblingExpand {
   return raw === 'single' ? 'single' : 'multi';
 }
 
+function readLensContentFilter(): LensContentFilter {
+  const raw = localStorage.getItem(LENS_CONTENT_FILTER_KEY);
+  if (raw === 'content' || raw === 'empty' || raw === 'all') return raw;
+  // Migrate former boolean toggle.
+  if (localStorage.getItem(LENS_CONTENT_FILTER_LEGACY_KEY) === '1') return 'content';
+  return 'all';
+}
+
 function showLevelStorageKey(bookId: string): string {
   return `reader.showLevel.${bookId}`;
+}
+
+function rulerPickStorageKey(bookId: string): string {
+  return `reader.rulerPick.${bookId}`;
 }
 
 export const ui = reactive({
@@ -52,12 +70,19 @@ export const ui = reactive({
   lensByBook: {} as Record<string, LensSelection>,
   /** Per-book content rank ceiling; `null` = show all ranks. */
   showLevelByBook: {} as Record<string, number | null>,
+  /** Per-book ruler pick: `index` or a lens axis id. */
+  rulerPickByBook: {} as Record<string, string>,
   /** 多选 = same-axis multi; 单选 = one id per axis. */
   lensPickMode: readLensPickMode() as LensAxisPickMode,
-  /** 单页 = one chapter; 汇总 = all visible sections; 尺子 = module index skeleton. */
+  /** 单页 = leaf module; 汇总 = all visible modules. */
   lensReadMode: readLensReadMode() as LensReadMode,
   /** TOC groups: 单开 = one sibling; 多开 = many siblings open. */
   tocSiblingExpand: readTocSiblingExpand() as TocSiblingExpand,
+  /**
+   * all = no extra filter; content = only pages with lens content;
+   * empty = only pages without lens content. Default all.
+   */
+  lensContentFilter: readLensContentFilter() as LensContentFilter,
 });
 
 /** Load per-book content rank ceiling; `null` = 全部. */
@@ -81,6 +106,18 @@ export function setBookShowLevel(bookId: string, level: number | null): void {
   localStorage.setItem(showLevelStorageKey(bookId), level == null ? 'all' : String(level));
 }
 
+export function getBookRulerPick(bookId: string): string {
+  if (!(bookId in ui.rulerPickByBook)) {
+    ui.rulerPickByBook[bookId] = localStorage.getItem(rulerPickStorageKey(bookId)) ?? 'index';
+  }
+  return ui.rulerPickByBook[bookId]!;
+}
+
+export function setBookRulerPick(bookId: string, pick: string): void {
+  ui.rulerPickByBook[bookId] = pick;
+  localStorage.setItem(rulerPickStorageKey(bookId), pick);
+}
+
 export function setLensPickMode(mode: LensAxisPickMode): void {
   ui.lensPickMode = mode;
   localStorage.setItem(LENS_PICK_KEY, mode);
@@ -94,6 +131,11 @@ export function setLensReadMode(mode: LensReadMode): void {
 export function setTocSiblingExpand(mode: TocSiblingExpand): void {
   ui.tocSiblingExpand = mode;
   localStorage.setItem(TOC_EXPAND_KEY, mode);
+}
+
+export function setLensContentFilter(mode: LensContentFilter): void {
+  ui.lensContentFilter = mode;
+  localStorage.setItem(LENS_CONTENT_FILTER_KEY, mode);
 }
 
 export function bumpChapterReload(): void {

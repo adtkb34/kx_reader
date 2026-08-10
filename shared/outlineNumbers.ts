@@ -31,3 +31,31 @@ export function outlineNumbers(items: OutlineItem[]): Map<string, string> {
 
   return out;
 }
+
+/** Stable key for a TOC tree node in outline maps. */
+export function tocOutlineKey(type: 'group' | 'page', id: string): string {
+  return `${type}:${id}`;
+}
+
+/**
+ * Outline numbers for a sidebar TOC tree (groups + pages).
+ * Depth 1 = top-level siblings → `1`, `2`; children → `1.1`, `1.2`, …
+ */
+export function tocTreeOutlineNumbers(
+  tree: { type: 'group' | 'page'; id: string; children?: unknown[] }[],
+): Map<string, string> {
+  const items: OutlineItem[] = [];
+  function walk(
+    nodes: { type: 'group' | 'page'; id: string; children?: unknown[] }[],
+    level: number,
+  ): void {
+    for (const n of nodes) {
+      items.push({ id: tocOutlineKey(n.type, n.id), level });
+      if (n.type === 'group' && Array.isArray(n.children) && n.children.length) {
+        walk(n.children as { type: 'group' | 'page'; id: string; children?: unknown[] }[], level + 1);
+      }
+    }
+  }
+  walk(tree, 1);
+  return outlineNumbers(items);
+}
