@@ -91,7 +91,7 @@
   padding-right: 6.5em;
 }
 
-/* Ruler hang: outline labels match title weight */
+/* Outline labels match title weight */
 .doc-section.outline-numbered .section-body > .section-marker + :is(h1, h2, h3, h4, h5, h6)::before,
 .doc-section.outline-numbered .section-body > :is(h1, h2, h3, h4, h5, h6):first-child::before,
 .ruler-key-title.outline-numbered::before {

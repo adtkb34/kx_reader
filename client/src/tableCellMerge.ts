@@ -41,7 +41,6 @@ function logicalGrid(tbody: HTMLTableSectionElement): string[][] {
 type RowMeta = {
   id: string;
   className: string;
-  label: string | null;
   display: string;
 };
 
@@ -49,7 +48,6 @@ function readRowMeta(tr: HTMLTableRowElement): RowMeta {
   return {
     id: tr.id,
     className: tr.className,
-    label: tr.getAttribute('data-ruler-label'),
     display: tr.style.display,
   };
 }
@@ -58,13 +56,12 @@ function applyRowMeta(tr: HTMLTableRowElement, m: RowMeta | undefined): void {
   if (!m) return;
   if (m.id) tr.id = m.id;
   if (m.className) tr.className = m.className;
-  if (m.label) tr.setAttribute('data-ruler-label', m.label);
   if (m.display) tr.style.display = m.display;
 }
 
 /**
  * Expand all rowspans/colspans in tbody into one cell per logical slot
- * (preserves row id / class / display / data-ruler-label).
+ * (preserves row id / class / display).
  */
 export function explodeAllRowspans(table: HTMLTableElement): void {
   const tbody = table.tBodies[0];
@@ -76,14 +73,12 @@ export function explodeAllRowspans(table: HTMLTableElement): void {
   const meta = oldRows.map(readRowMeta);
 
   tbody.replaceChildren();
-  const hasRuler = table.getAttribute('data-ruler-col') === '1';
   for (let r = 0; r < grid.length; r++) {
     const tr = document.createElement('tr');
     applyRowMeta(tr, meta[r]);
     const row = grid[r] ?? [];
     for (let c = 0; c < row.length; c++) {
       const td = document.createElement('td');
-      if (hasRuler && c === 0) td.className = 'table-ruler-cell';
       td.textContent = row[c]!;
       tr.appendChild(td);
     }
@@ -117,7 +112,6 @@ export function mergeSameCells(table: HTMLTableElement): void {
   const blocks: MergeBlock[] = planSameCellMerges(values, hidden);
 
   const meta = rows.map(readRowMeta);
-  const hasRuler = table.getAttribute('data-ruler-col') === '1';
   tbody.replaceChildren();
 
   for (let r = 0; r < n; r++) {
@@ -129,7 +123,6 @@ export function mergeSameCells(table: HTMLTableElement): void {
       td.textContent = b.text;
       if (b.rs > 1) td.rowSpan = b.rs;
       if (b.cs > 1) td.colSpan = b.cs;
-      if (hasRuler && b.c === 0) td.className = 'table-ruler-cell';
       tr.appendChild(td);
     }
     tbody.appendChild(tr);

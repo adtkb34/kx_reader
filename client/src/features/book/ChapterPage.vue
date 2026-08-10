@@ -8,7 +8,6 @@ import { renderChapter, splitSections, type RenderedSection } from '@/markdown';
 import { bindMermaidDetails, renderMermaidIn } from '@/mermaid';
 import { activateFigmaEmbedsIn, bindFigmaEmbedDetails } from '@/figmaEmbed';
 import { enhanceTableFiltersIn } from '@/tableFilters';
-import { enhanceTableRulerColIn } from '@/tableRulerCol';
 import { enhanceTableCellMergeIn } from '@/tableCellMerge';
 import { cloneDiagramHtml, diagramZoomTarget } from '@/diagramZoom';
 import SectionBlock from '@/features/book/SectionBlock.vue';
@@ -23,6 +22,7 @@ import {
   sectionLensLeaves,
   selectionLegendLeaves,
 } from '@shared/lenses';
+import { outlineNumbers } from '@shared/outlineNumbers';
 import type { LensSelection, PageLayer, TocChapter } from '@shared/types';
 
 const props = defineProps<{
@@ -88,6 +88,23 @@ const lensColors = computed(() => {
   return toc ? lensColorMap(toc) : {};
 });
 
+/**
+ * Stable numbers from chapter TOC section order (not the filtered visible set —
+ * hiding a sibling must not renumber the rest).
+ */
+const outlineNumMap = computed(() => {
+  const ch = tocChapter.value;
+  if (!ch) return new Map<string, string>();
+  const items = ch.sections
+    .filter((s) => s.title)
+    .map((s) => ({ id: s.id, level: s.level }));
+  return outlineNumbers(items);
+});
+
+function outlineNum(sectionId: string): string {
+  return outlineNumMap.value.get(sectionId) ?? '';
+}
+
 function leavesFor(sectionId: string): PageLayer[] {
   const toc = tocOf(props.bookId);
   const ch = tocChapter.value;
@@ -144,7 +161,6 @@ async function load(): Promise<void> {
     await renderMermaidIn(contentEl.value);
     activateFigmaEmbedsIn(contentEl.value);
     if (seq !== loadSeq) return;
-    enhanceTableRulerColIn(contentEl.value, tocOf(reqBookId));
     enhanceTableCellMergeIn(contentEl.value);
     enhanceTableFiltersIn(contentEl.value);
     if (route.hash) scrollToHash(route.hash);
@@ -188,7 +204,6 @@ watch(
     await nextTick();
     await renderMermaidIn(contentEl.value);
     activateFigmaEmbedsIn(contentEl.value);
-    enhanceTableRulerColIn(contentEl.value, tocOf(props.bookId));
     enhanceTableCellMergeIn(contentEl.value);
     enhanceTableFiltersIn(contentEl.value);
   },
@@ -337,6 +352,7 @@ function goNext(): void {
           :lens-titles="lensTitleMap"
           :lens-colors="lensColors"
           :lens-chrome="lensChrome"
+          :outline-number="outlineNum(s.id)"
           :cluster="null"
         />
         <div v-if="!loading && sections.length === 0" class="muted">（本章暂无内容）</div>

@@ -5,7 +5,6 @@ import { renderChapter, splitSections, type RenderedSection } from '@/markdown';
 import { bindMermaidDetails, renderMermaidIn } from '@/mermaid';
 import { activateFigmaEmbedsIn, bindFigmaEmbedDetails } from '@/figmaEmbed';
 import { enhanceTableFiltersIn } from '@/tableFilters';
-import { enhanceTableRulerColIn } from '@/tableRulerCol';
 import { enhanceTableCellMergeIn } from '@/tableCellMerge';
 import { cloneDiagramHtml, diagramZoomTarget } from '@/diagramZoom';
 import SectionBlock from '@/features/book/SectionBlock.vue';
@@ -131,7 +130,6 @@ async function load(): Promise<void> {
     unbindFigma = bindFigmaEmbedDetails(contentEl.value);
     await renderMermaidIn(contentEl.value);
     activateFigmaEmbedsIn(contentEl.value);
-    enhanceTableRulerColIn(contentEl.value, props.toc);
     enhanceTableCellMergeIn(contentEl.value);
     enhanceTableFiltersIn(contentEl.value);
   } catch (e) {
@@ -174,7 +172,6 @@ watch(
     await nextTick();
     await renderMermaidIn(contentEl.value);
     activateFigmaEmbedsIn(contentEl.value);
-    enhanceTableRulerColIn(contentEl.value, props.toc);
     enhanceTableCellMergeIn(contentEl.value);
     enhanceTableFiltersIn(contentEl.value);
   },

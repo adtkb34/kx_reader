@@ -194,7 +194,7 @@ export function selectionToFlatIds(toc: BookToc, selection: LensSelection | null
  * Map flat select-tree ids back to per-axis LensSelection.
  * Applies branch-layer normalization on the full select tree.
  * By default empty axes fall back to `defaultSelection`; pass `allowEmpty` for
- * ruler mode (skeleton only, no dimension hang-offs).
+ * ruler mode (skeleton index only, dims optional).
  */
 export function flatIdsToSelection(
   toc: BookToc,
@@ -254,7 +254,7 @@ export function collapseEachAxisToSingle(
 
 /**
  * Collapse each axis to exactly one effective leaf (never a parent that
- * still expands to multiple leaves — that would keep ruler auto-hang on).
+ * still expands to multiple leaves).
  */
 export function collapseEachAxisToSingleLeaf(
   toc: BookToc,

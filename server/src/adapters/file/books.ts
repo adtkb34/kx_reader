@@ -14,7 +14,6 @@ import type {
   TocTreeNode,
 } from '../../../../shared/types';
 import { lensLeafIds } from '../../../../shared/lenses';
-import { parseBookRuler } from '../../../../shared/rulerManifest';
 import type { BookAsset, BookRepository } from '../../ports/books';
 
 export type { BookAsset, BookRepository };
@@ -30,8 +29,6 @@ interface BookManifest {
   contents?: unknown[];
   /** Top-level array of axes; each node has `id` + `title` (+ optional `children`). */
   lenses?: BookLens[];
-  /** Optional ruler-mode: key sections → linked section ids. */
-  ruler?: unknown;
 }
 
 /** Book id / single path segment. */
@@ -428,7 +425,6 @@ export async function getBookToc(bookId: string): Promise<BookToc | null> {
 
   const parsed = parseLenses(bookId, manifest.lenses);
   const bookLenses = parsed?.lenses;
-  const ruler = parseBookRuler(bookId, manifest.ruler, bookLenses);
   const tree: TocTreeNode[] = [];
   const pages: TocChapter[] = [];
   try {
@@ -438,6 +434,8 @@ export async function getBookToc(bookId: string): Promise<BookToc | null> {
     console.error(e);
     return null;
   }
+
+  const hasRulerPage = pages.some((p) => p.role === 'ruler');
 
   return {
     id: bookId,
@@ -450,7 +448,7 @@ export async function getBookToc(bookId: string): Promise<BookToc | null> {
           lensAxisOrder: parsed.lensAxisOrder,
         }
       : {}),
-    ...(ruler ? { ruler } : {}),
+    ...(hasRulerPage ? { ruler: true as const } : {}),
     tree,
     chapters: pages,
   };

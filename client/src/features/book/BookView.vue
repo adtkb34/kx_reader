@@ -18,7 +18,6 @@ import {
   bookContentRanks,
   buildLensSelectTree,
   collapseEachAxisToSingle,
-  collapseEachAxisToSingleLeaf,
   defaultSelection,
   filterChapters,
   collapseSingletonGroups,
@@ -41,13 +40,10 @@ import {
   findRulerModuleIndexId,
   resolveRulerLensSwitchChapter,
   rulerSidebarKeepIds,
-  selectionUsesRulerHang,
 } from '@shared/ruler';
 import type { BookToc, LensSelection, PageLayer, TocChapter } from '@shared/types';
 import LensDigestView from '@/features/book/LensDigestView.vue';
 import DigestOutline from '@/features/book/DigestOutline.vue';
-import RulerView from '@/features/book/RulerView.vue';
-import RulerOutline from '@/features/book/RulerOutline.vue';
 import TocSidebar from '@/features/book/TocSidebar.vue';
 import ChapterPage from '@/features/book/ChapterPage.vue';
 import ChapterOutline from '@/features/book/ChapterOutline.vue';
@@ -58,7 +54,6 @@ import ComparePanel from '@/features/compare/ComparePanel.vue';
 import AgentPanel from '@/features/agent/AgentPanel.vue';
 import { loadToc, tocOf } from '@/stores/books';
 import { loadAnnotations } from '@/stores/annotations';
-import { useRulerOutlineKeySelection } from '@/composables/outlineKeys';
 import { Expand } from '@element-plus/icons-vue';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -118,29 +113,8 @@ const activeSelection = computed<LensSelection | null>(() => {
   return sanitizeSelection(candidate, t);
 });
 
-const {
-  selectedIds: outlineKeyIds,
-  visibleKeyIds: outlineVisibleIds,
-  onToggleKey: onOutlineKeyToggle,
-  selectTopLevelKeys: onOutlineSelectTopLevel,
-} = useRulerOutlineKeySelection(
-  () => bookId.value,
-  () => toc.value,
-  () => activeSelection.value,
-  () => chapterId.value || null,
-);
-
-const hangUnderRuler = computed(
-  () => !!toc.value && selectionUsesRulerHang(toc.value, activeSelection.value),
-);
-
 const isRulerMode = computed(
-  () =>
-    !!toc.value &&
-    !!toc.value.ruler &&
-    hasLenses(toc.value) &&
-    !!activeSelection.value &&
-    (ui.lensReadMode === 'ruler' || hangUnderRuler.value),
+  () => !!toc.value?.ruler && ui.lensReadMode === 'ruler',
 );
 
 const filteredChapters = computed(() => {
@@ -341,7 +315,9 @@ function resolveSwitchChapter(
   nextSel: LensSelection,
   prevSel?: LensSelection | null,
 ): string {
-  if (t.ruler) return resolveRulerLensSwitchChapter(t, currentId, nextSel);
+  if (t.ruler) {
+    return resolveRulerLensSwitchChapter(t, currentId, nextSel, isRulerMode.value);
+  }
   return resolveLensSwitchChapter(t, currentId, nextSel, prevSel);
 }
 
@@ -387,18 +363,11 @@ function onLensReadMode(mode: LensReadMode): void {
   setLensReadMode(mode);
   if (!t?.ruler || !chapterId.value) return;
 
-  // Explicit 单页 while multi-hanging: collapse to one leaf and open that page.
   if (mode === 'page') {
-    let sel = rawSel ? sanitizeSelection(rawSel, t) : null;
-    if (sel && selectionUsesRulerHang(t, sel)) {
-      setLensPickMode('single');
-      sel = collapseEachAxisToSingleLeaf(t, sel);
-      setBookLensSelection(bookId.value, sel);
-    } else if (sel) {
-      setBookLensSelection(bookId.value, sel);
-    }
+    const sel = rawSel ? sanitizeSelection(rawSel, t) : null;
     if (sel) {
-      const target = resolveRulerLensSwitchChapter(t, chapterId.value, sel);
+      setBookLensSelection(bookId.value, sel);
+      const target = resolveRulerLensSwitchChapter(t, chapterId.value, sel, false);
       if (target !== chapterId.value) {
         syncLensQueryToRoute(sel, t, 'replace', target);
       }
@@ -414,12 +383,12 @@ function onLensReadMode(mode: LensReadMode): void {
     return;
   }
 
-  // Manual 尺子: go to this module's index skeleton (not always the first in the book).
+  // 尺子: open this module's index.md skeleton.
   const sel = activeSelection.value;
   if (!sel) return;
   const indexId =
     findRulerModuleIndexId(t, chapterId.value) ?? findRulerSkeletonChapter(t)?.id;
-  const dest = indexId ?? resolveRulerLensSwitchChapter(t, chapterId.value, sel);
+  const dest = indexId ?? resolveRulerLensSwitchChapter(t, chapterId.value, sel, true);
   if (dest !== chapterId.value) syncLensQueryToRoute(sel, t, 'replace', dest);
 }
 
@@ -515,7 +484,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
             <span class="visually-hidden">阅读模式</span>
             <el-select
               class="lens-mode-select"
-              :model-value="isRulerMode ? 'ruler' : ui.lensReadMode"
+              :model-value="ui.lensReadMode"
               @update:model-value="onLensReadMode($event as LensReadMode)"
             >
               <el-option label="单页" value="page" />
@@ -578,16 +547,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
       <div class="book-body">
         <div class="book-reading">
           <div class="book-content">
-            <RulerView
-              v-if="isRulerMode && toc"
-              :book-id="bookId"
-              :toc="toc"
-              :lens-selection="activeSelection"
-              :focus-chapter-id="chapterId"
-              :outline-key-ids="outlineKeyIds"
-            />
             <LensDigestView
-              v-else-if="isDigestMode && toc"
+              v-if="isDigestMode && toc"
               :book-id="bookId"
               :toc="toc"
               :lens-selection="activeSelection"
@@ -602,19 +563,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
               :lens-selection="activeSelection"
             />
           </div>
-          <RulerOutline
-            v-if="isRulerMode && toc"
-            :toc="toc"
-            :book-id="bookId"
-            :lens-selection="activeSelection"
-            :focus-chapter-id="chapterId"
-            :outline-selected-ids="outlineKeyIds"
-            :outline-visible-ids="outlineVisibleIds"
-            @toggle-key="onOutlineKeyToggle"
-            @select-top-level="onOutlineSelectTopLevel"
-          />
           <DigestOutline
-            v-else-if="isDigestMode && toc"
+            v-if="isDigestMode && toc"
             :toc="toc"
             :book-id="bookId"
             :lens-selection="activeSelection"

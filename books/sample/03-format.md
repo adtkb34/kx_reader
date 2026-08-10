@@ -78,12 +78,11 @@ flowchart TD
 }
 ```
 
-- **`lenses`（可选）**：顶层每一项是一条轴（`id` + `title`）；`children` 为选项树。轴标题写在节点上，代码不写死。见 [阅读透镜](06-lenses.md#how)。
-- **`ruler`（可选）**：尺子读法——指定轴 / 钥匙叶子与 `links`（钥匙小节 → 关联小节）。见 [阅读透镜 · 尺子](06-lenses.md#ruler)。
+- **`lenses`（可选）**：顶层每一项是一条轴（`id` + `title`）；`children` 为选项树。轴标题写在配置里，代码不写死。见 [阅读透镜](06-lenses.md#how)。
 - **`contents`**：有 `file` = 页（`id` 须与 frontmatter 一致；可选 `lenses`、`showLevel`、`role`）；有 `title` + `children` = 目录组。
 - **页项 `lenses`**：按轴声明归属，**key 必须是叶子** option id。省略则各轴常显。`true` = 整页；`string[]` = 可见小节 id。
 - **页项 / frontmatter `showLevel`**：该页最多显示到哪一档内容 `rank`（页项优先）。见 [稳定 ID](#stable-ids)。
-- **页项 / frontmatter `role`**：`ruler` = 模块尺子骨架（步骤键 / rank；挂靠时 TOC 落此页；单选维度时不当正文页）；`page` 或省略 = 普通内容页。页项优先于 frontmatter。
+- **页项 / frontmatter `role`**：`ruler` = 模块尺子骨架（`index.md`；顶栏「尺子」读这些页）；`page` 或省略 = 普通内容页。页项优先于 frontmatter。有任一 `role: "ruler"` 页时顶栏出现「尺子」。
 - 翻页（←/→）只在**当前透镜可见的**叶子页之间按 DFS 顺序走动；组节点被跳过。
 - 组可再嵌套组；深度不限。TOC 里**同一深度样式相同**（组与叶子页无关）；更深一层再弱一档。
 - 删除叶子页：从 `contents` 树移除；该页标注进入「孤立标注」面板。
@@ -134,7 +133,7 @@ title: 结构思想
 ```
 
 - **小节** id 与**章节** id 同一套规矩：稳定、不带业务含义、一经使用永不修改。
-- **`rank`（可选）**：内容等级，任意页可用。与标题 `level`（h2/h3）无关。页可设 `showLevel`（frontmatter 或 book.json 页项，页项优先）；阅读器顶栏也可选「全部等级 / 等级 N」（顶栏优先；选「全部」则不按 rank 过滤）。有生效上限 `N` 时，`rank > N` 的小节不显示。尺子钥匙若 `rank > N`，该键及其挂靠一并隐藏。
+- **`rank`（可选）**：内容等级，任意页可用。与标题 `level`（h2/h3）无关。页可设 `showLevel`（frontmatter 或 book.json 页项，页项优先）；阅读器顶栏也可选「全部等级 / 等级 N」（顶栏优先；选「全部」则不按 rank 过滤）。有生效上限 `N` 时，`rank > N` 的小节不显示。
 - **新建小节**：`id` 用时间戳（推荐 `YYYYMMDDHHmm`，同分钟多节可再加两位序号），**不要**再用 `claim` / `data-flow` 这类语义名——标题一改就想改 id，和章节踩同一个坑。
 - **已有小节**：禁止把旧 id 改成时间戳或任何新值（标注键是 `章节id#小节id`）。
 - 铁律：
