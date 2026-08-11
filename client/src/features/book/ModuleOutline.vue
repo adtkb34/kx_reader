@@ -73,6 +73,31 @@ const localEntries = computed(() =>
   ),
 );
 
+/** Full hang set for stable numbers (ignore 仅有/仅无内容). */
+const stableNumMap = computed(() => {
+  const entries = filterRulerOutlineEntries(
+    props.toc,
+    props.lensSelection ?? null,
+    getBookShowLevel(props.bookId),
+    rulerOutlineEntries(
+      props.toc,
+      props.lensSelection ?? null,
+      getBookShowLevel(props.bookId),
+      focusIndexId.value,
+      rulerPick.value,
+    ),
+    'all',
+  );
+  return outlineNumbers(
+    entries
+      .filter((e) => e.title)
+      .map((e) => ({
+        id: e.anchorId ?? e.sectionId,
+        level: e.level,
+      })),
+  );
+});
+
 /** Keys always listed; hang-offs only under visible keys when pick UI is on. */
 const displayEntries = computed(() => {
   const all = localEntries.value;
@@ -94,12 +119,7 @@ const displayEntries = computed(() => {
 
 const localNumbered = computed((): DigestOutlineRow[] => {
   const list = displayEntries.value;
-  const nums = outlineNumbers(
-    list.map((e) => ({
-      id: e.anchorId ?? e.sectionId,
-      level: e.level,
-    })),
-  );
+  const nums = stableNumMap.value;
   return list.map((e) => ({
     id: e.anchorId ?? rulerAnchorId(e.chapterId, e.sectionId),
     title: e.title,

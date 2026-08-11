@@ -30,6 +30,10 @@ export interface SectionCompareItem {
   title: string;
   kind: SectionChangeKind;
   lines: DiffLine[];
+  /** Present when compare spans multiple files in a leaf module. */
+  chapterId?: string;
+  chapterTitle?: string;
+  file?: string;
 }
 
 export type CompareMode = 'unified' | 'sideBySide';

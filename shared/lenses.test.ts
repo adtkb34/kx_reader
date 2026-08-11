@@ -12,6 +12,7 @@ import {
   effectiveAxisLeaves,
   effectiveLeaves,
   expandSectionAllowlist,
+  axisSelectionIsOpen,
   filterChapters,
   filterChaptersWithContent,
   filterChaptersWithoutContent,
@@ -87,6 +88,30 @@ describe('lens tree helpers', () => {
       'tenant',
     ]);
     expect(effectiveAxisLeaves(tocWithLenses, 'audience', ['tenant'])).toEqual(['tenant']);
+  });
+
+  it('axisSelectionIsOpen is true for axis id or non-leaf parent', () => {
+    expect(axisSelectionIsOpen(tocWithLenses, 'read', ['read'])).toBe(true);
+    expect(axisSelectionIsOpen(tocWithLenses, 'read', ['scenario'])).toBe(false);
+    const nested = {
+      ...tocWithLenses,
+      lenses: {
+        ...tocWithLenses.lenses!,
+        status: [
+          {
+            id: 'lifecycle',
+            title: '生命周期',
+            children: [
+              { id: 'draft', title: '草稿' },
+              { id: 'published', title: '发布' },
+            ],
+          },
+        ],
+      },
+    };
+    expect(axisSelectionIsOpen(nested, 'status', ['lifecycle'])).toBe(true);
+    expect(axisSelectionIsOpen(nested, 'status', ['status'])).toBe(true);
+    expect(axisSelectionIsOpen(nested, 'status', ['draft'])).toBe(false);
   });
 });
 
@@ -567,18 +592,14 @@ describe('sectionAllowlistFor', () => {
     },
   };
 
-  it('unions allowlists for multi-selected leaves', () => {
+  it('unions allowlists for multi-selected leaves (no untagged)', () => {
     expect(sectionAllowlistFor(chapter, { read: ['scenario', 'impl'] }, tocWithLenses)?.sort()).toEqual(
       ['a', 'a1', 'b'],
     );
   });
 
-  it('expands parent selection to leaf union', () => {
-    expect(sectionAllowlistFor(chapter, { read: ['read'] }, tocWithLenses)?.sort()).toEqual([
-      'a',
-      'a1',
-      'b',
-    ]);
+  it('parent / axis selection means no filter on that axis', () => {
+    expect(sectionAllowlistFor(chapter, { read: ['read'] }, tocWithLenses)).toBeNull();
   });
 
   it('returns null when option has no allowlist (whole page)', () => {
@@ -589,8 +610,8 @@ describe('sectionAllowlistFor', () => {
     expect(sectionAllowlistFor(whole, { read: ['scenario'] }, tocWithLenses)).toBeNull();
   });
 
-  it('hides allowlisted sections when their leaf is unchecked', () => {
-    // Page has no layers on biz — only section tags. Unchecking flow keeps untagged stubs.
+  it('leaf selection hides sections not hung on that leaf (including untagged)', () => {
+    // Page has no layers on biz — only section tags.
     const process: TocChapter = {
       id: 'process',
       title: '工艺',
@@ -617,13 +638,51 @@ describe('sectionAllowlistFor', () => {
     };
     // 概览 = whole-page overview of the module (index / hang-offs stay visible).
     expect(sectionAllowlistFor(process, { biz: ['overview'] }, toc)).toBeNull();
+    // 选流程叶：只看挂流程的；未挂任何 biz 子叶的 stub 隐藏。
     expect(sectionAllowlistFor(process, { biz: ['flow'] }, toc)?.sort()).toEqual([
       'flow-a',
       'flow-b',
-      'stub',
     ]);
-    // 权限 has no allowlist and is not overview → hide flow-tagged, keep untagged.
-    expect(sectionAllowlistFor(process, { biz: ['permission'] }, toc)?.sort()).toEqual(['stub']);
+    // 权限无表叶：未挂/已挂其它叶的都不显示。
+    expect(sectionAllowlistFor(process, { biz: ['permission'] }, toc)?.sort()).toEqual([]);
+    // 选父「biz」轴 = 该维不筛选 → stub 与 flow 都显示。
+    expect(sectionAllowlistFor(process, { biz: ['biz'] }, toc)).toBeNull();
+  });
+
+  it('intermediate parent selection also opens the axis', () => {
+    const process: TocChapter = {
+      id: 'process',
+      title: '工艺',
+      file: 'p.md',
+      sections: [
+        { id: 'flow-a', title: 'A', level: 2 },
+        { id: 'stub', title: 'Stub', level: 2 },
+      ],
+      sectionAllowlists: {
+        status: { draft: ['flow-a'] },
+      },
+    };
+    const toc = {
+      ...tocWithLenses,
+      lenses: {
+        ...tocWithLenses.lenses!,
+        status: [
+          {
+            id: 'lifecycle',
+            title: '生命周期',
+            children: [
+              { id: 'draft', title: '草稿' },
+              { id: 'published', title: '发布' },
+            ],
+          },
+        ],
+      },
+    };
+    // 未挂 status 任何子叶的 stub：选子叶不显示，选父显示。
+    expect(sectionAllowlistFor(process, { status: ['draft'] }, toc)?.sort()).toEqual(['flow-a']);
+    expect(sectionAllowlistFor(process, { status: ['published'] }, toc)?.sort()).toEqual([]);
+    expect(sectionAllowlistFor(process, { status: ['lifecycle'] }, toc)).toBeNull();
+    expect(sectionAllowlistFor(process, { status: ['status'] }, toc)).toBeNull();
   });
 });
 

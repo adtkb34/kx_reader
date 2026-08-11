@@ -97,6 +97,7 @@ export function effectiveLeaves(nodes: BookLens[], selected: PageLayer[]): PageL
 /**
  * Effective leaf option ids for one axis.
  * Selecting the axis id itself = all leaves under that axis's options.
+ * Prefer `axisSelectionIsOpen` when you need「父/轴 = 该维不筛选」.
  */
 export function effectiveAxisLeaves(
   toc: BookToc,
@@ -107,6 +108,26 @@ export function effectiveAxisLeaves(
   const chosen = normalizeAxisSelection(selected);
   if (chosen.includes(axis)) return [...lensLeafIds(opts)];
   return effectiveLeaves(opts, chosen);
+}
+
+/**
+ * True when the axis selection includes a non-leaf (axis id or parent node).
+ * Means「该维度不筛选」: show content whether or not it hangs on any child leaf.
+ */
+export function axisSelectionIsOpen(
+  toc: BookToc,
+  axis: LensAxisId,
+  selected: PageLayer[],
+): boolean {
+  const opts = toc.lenses?.[axis] ?? [];
+  const chosen = normalizeAxisSelection(selected);
+  if (chosen.length === 0) return false;
+  if (chosen.includes(axis)) return true;
+  for (const id of chosen) {
+    const node = findLensNode(opts, id);
+    if (node && !isLensLeaf(node)) return true;
+  }
+  return false;
 }
 
 /** Toolbar tree: L1 = axes, L2+ = that axis's options. */
@@ -305,6 +326,9 @@ export function pageVisibleInSelection(
   const layers = chapter.layers;
   if (!layers) return true;
   for (const [axis, chosen] of Object.entries(selection)) {
+    if (toc?.lenses?.[axis]?.length && axisSelectionIsOpen(toc, axis, chosen)) {
+      continue; // 父/轴 = 该维不筛选
+    }
     const opts = layerOptions(layers[axis]);
     if (opts.length === 0) continue;
     const leaves = toc?.lenses?.[axis]?.length
@@ -347,11 +371,12 @@ export function expandSectionAllowlist(
 /**
  * Section ids to show for the current selection, or null = no filter (all).
  * Per axis:
+ * - Non-leaf selected (axis id / parent) → 该维不筛选 (skip).
  * - Selected leaf with no allowlist on this page:
  *   - `overview`, or a leaf in page `layers` → whole-page (no section filter).
- *     So「概览」+ 按 index keeps skeleton / hang-off body visible.
- *   - otherwise → no tagged ids (hide other leaves' allowlisted sections).
- * - Selected leaf with an allowlist → those sections (+ untagged) are visible.
+ *   - otherwise → empty list (hide everything tagged or untagged for this axis).
+ * - Selected leaf with an allowlist → only those sections (not untagged).
+ *   Untagged (= not hung on any child of this axis) hide when a leaf is selected.
  * Across axes, intersecting lists still apply.
  */
 export function sectionAllowlistFor(
@@ -362,6 +387,10 @@ export function sectionAllowlistFor(
   if (!selection || !chapter.sectionAllowlists) return null;
   const lists: string[][] = [];
   for (const [axis, chosen] of Object.entries(selection)) {
+    if (toc?.lenses?.[axis]?.length && axisSelectionIsOpen(toc, axis, chosen)) {
+      continue; // 父/轴 = 该维不筛选
+    }
+
     const leaves = toc?.lenses?.[axis]?.length
       ? effectiveAxisLeaves(toc, axis, normalizeAxisSelection(chosen))
       : normalizeAxisSelection(chosen);
@@ -376,7 +405,7 @@ export function sectionAllowlistFor(
     for (const leaf of leaves) {
       const allow = axisAllows[leaf];
       if (!allow) {
-        // 概览 = 整页总览；`layers` 整页叶同理。其它未配小节表的叶不打开整页。
+        // 概览 = 整页总览；`layers` 整页叶同理。其它未配小节表的叶 → 该叶无挂靠内容。
         if (leaf === 'overview' || layerOpts.includes(leaf)) {
           wholePage = true;
           break;
@@ -387,17 +416,10 @@ export function sectionAllowlistFor(
     }
     if (wholePage) continue;
 
-    const allTagged = new Set<string>();
-    for (const list of Object.values(axisAllows)) {
-      if (!list) continue;
-      for (const id of list) allTagged.add(id);
-    }
-
-    const allowed: string[] = [];
-    for (const s of chapter.sections) {
-      if (!allTagged.has(s.id) || selectedTagged.has(s.id)) allowed.push(s.id);
-    }
-    if (allTagged.size > 0) lists.push(allowed);
+    // Leaf mode: only sections hung on the selected leaf/leaves (no untagged pass-through).
+    const allowed = [...selectedTagged];
+    const hasAnyAxisTags = Object.values(axisAllows).some((list) => !!list && list.length > 0);
+    if (hasAnyAxisTags || allowed.length > 0) lists.push(allowed);
   }
   if (lists.length === 0) return null;
   const expanded = lists.map((list) => expandSectionAllowlist(chapter.sections, list) ?? list);

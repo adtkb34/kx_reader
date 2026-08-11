@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, nextTick } from 'vue';
 import type { BookLens, PageLayer } from '@shared/types';
 
 const props = defineProps<{
@@ -36,6 +36,17 @@ const selected = computed({
     emit('update:modelValue', next);
   },
 });
+
+function onVisibleChange(open: boolean): void {
+  if (!open) return;
+  void nextTick(() => {
+    const dropdown =
+      document.querySelector('.el-tree-select__popper .el-select-dropdown__wrap') ??
+      document.querySelector('.el-select__popper .el-select-dropdown__wrap') ??
+      document.querySelector('.el-tree-select__popper .el-scrollbar__wrap');
+    if (dropdown instanceof HTMLElement) dropdown.scrollTop = 0;
+  });
+}
 </script>
 
 <template>
@@ -52,6 +63,8 @@ const selected = computed({
     :render-after-expand="false"
     show-checkbox
     default-expand-all
+    placement="bottom-start"
     :placeholder="placeholder ?? '透镜'"
+    @visible-change="onVisibleChange"
   />
 </template>

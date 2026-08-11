@@ -135,7 +135,7 @@ const assemble = computed(() => {
   };
 });
 
-/** Outline numbers from assembled module structure (keys + titled hang-offs + axis buckets). */
+/** Stable outline numbers from full hang set (不隐藏); content/empty filter only hides. */
 const outlineNumMap = computed(() => {
   const entries = filterRulerOutlineEntries(
     props.toc,
@@ -148,7 +148,7 @@ const outlineNumMap = computed(() => {
       focusIndexId.value,
       rulerPick.value,
     ),
-    hangFilter.value,
+    'all',
   );
   const items = entries
     .filter((e) => e.title)
@@ -215,12 +215,7 @@ function emitSyncedOutline(): void {
     if (keyVisible) list.push(e);
   }
 
-  const nums = outlineNumbers(
-    list.map((e) => ({
-      id: e.anchorId ?? e.sectionId,
-      level: e.level,
-    })),
-  );
+  const nums = outlineNumMap.value;
   emit(
     'outline',
     list.map((e) => {

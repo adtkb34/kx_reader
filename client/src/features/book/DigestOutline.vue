@@ -51,22 +51,30 @@ const hangFilter = computed(
   (): RulerTickHangFilter => ui.lensContentFilter as RulerTickHangFilter,
 );
 
-const computedRows = computed((): DigestOutlineRow[] => {
+type OutlineItem = {
+  id: string;
+  title: string;
+  level: number;
+  chapterId?: string;
+  sectionId?: string;
+};
+
+function buildDigestOutlineItems(
+  hangMode: RulerTickHangFilter,
+  applyContentFilter: boolean,
+): OutlineItem[] {
   const sel = props.lensSelection ?? null;
   const showLevel = getBookShowLevel(props.bookId);
-  const items: { id: string; title: string; level: number; chapterId?: string; sectionId?: string }[] =
-    [];
+  const items: OutlineItem[] = [];
 
   if (props.toc.ruler) {
     const keep = rulerSidebarKeepIds(props.toc, sel);
     let modules = listLeafModules(props.toc).filter((m) => keep.has(m.indexChapterId));
-    if (hangFilter.value === 'content' || hangFilter.value === 'empty') {
-      const ids = filterRulerModuleIndexIds(
-        props.toc,
-        sel,
-        showLevel,
-        hangFilter.value,
-      );
+    if (
+      applyContentFilter &&
+      (hangMode === 'content' || hangMode === 'empty')
+    ) {
+      const ids = filterRulerModuleIndexIds(props.toc, sel, showLevel, hangMode);
       modules = modules.filter((m) => ids.has(m.indexChapterId));
     }
 
@@ -101,7 +109,7 @@ const computedRows = computed((): DigestOutlineRow[] => {
             mod.indexChapterId,
             pick.value,
           ),
-          hangFilter.value,
+          hangMode,
         );
         for (const e of entries) {
           if (!e.title) continue;
@@ -145,7 +153,7 @@ const computedRows = computed((): DigestOutlineRow[] => {
               mod.indexChapterId,
               pick.value,
             ),
-            hangFilter.value,
+            hangMode,
           );
           const leafEntries = [];
           let bucketLeaf: PageLayer | null = null;
@@ -158,7 +166,7 @@ const computedRows = computed((): DigestOutlineRow[] => {
             if (!e.title) continue;
             leafEntries.push(e);
           }
-          if (leafEntries.length === 0 && hangFilter.value !== 'all') continue;
+          if (leafEntries.length === 0 && hangMode !== 'all') continue;
 
           for (let i = 0; i < mod.groupPath.length; i++) {
             const key = mod.groupPath.slice(0, i + 1).join('/');
@@ -190,20 +198,22 @@ const computedRows = computed((): DigestOutlineRow[] => {
             });
           }
         }
-        if (!leafHasRows && hangFilter.value !== 'all') {
+        if (!leafHasRows && hangMode !== 'all') {
           items.pop(); // drop empty axis header
         }
       }
     }
   } else {
     const filterOn =
-      ui.lensContentFilter !== 'all' && selectionToFlatIds(props.toc, sel).length > 0;
+      applyContentFilter &&
+      ui.lensContentFilter !== 'all' &&
+      selectionToFlatIds(props.toc, sel).length > 0;
     const chapters = !filterOn
       ? filterChapters(props.toc.chapters, sel, props.toc)
       : ui.lensContentFilter === 'empty'
         ? filterChaptersWithoutContent(props.toc.chapters, sel, props.toc, showLevel)
         : filterChaptersWithContent(props.toc.chapters, sel, props.toc, showLevel);
-    const explicitOnly = ui.lensContentFilter === 'content';
+    const explicitOnly = applyContentFilter && ui.lensContentFilter === 'content';
     const emitted = new Set<string>();
     for (const g of groupChaptersForDigest(props.toc, chapters)) {
       for (let i = 0; i < g.groupPath.length; i++) {
@@ -218,7 +228,9 @@ const computedRows = computed((): DigestOutlineRow[] => {
       }
       for (const ch of g.pages) {
         const sections = visibleTocSections(ch, sel, props.toc, showLevel, explicitOnly);
-        if (sections.length === 0 && ui.lensContentFilter !== 'empty') continue;
+        if (sections.length === 0 && !(applyContentFilter && ui.lensContentFilter === 'empty')) {
+          continue;
+        }
         items.push({
           id: `page-${ch.id}`,
           title: ch.title,
@@ -238,8 +250,17 @@ const computedRows = computed((): DigestOutlineRow[] => {
     }
   }
 
-  const nums = outlineNumbers(items.map((i) => ({ id: i.id, level: i.level })));
-  return items.map((i) => ({
+  return items;
+}
+
+const computedRows = computed((): DigestOutlineRow[] => {
+  const visible = buildDigestOutlineItems(hangFilter.value, true);
+  const full =
+    hangFilter.value === 'all' && ui.lensContentFilter === 'all'
+      ? visible
+      : buildDigestOutlineItems('all', false);
+  const nums = outlineNumbers(full.map((i) => ({ id: i.id, level: i.level })));
+  return visible.map((i) => ({
     ...i,
     number: nums.get(i.id) ?? '',
   }));

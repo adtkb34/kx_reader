@@ -2,7 +2,9 @@
 import { computed, ref } from 'vue';
 import { Fold, ZoomIn } from '@element-plus/icons-vue';
 import type { BookToc, LensSelection, TocChapter, TocTreeNode } from '@shared/types';
+import { collapseSingletonGroups, filterChapters, filterTree } from '@shared/lenses';
 import { tocTreeOutlineNumbers } from '@shared/outlineNumbers';
+import { rulerSidebarKeepIds } from '@shared/ruler';
 import TocTreeNodes from '@/features/book/TocTreeNodes.vue';
 import TocLightbox from '@/features/book/TocLightbox.vue';
 import TocExpandModeSwitch from '@/features/book/TocExpandModeSwitch.vue';
@@ -12,7 +14,7 @@ const props = defineProps<{
   toc: BookToc;
   bookId: string;
   currentChapterId: string;
-  /** Pre-filtered tree (by reading lens). */
+  /** Pre-filtered tree (by reading lens + content filter). */
   tree: TocTreeNode[];
   lensSelection?: LensSelection | null;
 }>();
@@ -25,7 +27,25 @@ const pageById = computed(() => {
   return map;
 });
 
-const outlineNums = computed(() => tocTreeOutlineNumbers(props.tree));
+/** Numbers from lens-only tree (ignore 仅有/仅无内容) so hiding siblings does not renumber. */
+const outlineNums = computed(() => {
+  const t = props.toc;
+  const sel = props.lensSelection ?? null;
+  let ids = new Set(filterChapters(t.chapters, sel, t).map((c) => c.id));
+  if (t.ruler) {
+    const keep = rulerSidebarKeepIds(t, sel);
+    ids = new Set([...ids].filter((id) => keep.has(id)));
+  }
+  const base = t.tree?.length
+    ? t.tree
+    : t.chapters.map((c) => ({
+        type: 'page' as const,
+        id: c.id,
+        title: c.title,
+        file: c.file,
+      }));
+  return tocTreeOutlineNumbers(collapseSingletonGroups(filterTree(base, ids)));
+});
 </script>
 
 <template>

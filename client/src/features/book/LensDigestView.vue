@@ -36,6 +36,7 @@ import {
   sectionLensLeaves,
   selectionLegendLeaves,
   selectionToFlatIds,
+  visibleTocSections,
 } from '@shared/lenses';
 import { outlineNumbers } from '@shared/outlineNumbers';
 import {
@@ -43,10 +44,12 @@ import {
   axisBucketAnchorId,
   filterRulerAssembleView,
   filterRulerModuleIndexIds,
+  filterRulerOutlineEntries,
   listLeafModules,
   moduleMatchesRulerLeaf,
   normalizeRulerPick,
   rulerAxisLeaves,
+  rulerOutlineEntries,
   rulerSidebarKeepIds,
   type LeafModule,
   type RulerTickHangFilter,
@@ -199,6 +202,124 @@ function assignNumbers(items: { id: string; level: number }[]): Map<string, stri
   return outlineNumbers(items);
 }
 
+/** Stable digest numbers from lens-visible structure (ignore 仅有/仅无内容). */
+function stablePlainNumberMap(): Map<string, string> {
+  const sel = props.lensSelection ?? null;
+  const showLevel = getBookShowLevel(props.bookId);
+  const chapters = filterChapters(props.toc.chapters, sel, props.toc);
+  const items: { id: string; level: number }[] = [];
+  const emitted = new Set<string>();
+  for (const g of groupChaptersForDigest(props.toc, chapters)) {
+    for (let i = 0; i < g.groupPath.length; i++) {
+      const key = g.groupPath.slice(0, i + 1).join('/');
+      if (emitted.has(key)) continue;
+      emitted.add(key);
+      items.push({ id: digestPathAnchorId(key), level: i + 1 });
+    }
+    for (const ch of g.pages) {
+      const sections = visibleTocSections(ch, sel, props.toc, showLevel, false);
+      if (sections.length === 0) continue;
+      const pageLevel = digestPageDisplayLevel(g.groupPath.length);
+      items.push({ id: pageAnchorId(ch.id), level: pageLevel });
+      for (const s of sections) {
+        items.push({
+          id: digestAnchorId(ch.id, s.id),
+          level: digestSectionDisplayLevel(g.groupPath.length, s.level),
+        });
+      }
+    }
+  }
+  return assignNumbers(items);
+}
+
+function stableModuleNumberMap(): Map<string, string> {
+  const sel = props.lensSelection ?? null;
+  const showLevel = getBookShowLevel(props.bookId);
+  const keep = rulerSidebarKeepIds(props.toc, sel);
+  const modules = listLeafModules(props.toc).filter((m) => keep.has(m.indexChapterId));
+  const items: { id: string; level: number }[] = [];
+
+  if (pick.value === 'index') {
+    const emitted = new Set<string>();
+    for (const mod of modules) {
+      for (let i = 0; i < mod.groupPath.length; i++) {
+        const key = mod.groupPath.slice(0, i + 1).join('/');
+        if (emitted.has(key)) continue;
+        emitted.add(key);
+        items.push({ id: digestPathAnchorId(key), level: i + 1 });
+      }
+      const pageLevel = digestPageDisplayLevel(mod.groupPath.length);
+      items.push({ id: pageAnchorId(mod.indexChapterId), level: pageLevel });
+      const entries = filterRulerOutlineEntries(
+        props.toc,
+        sel,
+        showLevel,
+        rulerOutlineEntries(props.toc, sel, showLevel, mod.indexChapterId, pick.value),
+        'all',
+      );
+      for (const e of entries) {
+        if (!e.title) continue;
+        items.push({
+          id: e.anchorId ?? digestAnchorId(e.chapterId, e.sectionId),
+          level: digestSectionDisplayLevel(mod.groupPath.length, e.level),
+        });
+      }
+    }
+  } else {
+    const axis = pick.value as LensAxisId;
+    for (const leaf of rulerAxisLeaves(props.toc, axis)) {
+      const leafMods = modules.filter((m) =>
+        moduleMatchesRulerLeaf(props.toc, m.indexChapterId, axis, leaf),
+      );
+      if (leafMods.length === 0) continue;
+      const axisId = axisBucketAnchorId(leaf);
+      items.push({ id: axisId, level: 1 });
+      const boost = 1;
+      const emitted = new Set<string>();
+      for (const mod of leafMods) {
+        const entries = filterRulerOutlineEntries(
+          props.toc,
+          sel,
+          showLevel,
+          rulerOutlineEntries(props.toc, sel, showLevel, mod.indexChapterId, pick.value),
+          'all',
+        );
+        const leafEntries = [];
+        let bucketLeaf: PageLayer | null = null;
+        for (const e of entries) {
+          if (e.anchorId?.startsWith('ruler-bucket-')) {
+            bucketLeaf = e.sectionId as PageLayer;
+            continue;
+          }
+          if (bucketLeaf !== leaf || !e.title) continue;
+          leafEntries.push(e);
+        }
+        for (let i = 0; i < mod.groupPath.length; i++) {
+          const key = mod.groupPath.slice(0, i + 1).join('/');
+          const emitKey = `${leaf}/${key}`;
+          if (emitted.has(emitKey)) continue;
+          emitted.add(emitKey);
+          items.push({
+            id: `${axisId}--${digestPathAnchorId(key)}`,
+            level: i + 1 + boost,
+          });
+        }
+        items.push({
+          id: pageAnchorId(mod.indexChapterId, leaf),
+          level: digestPageDisplayLevel(mod.groupPath.length) + boost,
+        });
+        for (const e of leafEntries) {
+          items.push({
+            id: `${axisId}--${digestAnchorId(e.chapterId, e.sectionId)}`,
+            level: digestSectionDisplayLevel(mod.groupPath.length, e.level) + boost,
+          });
+        }
+      }
+    }
+  }
+  return assignNumbers(items);
+}
+
 function demoteSection(section: RenderedSection, displayLevel: number): RenderedSection {
   const delta = displayLevel - section.level;
   if (delta === 0) return { ...section, level: displayLevel };
@@ -337,7 +458,7 @@ async function loadPlain(): Promise<DigestGroupView[]> {
     }
   }
 
-  const nums = assignNumbers(outlineItems);
+  const nums = stablePlainNumberMap();
   const emitted = new Set<string>();
   return [
     {
@@ -613,7 +734,7 @@ async function loadModules(): Promise<DigestGroupView[]> {
     }
   }
 
-  const nums = assignNumbers(outlineItems);
+  const nums = stableModuleNumberMap();
   return outGroups.map((g) => {
     const emitted = new Set<string>();
     const idPrefix = g.axis?.id;
