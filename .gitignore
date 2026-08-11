@@ -18,6 +18,8 @@ books/*
 !books/practice/**
 !books/complaint/
 !books/complaint/**
+!books/metoak-mes/
+!books/metoak-mes/**
 
 # Per-book git repos (compare feature); parent tracks content only
 books/**/.git/

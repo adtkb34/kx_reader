@@ -1,0 +1,249 @@
+{
+  "title": "METOAK MES",
+  "description": "MES 功能域骨架：四组十一章；采集≠物联通道、派发反馈≠过程采集、调度进度≠绩效指标；工艺留在资源支撑作制造契约，调组待正文卡点再定。",
+  "lenses": [
+    {
+      "id": "biz",
+      "title": "业务",
+      "children": [
+        { "id": "overview", "title": "概览", "color": "#7a8a9a" },
+        { "id": "flow", "title": "流程", "color": "#6d86a0" },
+        { "id": "permission", "title": "权限", "color": "#5f9090" }
+      ]
+    },
+    {
+      "id": "impl",
+      "title": "实现",
+      "children": [
+        { "id": "rule", "title": "规则", "color": "#7a8a9a" },
+        { "id": "ui", "title": "界面", "color": "#a88b55" },
+        { "id": "entity", "title": "实体", "color": "#6a9478" },
+        { "id": "exception", "title": "异常", "color": "#9a7482" }
+      ]
+    },
+    {
+      "id": "status",
+      "title": "状态",
+      "children": [
+        { "id": "planned", "title": "待规划", "color": "#8a8a8a" },
+        { "id": "doing", "title": "进行中", "color": "#a88b55" },
+        { "id": "done", "title": "已完成", "color": "#6a9478" },
+        { "id": "shelved", "title": "已搁置", "color": "#9a7482" }
+      ]
+    },
+    {
+      "id": "priority",
+      "title": "优先级",
+      "children": [
+        { "id": "p0", "title": "P0", "color": "#a65d57" },
+        { "id": "p1", "title": "P1", "color": "#a88b55" },
+        { "id": "p2", "title": "P2", "color": "#6d86a0" },
+        { "id": "p3", "title": "P3", "color": "#8a8a8a" }
+      ]
+    },
+    {
+      "id": "role",
+      "title": "角色",
+      "children": [
+        { "id": "scheduler", "title": "调度员", "color": "#6d86a0" },
+        { "id": "process-eng", "title": "工艺员", "color": "#5f9090" },
+        { "id": "operator", "title": "操作工", "color": "#6a9478" },
+        { "id": "qc", "title": "质检员", "color": "#a88b55" },
+        { "id": "equipment", "title": "设备员", "color": "#7a8a9a" },
+        { "id": "foreman", "title": "班组长", "color": "#9a7482" },
+        { "id": "supervisor", "title": "生产主管", "color": "#a65d57" },
+        { "id": "warehouse", "title": "仓库管理员", "color": "#8a8a8a" },
+        { "id": "admin", "title": "系统管理员", "color": "#5a6a7a" }
+      ]
+    }
+  ],
+  "ruler": {
+    "axes": ["priority", "status"],
+    "links": {
+      "202608101508": ["20260810150801", "20260810150802"],
+      "202608101427": ["20260810142701", "202608101214", "20260810142702", "20260810142703"]
+    }
+  },
+  "contents": [
+    {
+      "id": "plan-schedule",
+      "title": "计划调度",
+      "children": [
+        {
+          "id": "scheduling",
+          "title": "生产调度",
+          "children": [
+            {
+              "id": "202608101201",
+              "file": "scheduling/index.md",
+              "role": "ruler",
+              "lenses": { "priority": { "p0": true } }
+            }
+          ]
+        },
+        {
+          "id": "dispatch",
+          "title": "单元派发",
+          "children": [
+            {
+              "id": "202608101203",
+              "file": "dispatch/index.md",
+              "role": "ruler",
+              "lenses": { "priority": { "p0": true } }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "resource-support",
+      "title": "资源支撑",
+      "children": [
+        {
+          "id": "resource",
+          "title": "资源配置",
+          "children": [
+            {
+              "id": "202608101202",
+              "file": "resource/index.md",
+              "role": "ruler",
+              "lenses": { "priority": { "p1": true } }
+            }
+          ]
+        },
+        {
+          "id": "document",
+          "title": "文档体系",
+          "children": [
+            {
+              "id": "202608101204",
+              "file": "document/index.md",
+              "role": "ruler",
+              "lenses": { "priority": { "p2": true } }
+            }
+          ]
+        },
+        {
+          "id": "workforce",
+          "title": "用工组织",
+          "children": [
+            {
+              "id": "202608101206",
+              "file": "workforce/index.md",
+              "role": "ruler",
+              "lenses": { "priority": { "p2": true } }
+            }
+          ]
+        },
+        {
+          "id": "process",
+          "title": "工艺定义",
+          "children": [
+            {
+              "id": "202608101208",
+              "file": "process/index.md",
+              "role": "ruler",
+              "lenses": { "priority": { "p1": true } }
+            },
+            {
+              "id": "202608101212",
+              "file": "process/flow.md",
+              "lenses": {
+                "biz": { "flow": true },
+                "priority": { "p1": true }
+              }
+            },
+            {
+              "id": "202608101213",
+              "file": "process/entity.md",
+              "lenses": {
+                "impl": { "entity": true },
+                "priority": { "p1": true }
+              }
+            },
+            {
+              "id": "202608101215",
+              "file": "process/rule.md",
+              "lenses": {
+                "impl": { "rule": true },
+                "priority": { "p1": true }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "shop-floor-loop",
+      "title": "现场闭环",
+      "children": [
+        {
+          "id": "data-collect",
+          "title": "数据采集",
+          "children": [
+            {
+              "id": "202608101205",
+              "file": "data-collect/index.md",
+              "role": "ruler",
+              "lenses": { "priority": { "p0": true } }
+            }
+          ]
+        },
+        {
+          "id": "quality",
+          "title": "质量闭环",
+          "children": [
+            {
+              "id": "202608101207",
+              "file": "quality/index.md",
+              "role": "ruler",
+              "lenses": { "priority": { "p0": true } }
+            }
+          ]
+        },
+        {
+          "id": "traceability",
+          "title": "产品追溯",
+          "children": [
+            {
+              "id": "202608101209",
+              "file": "traceability/index.md",
+              "role": "ruler",
+              "lenses": { "priority": { "p1": true } }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "platform-capability",
+      "title": "底座能力",
+      "children": [
+        {
+          "id": "performance",
+          "title": "绩效分析",
+          "children": [
+            {
+              "id": "202608101210",
+              "file": "performance/index.md",
+              "role": "ruler",
+              "lenses": { "priority": { "p3": true } }
+            }
+          ]
+        },
+        {
+          "id": "iot",
+          "title": "物联融合",
+          "children": [
+            {
+              "id": "202608101211",
+              "file": "iot/index.md",
+              "role": "ruler",
+              "lenses": { "priority": { "p3": true } }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
