@@ -59,10 +59,7 @@
   ],
   "ruler": {
     "axes": ["priority", "status"],
-    "links": {
-      "202608101508": ["20260810150801", "20260810150802"],
-      "202608101427": ["20260810142701", "202608101214", "20260810142702", "20260810142703"]
-    }
+    "links": {}
   },
   "contents": [
     {
@@ -144,30 +141,6 @@
               "file": "process/index.md",
               "role": "ruler",
               "lenses": { "priority": { "p1": true } }
-            },
-            {
-              "id": "202608101212",
-              "file": "process/flow.md",
-              "lenses": {
-                "biz": { "flow": true },
-                "priority": { "p1": true }
-              }
-            },
-            {
-              "id": "202608101213",
-              "file": "process/entity.md",
-              "lenses": {
-                "impl": { "entity": true },
-                "priority": { "p1": true }
-              }
-            },
-            {
-              "id": "202608101215",
-              "file": "process/rule.md",
-              "lenses": {
-                "impl": { "rule": true },
-                "priority": { "p1": true }
-              }
             }
           ]
         }
