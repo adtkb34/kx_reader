@@ -413,6 +413,7 @@ function goNext(): void {
         <button class="btn" @click="load()">重试</button>
       </div>
       <template v-else-if="lensEmptyState">
+        <h1 v-if="pageTitle" class="chapter-title">{{ pageTitle }}</h1>
         <p class="chapter-empty-code">无内容</p>
         <h1 class="chapter-empty-title">当前维度下没有可显示的内容</h1>
         <p class="chapter-empty-desc muted">
@@ -423,6 +424,7 @@ function goNext(): void {
         </button>
       </template>
       <template v-else-if="lensHasContentHiddenState">
+        <h1 v-if="pageTitle" class="chapter-title">{{ pageTitle }}</h1>
         <p class="chapter-empty-code">有内容</p>
         <h1 class="chapter-empty-title">当前页在「仅无内容」下不可见</h1>
         <p class="chapter-empty-desc muted">

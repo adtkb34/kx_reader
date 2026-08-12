@@ -522,10 +522,10 @@ function go(ch: TocChapter | null): void {
         <button class="btn" @click="load()">重试</button>
       </div>
       <template v-else>
+        <h1 v-if="pageTitle" class="chapter-title">{{ pageTitle }}</h1>
         <div v-if="loading && empty" class="muted">加载模块…</div>
         <div v-else-if="empty" class="muted">当前透镜下没有可见内容。</div>
         <template v-else>
-          <h1 v-if="pageTitle" class="chapter-title">{{ pageTitle }}</h1>
           <SectionBlock
             v-for="hit in preamble"
             :id="rulerAnchorId(hit.chapter.id, hit.section.id)"
