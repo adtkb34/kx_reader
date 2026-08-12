@@ -369,22 +369,63 @@ export function expandSectionAllowlist(
 }
 
 /**
+ * Index / ruler skeleton section ids on this chapter (shells that stay visible
+ * under any leaf). Empty when the chapter is not a ruler index.
+ */
+export function chapterIndexShellIds(
+  chapter: TocChapter,
+  toc?: BookToc | null,
+): Set<string> {
+  const out = new Set<string>();
+  if (!toc?.ruler) return out;
+  const linkKeys = new Set(Object.keys(toc.ruler.links));
+  if (chapter.role === 'ruler') {
+    for (const s of chapter.sections) {
+      if (s.title) out.add(s.id);
+    }
+    return out;
+  }
+  for (const s of chapter.sections) {
+    if (linkKeys.has(s.id)) out.add(s.id);
+  }
+  return out;
+}
+
+/** Section ids tagged on any leaf of this axis allowlist map. */
+function axisTaggedSectionIds(
+  axisAllows: Partial<Record<PageLayer, string[]>>,
+): Set<string> {
+  const tagged = new Set<string>();
+  for (const list of Object.values(axisAllows)) {
+    if (!list) continue;
+    for (const id of list) tagged.add(id);
+  }
+  return tagged;
+}
+
+/** `display` = shells + untagged + selected hung; `hungOnly` =「仅有/仅无内容」判定. */
+export type SectionAllowlistMode = 'display' | 'hungOnly';
+
+/**
  * Section ids to show for the current selection, or null = no filter (all).
  * Per axis:
  * - Non-leaf selected (axis id / parent) → 该维不筛选 (skip).
  * - Selected leaf with no allowlist on this page:
  *   - `overview`, or a leaf in page `layers` → whole-page (no section filter).
- *   - otherwise → empty list (hide everything tagged or untagged for this axis).
- * - Selected leaf with an allowlist → only those sections (not untagged).
- *   Untagged (= not hung on any child of this axis) hide when a leaf is selected.
+ *   - `display` → untagged ∪ index shells; `hungOnly` → empty list.
+ * - Selected leaf with an allowlist:
+ *   - `display` → that leaf's hung ∪ untagged ∪ index shells.
+ *   - `hungOnly` → that leaf's hung only (for「仅有内容」/「仅无内容」).
  * Across axes, intersecting lists still apply.
  */
 export function sectionAllowlistFor(
   chapter: TocChapter,
   selection: LensSelection | null,
   toc?: BookToc | null,
+  mode: SectionAllowlistMode = 'display',
 ): string[] | null {
   if (!selection || !chapter.sectionAllowlists) return null;
+  const shellIds = mode === 'display' ? chapterIndexShellIds(chapter, toc) : new Set<string>();
   const lists: string[][] = [];
   for (const [axis, chosen] of Object.entries(selection)) {
     if (toc?.lenses?.[axis]?.length && axisSelectionIsOpen(toc, axis, chosen)) {
@@ -405,7 +446,7 @@ export function sectionAllowlistFor(
     for (const leaf of leaves) {
       const allow = axisAllows[leaf];
       if (!allow) {
-        // 概览 = 整页总览；`layers` 整页叶同理。其它未配小节表的叶 → 该叶无挂靠内容。
+        // 概览 = 整页总览；`layers` 整页叶同理。其它未配小节表的叶 → 无本叶挂靠。
         if (leaf === 'overview' || layerOpts.includes(leaf)) {
           wholePage = true;
           break;
@@ -416,10 +457,26 @@ export function sectionAllowlistFor(
     }
     if (wholePage) continue;
 
-    // Leaf mode: only sections hung on the selected leaf/leaves (no untagged pass-through).
-    const allowed = [...selectedTagged];
-    const hasAnyAxisTags = Object.values(axisAllows).some((list) => !!list && list.length > 0);
-    if (hasAnyAxisTags || allowed.length > 0) lists.push(allowed);
+    const taggedOnAxis = axisTaggedSectionIds(axisAllows);
+    const hasAnyAxisTags = taggedOnAxis.size > 0;
+
+    if (mode === 'hungOnly') {
+      const allowed = [...selectedTagged];
+      if (hasAnyAxisTags || allowed.length > 0) lists.push(allowed);
+      continue;
+    }
+
+    if (!hasAnyAxisTags && selectedTagged.size === 0 && shellIds.size === 0) {
+      continue;
+    }
+
+    // display: selected hung ∪ untagged ∪ index shells (never hide shells).
+    const allowed = new Set<string>(selectedTagged);
+    for (const id of shellIds) allowed.add(id);
+    for (const s of chapter.sections) {
+      if (!taggedOnAxis.has(s.id)) allowed.add(s.id);
+    }
+    lists.push([...allowed]);
   }
   if (lists.length === 0) return null;
   const expanded = lists.map((list) => expandSectionAllowlist(chapter.sections, list) ?? list);
@@ -821,7 +878,8 @@ export function selectionFromPageLayers(
 }
 
 /** TOC sections visible under the current lens selection (untitled sections omitted).
- * When `explicitOnly`, untagged pages (no `layers`) yield no sections — used by「仅有内容」.
+ * When `explicitOnly`, untagged pages (no `layers`) yield no sections and allowlists
+ * count hung-only — used by「仅有内容」/「仅无内容」.
  */
 export function visibleTocSections(
   chapter: TocChapter,
@@ -842,7 +900,7 @@ export function visibleTocSections(
   return filterSectionsByShowLevel(
     filterSectionsByAllowlist(
       chapter.sections,
-      sectionAllowlistFor(chapter, selection, toc),
+      sectionAllowlistFor(chapter, selection, toc, explicitOnly ? 'hungOnly' : 'display'),
     ),
     chapter,
     readerShowLevel,

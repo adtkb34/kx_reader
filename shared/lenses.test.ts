@@ -592,7 +592,7 @@ describe('sectionAllowlistFor', () => {
     },
   };
 
-  it('unions allowlists for multi-selected leaves (no untagged)', () => {
+  it('unions allowlists for multi-selected leaves', () => {
     expect(sectionAllowlistFor(chapter, { read: ['scenario', 'impl'] }, tocWithLenses)?.sort()).toEqual(
       ['a', 'a1', 'b'],
     );
@@ -610,7 +610,7 @@ describe('sectionAllowlistFor', () => {
     expect(sectionAllowlistFor(whole, { read: ['scenario'] }, tocWithLenses)).toBeNull();
   });
 
-  it('leaf selection hides sections not hung on that leaf (including untagged)', () => {
+  it('leaf selection keeps untagged; hides other-leaf hung sections', () => {
     // Page has no layers on biz — only section tags.
     const process: TocChapter = {
       id: 'process',
@@ -638,13 +638,14 @@ describe('sectionAllowlistFor', () => {
     };
     // 概览 = whole-page overview of the module (index / hang-offs stay visible).
     expect(sectionAllowlistFor(process, { biz: ['overview'] }, toc)).toBeNull();
-    // 选流程叶：只看挂流程的；未挂任何 biz 子叶的 stub 隐藏。
+    // 选流程叶：挂流程的 + 未挂靠 stub。
     expect(sectionAllowlistFor(process, { biz: ['flow'] }, toc)?.sort()).toEqual([
       'flow-a',
       'flow-b',
+      'stub',
     ]);
-    // 权限无表叶：未挂/已挂其它叶的都不显示。
-    expect(sectionAllowlistFor(process, { biz: ['permission'] }, toc)?.sort()).toEqual([]);
+    // 权限无表叶：只留未挂靠；其它叶挂靠隐藏。
+    expect(sectionAllowlistFor(process, { biz: ['permission'] }, toc)?.sort()).toEqual(['stub']);
     // 选父「biz」轴 = 该维不筛选 → stub 与 flow 都显示。
     expect(sectionAllowlistFor(process, { biz: ['biz'] }, toc)).toBeNull();
   });
@@ -678,11 +679,50 @@ describe('sectionAllowlistFor', () => {
         ],
       },
     };
-    // 未挂 status 任何子叶的 stub：选子叶不显示，选父显示。
-    expect(sectionAllowlistFor(process, { status: ['draft'] }, toc)?.sort()).toEqual(['flow-a']);
-    expect(sectionAllowlistFor(process, { status: ['published'] }, toc)?.sort()).toEqual([]);
+    // 未挂靠 stub 常显；其它叶挂靠隐藏；选父不筛选。
+    expect(sectionAllowlistFor(process, { status: ['draft'] }, toc)?.sort()).toEqual([
+      'flow-a',
+      'stub',
+    ]);
+    expect(sectionAllowlistFor(process, { status: ['published'] }, toc)?.sort()).toEqual(['stub']);
     expect(sectionAllowlistFor(process, { status: ['lifecycle'] }, toc)).toBeNull();
     expect(sectionAllowlistFor(process, { status: ['status'] }, toc)).toBeNull();
+  });
+
+  it('index shell sections stay visible even when tagged to another leaf', () => {
+    const index: TocChapter = {
+      id: 'idx',
+      title: '骨架',
+      file: 'index.md',
+      role: 'ruler',
+      sections: [
+        { id: 'archive', title: '建档', level: 2 },
+        { id: 'route', title: '路线', level: 2 },
+      ],
+      sectionAllowlists: {
+        read: { scenario: ['archive'] },
+      },
+    };
+    const toc: BookToc = {
+      ...tocWithLenses,
+      ruler: { links: { archive: ['flow-sec-1'], route: [] } },
+      chapters: [index],
+      lenses: {
+        read: [
+          { id: 'scenario', title: '场景' },
+          { id: 'impl', title: '实现' },
+        ],
+      },
+    };
+    // 选实现：index 壳仍在；场景挂靠小节本身若也在 index 上仍当壳保留。
+    expect(sectionAllowlistFor(index, { read: ['impl'] }, toc)?.sort()).toEqual([
+      'archive',
+      'route',
+    ]);
+    expect(sectionAllowlistFor(index, { read: ['scenario'] }, toc)?.sort()).toEqual([
+      'archive',
+      'route',
+    ]);
   });
 });
 

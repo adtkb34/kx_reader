@@ -608,13 +608,7 @@ function buildKeyBlocks(
       });
     }
 
-    // Axis buckets: keep key if it belongs to this leaf, or has hang-offs for it.
-    if (axisFilter && onlyLeaf) {
-      const keyLeaves = sectionAxisLeaves(toc, axisFilter, hit.chapter, keyId);
-      const keyMatches = keyLeaves.includes(onlyLeaf);
-      if (!keyMatches && linked.length === 0) continue;
-    }
-
+    // Axis buckets: index shells always stay; hang-offs already filtered above.
     out.push({
       chapterId: hit.chapter.id,
       sectionId: keyId,

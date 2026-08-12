@@ -199,12 +199,44 @@ describe('assembleModuleView', () => {
       'priority',
     );
     expect(view!.buckets.map((b) => b.leaf)).toEqual(['p0', 'p1']);
-    expect(view!.buckets[0]!.keys[0]!.groups[0]!.blocks.map((b) => b.sectionId)).toEqual([
+    // 壳常显：每个叶桶都保留全部 index 刻度；挂靠正文仍按叶筛。
+    expect(view!.buckets[0]!.keys.map((k) => k.sectionId)).toEqual(['k1', 'k2']);
+    expect(view!.buckets[1]!.keys.map((k) => k.sectionId)).toEqual(['k1', 'k2']);
+    expect(view!.buckets[0]!.keys.find((k) => k.sectionId === 'k1')!.groups[0]!.blocks.map((b) => b.sectionId)).toEqual([
       'f1',
     ]);
-    expect(view!.buckets[1]!.keys[0]!.groups[0]!.blocks.map((b) => b.sectionId)).toEqual([
+    expect(view!.buckets[0]!.keys.find((k) => k.sectionId === 'k2')!.groups[0]!.blocks).toEqual([]);
+    expect(view!.buckets[1]!.keys.find((k) => k.sectionId === 'k2')!.groups[0]!.blocks.map((b) => b.sectionId)).toEqual([
       'e1',
     ]);
+    expect(view!.buckets[1]!.keys.find((k) => k.sectionId === 'k1')!.groups[0]!.blocks).toEqual([]);
+  });
+
+  it('axis pick keeps bare index shells with no hang-offs for that leaf', () => {
+    const withStub: BookToc = {
+      ...book,
+      chapters: book.chapters.map((c) =>
+        c.id === 'idx'
+          ? {
+              ...c,
+              sections: [
+                ...c.sections,
+                { id: 'stub', title: '未挂靠占位', level: 2 },
+              ],
+            }
+          : c,
+      ),
+    };
+    const view = assembleModuleView(
+      withStub,
+      { read: ['flow'], priority: ['p0'] },
+      undefined,
+      'idx',
+      'priority',
+    );
+    const p0 = view!.buckets.find((b) => b.leaf === 'p0');
+    expect(p0!.keys.map((k) => k.sectionId)).toEqual(['k1', 'k2', 'stub']);
+    expect(p0!.keys.find((k) => k.sectionId === 'stub')!.groups[0]!.blocks).toEqual([]);
   });
 });
 
