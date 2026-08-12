@@ -197,6 +197,10 @@ export function getStoredLensSelection(bookId: string): LensSelection | null {
     const out: LensSelection = {};
     for (const [axis, opt] of Object.entries(parsed as Record<string, unknown>)) {
       if (!isOptionId(axis)) continue;
+      if (Array.isArray(opt) && opt.length === 0) {
+        out[axis] = [];
+        continue;
+      }
       const ids = normalizeAxisSelection(opt).filter(isOptionId);
       if (ids.length > 0) out[axis] = ids;
     }

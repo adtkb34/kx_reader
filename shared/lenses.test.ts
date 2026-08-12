@@ -186,6 +186,12 @@ describe('flatIdsToSelection', () => {
       read: [],
       audience: [],
     });
+    expect(
+      flatIdsToSelection(tocWithLenses, ['tenant'], ['scenario', 'tenant'], { allowEmpty: true }),
+    ).toEqual({
+      read: [],
+      audience: ['tenant'],
+    });
   });
 });
 
@@ -327,6 +333,27 @@ describe('pageVisibleInSelection', () => {
     };
     expect(pageVisibleInSelection(flow, { read: ['overview'] }, toc)).toBe(true);
     expect(pageVisibleInSelection(flow, { read: ['impl'] }, toc)).toBe(false);
+  });
+
+  it('empty axis hides pages tagged on that axis, keeps untagged pages', () => {
+    const tagged: TocChapter = {
+      id: 'api',
+      title: 'API',
+      file: 'api.md',
+      layers: { read: ['impl'] },
+      sections: [],
+    };
+    const untagged: TocChapter = {
+      id: 'intro',
+      title: 'Intro',
+      file: 'intro.md',
+      sections: [],
+    };
+    expect(pageVisibleInSelection(tagged, { read: [] }, tocWithLenses)).toBe(false);
+    expect(
+      pageVisibleInSelection(untagged, { read: [], audience: ['tenant'] }, tocWithLenses),
+    ).toBe(true);
+    expect(pageVisibleInSelection(tagged, { read: ['read'] }, tocWithLenses)).toBe(true);
   });
 });
 
@@ -549,6 +576,21 @@ describe('lensQueryFromSelection', () => {
     const bare: BookToc = { id: 'x', title: 'X', chapters: [], tree: [] };
     expect(lensQueryFromSelection({ read: ['scenario'] }, bare)).toEqual({});
   });
+
+  it('persists empty axes as empty-string query values', () => {
+    expect(
+      lensQueryFromSelection({ read: [], audience: ['tenant'] }, tocWithLenses),
+    ).toEqual({ read: '', audience: 'tenant' });
+    expect(lensSelectionFromQuery({ read: '', audience: 'tenant' }, tocWithLenses)).toEqual({
+      read: [],
+      audience: ['tenant'],
+    });
+    const q = new URLSearchParams('read=&audience=tenant');
+    expect(lensSelectionFromQuery(q, tocWithLenses)).toEqual({
+      read: [],
+      audience: ['tenant'],
+    });
+  });
 });
 
 describe('resolveLensSwitchChapter', () => {
@@ -683,6 +725,55 @@ describe('sectionAllowlistFor', () => {
     expect(sectionAllowlistFor(process, { biz: ['permission'] }, toc)?.sort()).toEqual([]);
     // 选父「biz」轴 = 该维不筛选 → stub 与 flow 都显示。
     expect(sectionAllowlistFor(process, { biz: ['biz'] }, toc)).toBeNull();
+    // 空轴：有挂靠/整页层 → 藏挂靠留壳；与选不中叶一致。
+    expect(sectionAllowlistFor(process, { biz: [] }, toc)?.sort()).toEqual([]);
+  });
+
+  it('empty axis leaves untagged pages as shells-only; tagged hangs hide to shells; parent still open', () => {
+    const tagged: TocChapter = {
+      id: 'flow-page',
+      title: '流程',
+      file: 'flow.md',
+      layers: { read: ['scenario'] },
+      sections: [
+        { id: 'f1', title: '步骤', level: 2 },
+        { id: 'f2', title: '细节', level: 2 },
+      ],
+      sectionAllowlists: {
+        read: { scenario: ['f1'] },
+      },
+    };
+    const untagged: TocChapter = {
+      id: 'notes',
+      title: '备注',
+      file: 'notes.md',
+      sections: [
+        { id: 'n1', title: 'N1', level: 2 },
+        { id: 'n2', title: 'N2', level: 2 },
+      ],
+    };
+    const index: TocChapter = {
+      id: 'idx',
+      title: '骨架',
+      file: 'index.md',
+      role: 'ruler',
+      layers: { read: ['impl'] },
+      sections: [
+        { id: 'tick-a', title: '建档', level: 2 },
+        { id: 'tick-b', title: '路线', level: 2 },
+      ],
+    };
+    const toc: BookToc = {
+      ...tocWithLenses,
+      ruler: { links: { 'tick-a': ['f1'], 'tick-b': [] } },
+      chapters: [index, tagged, untagged],
+    };
+    // Empty = unmatched leaf: hang / untagged body hidden; index ticks stay.
+    expect(sectionAllowlistFor(tagged, { read: [] }, toc)?.sort()).toEqual([]);
+    expect(sectionAllowlistFor(untagged, { read: [] }, toc)?.sort()).toEqual([]);
+    expect(sectionAllowlistFor(index, { read: [] }, toc)?.sort()).toEqual(['tick-a', 'tick-b']);
+    expect(sectionAllowlistFor(tagged, { read: ['read'] }, toc)).toBeNull();
+    expect(pageVisibleInSelection(index, { read: [] }, toc)).toBe(true);
   });
 
   it('intermediate parent selection also opens the axis', () => {

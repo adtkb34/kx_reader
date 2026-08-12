@@ -265,6 +265,19 @@ describe('assembleModuleView', () => {
     expect(p0!.keys.map((k) => k.sectionId)).toEqual(['k1', 'k2', 'stub']);
     expect(p0!.keys.find((k) => k.sectionId === 'stub')!.groups[0]!.blocks).toEqual([]);
   });
+
+  it('empty axis keeps ruler ticks and hides hang-offs', () => {
+    const view = assembleModuleView(
+      book,
+      { read: [], priority: ['p0', 'p1'] },
+      undefined,
+      'idx',
+    );
+    expect(view!.buckets[0]!.keys.map((k) => k.sectionId)).toEqual(['k1', 'k2']);
+    expect(
+      view!.buckets[0]!.keys.every((k) => k.groups.every((g) => g.blocks.length === 0)),
+    ).toBe(true);
+  });
 });
 
 describe('rulerOutlineEntries', () => {

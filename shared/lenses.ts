@@ -338,11 +338,15 @@ export function pageVisibleInSelection(
     const leaves = toc?.lenses?.[axis]?.length
       ? effectiveAxisLeaves(toc, axis, normalizeAxisSelection(chosen))
       : normalizeAxisSelection(chosen);
-    if (leaves.length === 0) return false;
+    const opts = layerOptions(layers[axis]);
+    // Empty leaf selection: hide pages tagged on this axis; untagged pages pass.
+    if (leaves.length === 0) {
+      if (opts.length > 0) return false;
+      continue;
+    }
     // 概览 = 该轴不按整页层收窄（与小节 allowlist 一致）.
     if (leaves.includes('overview')) continue;
     if (axisOpenedByWholePageLayers(moduleIndex, axis, leaves)) continue;
-    const opts = layerOptions(layers[axis]);
     if (opts.length === 0) continue;
     if (!leaves.some((leaf) => opts.includes(leaf))) return false;
   }
@@ -434,6 +438,9 @@ function axisOpenedByWholePageLayers(
  * Section ids to show for the current selection, or null = no filter (all).
  * Per axis:
  * - Non-leaf selected (axis id / parent) → 该维不筛选 (skip).
+ * - Empty leaf selection → same as unmatched leaf: `display` = index shells only
+ *   (尺子刻度常显；挂靠正文隐藏); `hungOnly` = empty. Untagged chapters also get
+ *   shells-only (not `continue` / open-axis).
  * - Selected leaf with no allowlist on this page:
  *   - `overview`, or a leaf in page `layers` → whole-page (no section filter).
  *   - or module index has matching whole-page layers → same (挂靠页跟随模块归属).
@@ -464,10 +471,16 @@ export function sectionAllowlistFor(
     const leaves = toc?.lenses?.[axis]?.length
       ? effectiveAxisLeaves(toc, axis, normalizeAxisSelection(chosen))
       : normalizeAxisSelection(chosen);
-    if (leaves.length === 0) continue;
 
     const axisAllows = chapter.sectionAllowlists?.[axis];
     const layerOpts = layerOptions(chapter.layers?.[axis]);
+
+    // Empty leaves = no leaf matched: keep index shells (ticks), hide hangs.
+    if (leaves.length === 0) {
+      lists.push(mode === 'display' ? [...shellIds] : []);
+      continue;
+    }
+
     const moduleOpens = axisOpenedByWholePageLayers(moduleIndex, axis, leaves);
 
     // No section table on this axis: whole-page leaf / module ownership → skip; else shells only.
@@ -816,8 +829,14 @@ function queryValues(query: LensQueryInput, key: string): string[] {
   return raw === '' ? [] : [raw];
 }
 
+function queryHasAxisKey(query: LensQueryInput, axis: string): boolean {
+  if (query instanceof URLSearchParams) return query.has(axis);
+  return Object.prototype.hasOwnProperty.call(query, axis);
+}
+
 /**
  * Read lens selection from URL query (axis → node id list).
+ * Present empty values (`axis=`) become `axis: []`; missing keys are omitted.
  * Returns null when no declared axis key is present.
  */
 export function lensSelectionFromQuery(
@@ -828,17 +847,20 @@ export function lensSelectionFromQuery(
   const out: LensSelection = {};
   let found = false;
   for (const axis of lensAxisIds(toc)) {
-    const raw = queryValues(query, axis);
-    if (raw.length === 0) continue;
+    if (!queryHasAxisKey(query, axis)) continue;
     found = true;
+    const raw = queryValues(query, axis);
     const allowed = allowedAxisSelectionIds(toc, axis);
     const pick = raw.filter((id) => allowed.has(id));
-    if (pick.length > 0) out[axis] = pick;
+    out[axis] = pick;
   }
   return found ? out : null;
 }
 
-/** Serialize selection to query params (array values → repeated keys). */
+/**
+ * Serialize selection to query params (array values → repeated keys).
+ * Empty axes are written as `axis=` so missing keys stay distinct from `[]`.
+ */
 export function lensQueryFromSelection(
   selection: LensSelection | null,
   toc: BookToc,
@@ -846,9 +868,13 @@ export function lensQueryFromSelection(
   if (!selection || !hasLenses(toc)) return {};
   const out: Record<string, string | string[]> = {};
   for (const axis of lensAxisIds(toc)) {
-    const v = selection[axis];
-    if (!v || v.length === 0) continue;
-    out[axis] = v.length === 1 ? v[0] : [...v];
+    if (!Object.prototype.hasOwnProperty.call(selection, axis)) continue;
+    const list = normalizeAxisSelection(selection[axis]);
+    if (list.length === 0) {
+      out[axis] = '';
+      continue;
+    }
+    out[axis] = list.length === 1 ? list[0] : [...list];
   }
   return out;
 }

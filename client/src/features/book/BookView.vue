@@ -97,12 +97,14 @@ function sanitizeSelection(
   const out: LensSelection = {};
   for (const axis of lensAxisIds(t)) {
     const allowed = allowedAxisSelectionIds(t, axis);
+    const hasKey = Object.prototype.hasOwnProperty.call(base, axis);
     const pick = normalizeAxisSelection(base[axis]).filter((id) => allowed.has(id));
     if (pick.length > 0) out[axis] = pick;
+    else if (hasKey) out[axis] = [];
     else if (fallback?.[axis]?.length) out[axis] = [...fallback[axis]];
   }
   const flat = selectionToFlatIds(t, out);
-  const normalized = flatIdsToSelection(t, flat, flat);
+  const normalized = flatIdsToSelection(t, flat, flat, { allowEmpty: true });
   if (!normalized) return null;
   if (ui.lensPickMode === 'single') {
     return collapseEachAxisToSingle(t, normalized);
@@ -428,9 +430,9 @@ function onLensSelect(options: PageLayer[]): void {
   if (!t || !sel) return;
   const prevFlat = selectionToFlatIds(t, sel);
   const added = options.filter((id) => !prevFlat.includes(id));
-  let nextSel = flatIdsToSelection(t, options, prevFlat);
+  let nextSel = flatIdsToSelection(t, options, prevFlat, { allowEmpty: true });
   if (!nextSel) return;
-  nextSel = finalizeSelection(t, nextSel, added, false);
+  nextSel = finalizeSelection(t, nextSel, added, true);
   setBookLensSelection(bookId.value, nextSel);
   syncLensQueryToRoute(nextSel, t, 'replace', chapterId.value);
 }
