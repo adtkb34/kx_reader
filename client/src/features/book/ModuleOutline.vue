@@ -149,9 +149,14 @@ function goSection(e: DigestOutlineRow): void {
   window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
 }
 
-function onCheck(sectionId: string, ev: Event): void {
-  const input = ev.target as HTMLInputElement;
-  emit('toggleKey', sectionId, input.checked);
+function onCheckClick(sectionId: string): void {
+  const currently = selectedSet.value.has(sectionId);
+  if (ui.outlinePickMode === 'single') {
+    if (currently) return;
+    emit('toggleKey', sectionId, true);
+    return;
+  }
+  emit('toggleKey', sectionId, !currently);
 }
 
 function setMode(mode: OutlinePickMode): void {
@@ -170,20 +175,20 @@ function isCheckableKey(e: DigestOutlineRow): boolean {
         <button
           type="button"
           class="outline-pick-mode-btn"
-          :class="{ active: ui.outlinePickMode === 'multi' }"
-          :aria-pressed="ui.outlinePickMode === 'multi'"
-          @click="setMode('multi')"
-        >
-          多选
-        </button>
-        <button
-          type="button"
-          class="outline-pick-mode-btn"
           :class="{ active: ui.outlinePickMode === 'single' }"
           :aria-pressed="ui.outlinePickMode === 'single'"
           @click="setMode('single')"
         >
           单选
+        </button>
+        <button
+          type="button"
+          class="outline-pick-mode-btn"
+          :class="{ active: ui.outlinePickMode === 'multi' }"
+          :aria-pressed="ui.outlinePickMode === 'multi'"
+          @click="setMode('multi')"
+        >
+          多选
         </button>
       </div>
       <button
@@ -208,14 +213,20 @@ function isCheckableKey(e: DigestOutlineRow): boolean {
               : '',
           ]"
         >
-          <label v-if="pickEnabled && isCheckableKey(e)" class="outline-key-row">
-            <input
-              type="checkbox"
-              class="outline-key-check"
-              :checked="selectedSet.has(e.sectionId!)"
-              @click.stop
-              @change="onCheck(e.sectionId!, $event)"
-            />
+          <div v-if="pickEnabled && isCheckableKey(e)" class="outline-key-row">
+            <button
+              type="button"
+              class="toc-page-check-wrap"
+              role="radio"
+              :aria-checked="selectedSet.has(e.sectionId!)"
+              :aria-label="`选择 ${e.title}`"
+              @click.prevent.stop="onCheckClick(e.sectionId!)"
+            >
+              <span
+                class="outline-key-check"
+                :class="{ 'is-on': selectedSet.has(e.sectionId!) }"
+              />
+            </button>
             <a href="#" @click.prevent="goSection(e)">
               <span v-if="e.number" class="digest-outline-num">{{ e.number }}</span>
               <span class="toc-sec-title">{{ e.title }}</span>
@@ -226,7 +237,7 @@ function isCheckableKey(e: DigestOutlineRow): boolean {
                 {{ noteCount(e.chapterId, e.sectionId) }}
               </span>
             </a>
-          </label>
+          </div>
           <a v-else href="#" @click.prevent="goSection(e)">
             <span v-if="e.number" class="digest-outline-num">{{ e.number }}</span>
             <span class="toc-sec-title">

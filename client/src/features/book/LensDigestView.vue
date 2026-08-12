@@ -38,6 +38,7 @@ import {
   selectionToFlatIds,
   visibleTocSections,
 } from '@shared/lenses';
+import { filterRulerKeysBySelection } from '@shared/outlineKeys';
 import { outlineNumbers } from '@shared/outlineNumbers';
 import {
   assembleModuleView,
@@ -69,6 +70,10 @@ const props = defineProps<{
   toc: BookToc;
   lensSelection?: LensSelection | null;
   rulerPick?: RulerPick;
+  /** Per-module selected outline keys (ruler digest reading filter). */
+  outlineKeyIdsByModule?: Record<string, string[]> | null;
+  /** When set, only render these leaf-module index ids (or plain chapter ids). */
+  focusModuleIds?: string[] | null;
 }>();
 
 const emit = defineEmits<{
@@ -170,11 +175,26 @@ const visibleChapters = computed(() => {
   const sel = props.lensSelection ?? null;
   const filterOn =
     ui.lensContentFilter !== 'all' && selectionToFlatIds(props.toc, sel).length > 0;
-  if (!filterOn) return filterChapters(props.toc.chapters, sel, props.toc);
-  const level = getBookShowLevel(props.bookId);
-  return ui.lensContentFilter === 'empty'
-    ? filterChaptersWithoutContent(props.toc.chapters, sel, props.toc, level)
-    : filterChaptersWithContent(props.toc.chapters, sel, props.toc, level);
+  let chapters = !filterOn
+    ? filterChapters(props.toc.chapters, sel, props.toc)
+    : ui.lensContentFilter === 'empty'
+      ? filterChaptersWithoutContent(
+          props.toc.chapters,
+          sel,
+          props.toc,
+          getBookShowLevel(props.bookId),
+        )
+      : filterChaptersWithContent(
+          props.toc.chapters,
+          sel,
+          props.toc,
+          getBookShowLevel(props.bookId),
+        );
+  if (props.focusModuleIds?.length) {
+    const want = new Set(props.focusModuleIds);
+    chapters = chapters.filter((c) => want.has(c.id));
+  }
+  return chapters;
 });
 
 const activeLeaves = computed(
@@ -518,13 +538,23 @@ async function loadModulePlan(
   );
   if (!raw) return null;
   const hangMode = ui.lensContentFilter as RulerTickHangFilter;
-  const view = filterRulerAssembleView(
+  let view = filterRulerAssembleView(
     props.toc,
     opts.sel,
     opts.showLevel,
     raw,
     hangMode,
   );
+  const keyIds = props.outlineKeyIdsByModule?.[mod.indexChapterId];
+  if (keyIds != null) {
+    view = {
+      ...view,
+      buckets: view.buckets.map((b) => ({
+        ...b,
+        keys: filterRulerKeysBySelection(b.keys, keyIds),
+      })),
+    };
+  }
 
   const buckets = opts.axisLeaf
     ? view.buckets.filter((b) => b.leaf === opts.axisLeaf)
@@ -658,6 +688,10 @@ async function loadModules(): Promise<DigestGroupView[]> {
   if (hangMode === 'content' || hangMode === 'empty') {
     const ids = filterRulerModuleIndexIds(props.toc, sel, showLevel, hangMode);
     modules = modules.filter((m) => ids.has(m.indexChapterId));
+  }
+  if (props.focusModuleIds?.length) {
+    const want = new Set(props.focusModuleIds);
+    modules = modules.filter((m) => want.has(m.indexChapterId));
   }
   const chapterById = new Map(props.toc.chapters.map((c) => [c.id, c]));
 
@@ -819,6 +853,8 @@ watch(
       getBookShowLevel(props.bookId),
       ui.lensContentFilter,
       pick.value,
+      JSON.stringify(props.outlineKeyIdsByModule ?? null),
+      (props.focusModuleIds ?? []).join(','),
     ] as const,
   load,
   { immediate: true },

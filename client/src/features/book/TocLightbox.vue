@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted } from 'vue';
+import { computed, onBeforeUnmount, onMounted } from 'vue';
 import type { LensSelection, TocChapter, TocTreeNode } from '@shared/types';
 import TocTreeNodes from '@/features/book/TocTreeNodes.vue';
 import TocExpandModeSwitch from '@/features/book/TocExpandModeSwitch.vue';
 import { ui } from '@/stores/ui';
 
-defineProps<{
+const props = defineProps<{
   bookTitle: string;
   nodes: TocTreeNode[];
   bookId: string;
@@ -13,11 +13,20 @@ defineProps<{
   pageById: Record<string, TocChapter>;
   lensSelection?: LensSelection | null;
   outlineNums?: ReadonlyMap<string, string> | null;
+  tocNumWidthCh?: number;
+  pageSelectedIds?: string[] | null;
+  pageVisibleIds?: string[] | null;
+  pagePickEnabled?: boolean;
 }>();
 
 const emit = defineEmits<{
   close: [];
+  togglePage: [pageId: string, checked: boolean];
 }>();
+
+const treeStyle = computed(() => ({
+  '--toc-num-width': `${Math.max(props.tocNumWidthCh ?? 1, 1)}ch`,
+}));
 
 let prevOverflow = '';
 let prevPaddingRight = '';
@@ -33,6 +42,10 @@ function scrollbarWidth(): number {
 function onNavClick(e: MouseEvent): void {
   const t = e.target as HTMLElement | null;
   if (t?.closest('a.toc-chapter-link')) emit('close');
+}
+
+function onTogglePage(pageId: string, checked: boolean): void {
+  emit('togglePage', pageId, checked);
 }
 
 onMounted(() => {
@@ -74,7 +87,7 @@ onBeforeUnmount(() => {
         <div class="toc-lightbox-header">
           <div class="toc-lightbox-title">{{ bookTitle }}</div>
         </div>
-        <nav class="toc-lightbox-tree" @click.capture="onNavClick">
+        <nav class="toc-lightbox-tree" :style="treeStyle" @click.capture="onNavClick">
           <TocTreeNodes
             :nodes="nodes"
             :book-id="bookId"
@@ -83,6 +96,10 @@ onBeforeUnmount(() => {
             :lens-selection="lensSelection"
             :sibling-expand="ui.tocSiblingExpand"
             :outline-nums="outlineNums"
+            :page-selected-ids="pageSelectedIds ?? null"
+            :page-visible-ids="pageVisibleIds ?? null"
+            :page-pick-enabled="pagePickEnabled"
+            @toggle-page="onTogglePage"
           />
         </nav>
         <div class="toc-lightbox-footer">

@@ -28,7 +28,7 @@ import {
   type RulerTickHangFilter,
 } from '@shared/ruler';
 import { annotationsFor, sectionKey } from '@/stores/annotations';
-import { getBookShowLevel, ui } from '@/stores/ui';
+import { getBookShowLevel, setOutlinePickMode, ui, type OutlinePickMode } from '@/stores/ui';
 import type { DigestOutlineRow } from '@/features/book/outlineTypes';
 
 export type { DigestOutlineRow };
@@ -40,9 +40,20 @@ const props = defineProps<{
   rulerPick?: RulerPick;
   /**
    * When provided, render these rows (kept in lockstep with body).
-   * Omit to compute locally (fallback).
+   * Omit to compute locally (fallback). Ignored when outline pick UI is on.
    */
   syncRows?: DigestOutlineRow[];
+  /** moduleIndexId → selected outline key ids (ruler digest pick). */
+  outlineSelectedByModule?: Record<string, string[]>;
+  /** moduleIndexId → visible key ids (selected ∪ ancestors ∪ descendants). */
+  outlineVisibleByModule?: Record<string, string[]>;
+  /** When set, only list these leaf modules / chapters. */
+  focusModuleIds?: string[] | null;
+}>();
+
+const emit = defineEmits<{
+  toggleKey: [moduleIndexId: string, sectionId: string, checked: boolean];
+  selectTopLevel: [];
 }>();
 
 const anns = computed(() => annotationsFor(props.bookId));
@@ -51,12 +62,22 @@ const hangFilter = computed(
   (): RulerTickHangFilter => ui.lensContentFilter as RulerTickHangFilter,
 );
 
+const pickEnabled = computed(
+  () =>
+    !!props.toc.ruler &&
+    (props.outlineSelectedByModule !== undefined ||
+      props.outlineVisibleByModule !== undefined),
+);
+
 type OutlineItem = {
   id: string;
   title: string;
   level: number;
   chapterId?: string;
   sectionId?: string;
+  isKey?: boolean;
+  leafTitle?: string;
+  moduleIndexId?: string;
 };
 
 function buildDigestOutlineItems(
@@ -76,6 +97,10 @@ function buildDigestOutlineItems(
     ) {
       const ids = filterRulerModuleIndexIds(props.toc, sel, showLevel, hangMode);
       modules = modules.filter((m) => ids.has(m.indexChapterId));
+    }
+    if (props.focusModuleIds?.length) {
+      const want = new Set(props.focusModuleIds);
+      modules = modules.filter((m) => want.has(m.indexChapterId));
     }
 
     if (pick.value === 'index') {
@@ -97,6 +122,7 @@ function buildDigestOutlineItems(
           title: mod.title,
           level: pageLevel,
           chapterId: mod.indexChapterId,
+          moduleIndexId: mod.indexChapterId,
         });
         const entries = filterRulerOutlineEntries(
           props.toc,
@@ -120,6 +146,9 @@ function buildDigestOutlineItems(
             level,
             chapterId: e.chapterId,
             sectionId: e.sectionId,
+            isKey: e.isKey,
+            leafTitle: e.leafTitle,
+            moduleIndexId: mod.indexChapterId,
           });
         }
       }
@@ -185,6 +214,7 @@ function buildDigestOutlineItems(
             title: mod.title,
             level: pageLevel,
             chapterId: mod.indexChapterId,
+            moduleIndexId: mod.indexChapterId,
           });
           leafHasRows = true;
           for (const e of leafEntries) {
@@ -195,6 +225,9 @@ function buildDigestOutlineItems(
               level,
               chapterId: e.chapterId,
               sectionId: e.sectionId,
+              isKey: e.isKey,
+              leafTitle: e.leafTitle,
+              moduleIndexId: mod.indexChapterId,
             });
           }
         }
@@ -215,6 +248,9 @@ function buildDigestOutlineItems(
         : filterChaptersWithContent(props.toc.chapters, sel, props.toc, showLevel);
     const explicitOnly = applyContentFilter && ui.lensContentFilter === 'content';
     const emitted = new Set<string>();
+    const focus = props.focusModuleIds?.length
+      ? new Set(props.focusModuleIds)
+      : null;
     for (const g of groupChaptersForDigest(props.toc, chapters)) {
       for (let i = 0; i < g.groupPath.length; i++) {
         const key = g.groupPath.slice(0, i + 1).join('/');
@@ -227,6 +263,7 @@ function buildDigestOutlineItems(
         });
       }
       for (const ch of g.pages) {
+        if (focus && !focus.has(ch.id)) continue;
         const sections = visibleTocSections(ch, sel, props.toc, showLevel, explicitOnly);
         if (sections.length === 0 && !(applyContentFilter && ui.lensContentFilter === 'empty')) {
           continue;
@@ -253,11 +290,38 @@ function buildDigestOutlineItems(
   return items;
 }
 
+function filterItemsByOutlinePick(items: OutlineItem[]): OutlineItem[] {
+  if (!pickEnabled.value) return items;
+  const out: OutlineItem[] = [];
+  let keyVisible = true;
+  for (const e of items) {
+    if (!e.title) continue;
+    const mid = e.moduleIndexId;
+    if (e.isKey && e.sectionId && mid && !e.id.includes('ruler-bucket-')) {
+      const visible = new Set(props.outlineVisibleByModule?.[mid] ?? []);
+      keyVisible = visible.has(e.sectionId);
+      out.push(e);
+      continue;
+    }
+    if (e.isKey) {
+      out.push(e);
+      continue;
+    }
+    // path / page headers (no section body id)
+    if (!e.sectionId) {
+      out.push(e);
+      continue;
+    }
+    if (keyVisible) out.push(e);
+  }
+  return out;
+}
+
 const computedRows = computed((): DigestOutlineRow[] => {
-  const visible = buildDigestOutlineItems(hangFilter.value, true);
+  const visible = filterItemsByOutlinePick(buildDigestOutlineItems(hangFilter.value, true));
   const full =
     hangFilter.value === 'all' && ui.lensContentFilter === 'all'
-      ? visible
+      ? buildDigestOutlineItems('all', false)
       : buildDigestOutlineItems('all', false);
   const nums = outlineNumbers(full.map((i) => ({ id: i.id, level: i.level })));
   return visible.map((i) => ({
@@ -266,9 +330,10 @@ const computedRows = computed((): DigestOutlineRow[] => {
   }));
 });
 
-const rows = computed((): DigestOutlineRow[] =>
-  props.syncRows !== undefined ? props.syncRows : computedRows.value,
-);
+const rows = computed((): DigestOutlineRow[] => {
+  if (pickEnabled.value) return computedRows.value;
+  return props.syncRows !== undefined ? props.syncRows : computedRows.value;
+});
 
 function noteCount(chapterId?: string, sectionId?: string): number {
   if (!chapterId || !sectionId) return 0;
@@ -282,18 +347,110 @@ function go(row: DigestOutlineRow): void {
   const y = el.getBoundingClientRect().top + window.scrollY - topbarOffset;
   window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
 }
+
+function isCheckableKey(e: DigestOutlineRow): boolean {
+  return (
+    pickEnabled.value &&
+    !!e.isKey &&
+    !!e.sectionId &&
+    !!e.moduleIndexId &&
+    !e.id.includes('ruler-bucket-')
+  );
+}
+
+function isSelected(e: DigestOutlineRow): boolean {
+  if (!e.moduleIndexId || !e.sectionId) return false;
+  return (props.outlineSelectedByModule?.[e.moduleIndexId] ?? []).includes(e.sectionId);
+}
+
+function isDimmed(e: DigestOutlineRow): boolean {
+  if (!isCheckableKey(e) || !e.moduleIndexId || !e.sectionId) return false;
+  const visible = props.outlineVisibleByModule?.[e.moduleIndexId] ?? [];
+  return !visible.includes(e.sectionId);
+}
+
+function onCheckClick(e: DigestOutlineRow): void {
+  if (!e.moduleIndexId || !e.sectionId) return;
+  const currently = isSelected(e);
+  if (ui.outlinePickMode === 'single') {
+    if (currently) return;
+    emit('toggleKey', e.moduleIndexId, e.sectionId, true);
+    return;
+  }
+  emit('toggleKey', e.moduleIndexId, e.sectionId, !currently);
+}
+
+function setMode(mode: OutlinePickMode): void {
+  setOutlinePickMode(mode);
+}
 </script>
 
 <template>
-  <aside v-if="rows.length" class="chapter-outline">
-    <nav class="chapter-outline-nav">
+  <aside v-if="rows.length || pickEnabled" class="chapter-outline">
+    <div v-if="pickEnabled" class="outline-toolbar">
+      <div class="outline-pick-mode" role="group" aria-label="大纲选择方式">
+        <button
+          type="button"
+          class="outline-pick-mode-btn"
+          :class="{ active: ui.outlinePickMode === 'single' }"
+          :aria-pressed="ui.outlinePickMode === 'single'"
+          @click="setMode('single')"
+        >
+          单选
+        </button>
+        <button
+          type="button"
+          class="outline-pick-mode-btn"
+          :class="{ active: ui.outlinePickMode === 'multi' }"
+          :aria-pressed="ui.outlinePickMode === 'multi'"
+          @click="setMode('multi')"
+        >
+          多选
+        </button>
+      </div>
+      <button
+        type="button"
+        class="outline-pick-mode-btn outline-select-tops"
+        title="勾选全部最上层大纲键"
+        @click="emit('selectTopLevel')"
+      >
+        全选
+      </button>
+    </div>
+    <nav v-if="rows.length" class="chapter-outline-nav">
       <ul class="toc-sections digest-outline">
         <li
           v-for="r in rows"
           :key="r.id"
-          :class="`lvl-${r.level}`"
+          :class="[
+            `lvl-${r.level}`,
+            r.isKey ? 'ruler-outline-key' : '',
+            isDimmed(r) ? 'outline-key-dim' : '',
+          ]"
         >
-          <a href="#" @click.prevent="go(r)">
+          <div v-if="isCheckableKey(r)" class="outline-key-row">
+            <button
+              type="button"
+              class="toc-page-check-wrap"
+              role="radio"
+              :aria-checked="isSelected(r)"
+              :aria-label="`选择 ${r.title}`"
+              @click.prevent.stop="onCheckClick(r)"
+            >
+              <span
+                class="outline-key-check"
+                :class="{ 'is-on': isSelected(r) }"
+              />
+            </button>
+            <a href="#" @click.prevent="go(r)">
+              <span v-if="r.number" class="digest-outline-num">{{ r.number }}</span>
+              <span class="toc-sec-title">{{ r.title }}</span>
+              <span v-if="noteCount(r.chapterId, r.sectionId)" class="note-count">
+                {{ noteCount(r.chapterId, r.sectionId) }}
+              </span>
+            </a>
+          </div>
+          <a v-else href="#" @click.prevent="go(r)">
             <span v-if="r.number" class="digest-outline-num">{{ r.number }}</span>
             <span class="toc-sec-title">{{ r.title }}</span>
             <span v-if="noteCount(r.chapterId, r.sectionId)" class="note-count">

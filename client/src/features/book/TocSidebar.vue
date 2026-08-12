@@ -15,6 +15,15 @@ const props = defineProps<{
   /** Pre-filtered tree (by reading lens + content filter). */
   tree: TocTreeNode[];
   lensSelection?: LensSelection | null;
+  pageSelectedIds?: string[];
+  pageVisibleIds?: string[];
+  pagePickEnabled?: boolean;
+}>();
+
+const emit = defineEmits<{
+  togglePage: [pageId: string, checked: boolean];
+  selectAllPages: [];
+  setPagePickMode: [mode: 'single' | 'multi'];
 }>();
 
 const lightboxOpen = ref(false);
@@ -27,6 +36,22 @@ const pageById = computed(() => {
 
 /** Stable numbers: full tree, or ruler module-index shape (not lens-filtered). */
 const outlineNums = computed(() => tocSidebarOutlineNumbers(props.toc));
+
+const tocNumWidthCh = computed(() => {
+  let max = 0;
+  for (const n of outlineNums.value.values()) {
+    if (n.length > max) max = n.length;
+  }
+  return Math.max(max, 1);
+});
+
+const tocTreeStyle = computed(() => ({
+  '--toc-num-width': `${tocNumWidthCh.value}ch`,
+}));
+
+function onTogglePage(pageId: string, checked: boolean): void {
+  emit('togglePage', pageId, checked);
+}
 </script>
 
 <template>
@@ -43,7 +68,37 @@ const outlineNums = computed(() => tocSidebarOutlineNumbers(props.toc));
       </button>
       <div class="toc-book-title">{{ toc.title }}</div>
     </div>
-    <nav class="toc-tree">
+    <div v-if="pagePickEnabled" class="toc-page-pick-toolbar outline-toolbar">
+      <div class="outline-pick-mode" role="group" aria-label="目录页选择方式">
+        <button
+          type="button"
+          class="outline-pick-mode-btn"
+          :class="{ active: ui.tocPagePickMode === 'single' }"
+          :aria-pressed="ui.tocPagePickMode === 'single'"
+          @click="emit('setPagePickMode', 'single')"
+        >
+          单选
+        </button>
+        <button
+          type="button"
+          class="outline-pick-mode-btn"
+          :class="{ active: ui.tocPagePickMode === 'multi' }"
+          :aria-pressed="ui.tocPagePickMode === 'multi'"
+          @click="emit('setPagePickMode', 'multi')"
+        >
+          多选
+        </button>
+      </div>
+      <button
+        type="button"
+        class="outline-pick-mode-btn outline-select-tops"
+        title="勾选当前可见的全部页"
+        @click="emit('selectAllPages')"
+      >
+        全选
+      </button>
+    </div>
+    <nav class="toc-tree" :style="tocTreeStyle">
       <TocTreeNodes
         :nodes="tree"
         :book-id="bookId"
@@ -52,6 +107,10 @@ const outlineNums = computed(() => tocSidebarOutlineNumbers(props.toc));
         :lens-selection="lensSelection"
         :sibling-expand="ui.tocSiblingExpand"
         :outline-nums="outlineNums"
+        :page-selected-ids="pageSelectedIds ?? null"
+        :page-visible-ids="pageVisibleIds ?? null"
+        :page-pick-enabled="pagePickEnabled"
+        @toggle-page="onTogglePage"
       />
     </nav>
     <div class="toc-footer">
@@ -75,7 +134,12 @@ const outlineNums = computed(() => tocSidebarOutlineNumbers(props.toc));
       :page-by-id="pageById"
       :lens-selection="lensSelection"
       :outline-nums="outlineNums"
+      :toc-num-width-ch="tocNumWidthCh"
+      :page-selected-ids="pageSelectedIds ?? null"
+      :page-visible-ids="pageVisibleIds ?? null"
+      :page-pick-enabled="pagePickEnabled"
       @close="lightboxOpen = false"
+      @toggle-page="onTogglePage"
     />
   </aside>
 </template>

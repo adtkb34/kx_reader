@@ -43,6 +43,10 @@
           "file": "from-instinct/10-framework-first.md"
         },
         {
+          "id": "202608122301",
+          "file": "from-instinct/17-style-first.md"
+        },
+        {
           "id": "202607291918",
           "file": "from-instinct/11-responsibility-over-ability.md"
         },
@@ -55,12 +59,12 @@
           "title": "坐标与切分",
           "children": [
             {
-              "id": "202607291651",
-              "file": "from-instinct/06-shared-frame.md"
-            },
-            {
               "id": "202607291622",
               "file": "from-instinct/07-dimension-mixup.md"
+            },
+            {
+              "id": "202607291651",
+              "file": "from-instinct/06-shared-frame.md"
             },
             {
               "id": "202607291500",

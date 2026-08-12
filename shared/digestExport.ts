@@ -24,6 +24,7 @@ import {
   type ReaderShowLevel,
 } from './lenses';
 import { outlineNumbers } from './outlineNumbers';
+import { filterRulerKeysBySelection } from './outlineKeys';
 import {
   assembleModuleView,
   axisBucketAnchorId,
@@ -37,6 +38,7 @@ import {
   rulerOutlineEntries,
   rulerSidebarKeepIds,
   type LeafModule,
+  type RulerAssembleView,
   type RulerTickHangFilter,
 } from './ruler';
 import { extractSectionBodies, type SectionBody } from './sections';
@@ -220,7 +222,22 @@ export type DigestExportOptions = {
   readerShowLevel?: ReaderShowLevel;
   /** Body hang filter (matches topbar). Numbers always use stable `'all'`. */
   hangFilter?: RulerTickHangFilter;
+  /** When set, only export these leaf modules (index chapter ids) or plain chapters. */
+  focusModuleIds?: string[] | null;
+  /** @deprecated Prefer `focusModuleIds`. */
+  focusModuleId?: string | null;
+  /**
+   * Per-module selected outline key section ids (same as reading filter).
+   * Missing module ⇒ no key filter for that module.
+   */
+  outlineKeyIdsByModule?: Record<string, string[]> | null;
 };
+
+function focusModuleIdSet(opts: DigestExportOptions): Set<string> | null {
+  if (opts.focusModuleIds?.length) return new Set(opts.focusModuleIds);
+  if (opts.focusModuleId) return new Set([opts.focusModuleId]);
+  return null;
+}
 
 type MdBlock = {
   id: string;
@@ -366,6 +383,7 @@ function listRulerModules(
   selection: LensSelection | null,
   readerShowLevel: ReaderShowLevel,
   hangFilter: RulerTickHangFilter,
+  focusIds?: Set<string> | null,
 ): LeafModule[] {
   const keep = rulerSidebarKeepIds(toc, selection);
   let modules = listLeafModules(toc).filter((m) => keep.has(m.indexChapterId));
@@ -373,7 +391,39 @@ function listRulerModules(
     const ids = filterRulerModuleIndexIds(toc, selection, readerShowLevel, hangFilter);
     modules = modules.filter((m) => ids.has(m.indexChapterId));
   }
+  if (focusIds) {
+    modules = modules.filter((m) => focusIds.has(m.indexChapterId));
+  }
   return modules;
+}
+
+function outlineKeysForModule(
+  opts: DigestExportOptions,
+  moduleIndexId: string,
+): string[] | null | undefined {
+  const map = opts.outlineKeyIdsByModule;
+  if (!map) return undefined;
+  return Object.prototype.hasOwnProperty.call(map, moduleIndexId)
+    ? map[moduleIndexId]
+    : undefined;
+}
+
+/** Apply hang filter then optional outline-key selection to an assemble view. */
+function filterAssembleViewForExport(
+  toc: BookToc,
+  selection: LensSelection | null,
+  showLevel: ReaderShowLevel,
+  view: RulerAssembleView,
+  hangFilter: RulerTickHangFilter,
+  outlineKeyIds: string[] | null | undefined,
+): RulerAssembleView {
+  const hung = filterRulerAssembleView(toc, selection, showLevel, view, hangFilter);
+  if (outlineKeyIds == null) return hung;
+  const buckets = hung.buckets.map((b) => ({
+    ...b,
+    keys: filterRulerKeysBySelection(b.keys, outlineKeyIds),
+  }));
+  return { preamble: hung.preamble, buckets };
 }
 
 /** Chapter ids whose markdown is needed for the export. */
@@ -387,18 +437,33 @@ export function listDigestExportChapterIds(
   const ids = new Set<string>();
 
   if (!toc.ruler) {
+    const focus = focusModuleIdSet(opts);
     for (const ch of visiblePlainChapters(toc, selection, showLevel, hangFilter)) {
+      if (focus && !focus.has(ch.id)) continue;
       ids.add(ch.id);
     }
     return [...ids];
   }
 
   const pick = normalizeRulerPick(toc, opts.rulerPick);
-  const modules = listRulerModules(toc, selection, showLevel, hangFilter);
+  const modules = listRulerModules(
+    toc,
+    selection,
+    showLevel,
+    hangFilter,
+    focusModuleIdSet(opts),
+  );
   for (const mod of modules) {
     const raw = assembleModuleView(toc, selection, showLevel, mod.indexChapterId, pick);
     if (!raw) continue;
-    const view = filterRulerAssembleView(toc, selection, showLevel, raw, hangFilter);
+    const view = filterAssembleViewForExport(
+      toc,
+      selection,
+      showLevel,
+      raw,
+      hangFilter,
+      outlineKeysForModule(opts, mod.indexChapterId),
+    );
     for (const p of view.preamble) ids.add(p.chapterId);
     for (const b of view.buckets) {
       for (const k of b.keys) {
@@ -568,10 +633,18 @@ function buildModuleBlocks(
   bodies: Map<string, Map<string, SectionBody>>,
   chapterById: Map<string, TocChapter>,
   axisLeaf?: PageLayer,
+  outlineKeyIds?: string[] | null,
 ): MdBlock[] {
   const raw = assembleModuleView(toc, selection, showLevel, mod.indexChapterId, pick);
   if (!raw) return [];
-  const view = filterRulerAssembleView(toc, selection, showLevel, raw, hangFilter);
+  const view = filterAssembleViewForExport(
+    toc,
+    selection,
+    showLevel,
+    raw,
+    hangFilter,
+    outlineKeyIds,
+  );
   const buckets = axisLeaf ? view.buckets.filter((b) => b.leaf === axisLeaf) : view.buckets;
   if (axisLeaf && buckets.length === 0) return [];
   if (buckets.every((b) => b.keys.length === 0) && (axisLeaf || view.preamble.length === 0)) {
@@ -688,8 +761,11 @@ function buildPlainBlocks(
   hangFilter: RulerTickHangFilter,
   bodies: Map<string, Map<string, SectionBody>>,
   numberMap: Map<string, string>,
+  focusIds?: Set<string> | null,
 ): MdBlock[] {
-  const chapters = visiblePlainChapters(toc, selection, showLevel, hangFilter);
+  const chapters = visiblePlainChapters(toc, selection, showLevel, hangFilter).filter(
+    (ch) => !focusIds || focusIds.has(ch.id),
+  );
   const out: MdBlock[] = [];
   const emitted = new Set<string>();
   const contentOnly =
@@ -774,12 +850,26 @@ export function buildDigestMarkdown(
 
   if (!toc.ruler) {
     const nums = stablePlainNumberMap(toc, selection, showLevel);
-    const blocks = buildPlainBlocks(toc, selection, showLevel, hangFilter, bodies, nums);
+    const blocks = buildPlainBlocks(
+      toc,
+      selection,
+      showLevel,
+      hangFilter,
+      bodies,
+      nums,
+      focusModuleIdSet(opts),
+    );
     return renderBlocks(blocks, nums);
   }
 
   const pick = normalizeRulerPick(toc, opts.rulerPick);
-  const modules = listRulerModules(toc, selection, showLevel, hangFilter);
+  const modules = listRulerModules(
+    toc,
+    selection,
+    showLevel,
+    hangFilter,
+    focusModuleIdSet(opts),
+  );
   const nums = stableModuleNumberMap(toc, selection, showLevel, pick);
   const chapterById = new Map(toc.chapters.map((c) => [c.id, c]));
   const blocks: MdBlock[] = [];
@@ -796,6 +886,8 @@ export function buildDigestMarkdown(
         hangFilter,
         bodies,
         chapterById,
+        undefined,
+        outlineKeysForModule(opts, mod.indexChapterId),
       );
       if (modBlocks.length === 0) continue;
       blocks.push(...emitPathBlocks(mod.groupPath, emitted, nums));
@@ -821,6 +913,7 @@ export function buildDigestMarkdown(
           bodies,
           chapterById,
           leaf,
+          outlineKeysForModule(opts, mod.indexChapterId),
         );
         if (modBlocks.length === 0) continue;
         leafBlocks.push(

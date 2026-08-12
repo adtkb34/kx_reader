@@ -159,7 +159,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  /* checkbox → number (1.2× number → title) */
+  gap: var(--outline-check-to-num);
   padding: 8px 10px;
   border-radius: 8px;
   color: inherit;
@@ -167,6 +168,82 @@
   list-style: none;
   user-select: none;
   cursor: pointer;
+}
+
+.toc-chapter-row {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.toc-chapter-link {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--outline-check-to-num);
+  flex: 1;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Beat UA a:link / a:visited — color set per-depth below, not via inherit alone. */
+.toc-chapter-link:link,
+.toc-chapter-link:visited,
+.toc-chapter-link:hover,
+.toc-chapter-link:active {
+  color: inherit;
+  text-decoration: none;
+}
+
+.toc-page-check-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.outline-key-check {
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  display: block;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  padding: 0;
+  border: 1.5px solid #8a8680;
+  border-radius: 50%;
+  background: #fff;
+  flex: none;
+  cursor: pointer;
+}
+
+.outline-key-check.is-on {
+  border-color: var(--accent);
+  background: radial-gradient(
+    circle at center,
+    var(--accent) 0 35%,
+    #fff 40%
+  );
+}
+
+.toc-page-dim {
+  opacity: 0.45;
+}
+
+.toc-page-pick-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 8px;
 }
 
 .toc-group-summary::-webkit-details-marker {
@@ -182,37 +259,62 @@
 }
 
 .toc-row-title {
+  display: flex;
+  align-items: baseline;
   flex: 1;
+  min-width: 0;
+}
+
+.toc-row-title-text {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: inherit;
 }
 
 .toc-outline-num {
-  margin-right: 0.35em;
-  opacity: 0.55;
+  flex: none;
+  margin-right: var(--outline-num-to-title);
+  color: inherit;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-/* Same depth → same type style (group or page). */
-.toc-row--depth-0 > .toc-row-label {
+.toc-outline-num--empty {
+  display: none;
+}
+
+/* Same depth → same type style (group or page). Color on label AND chapter link. */
+.toc-row--depth-0 > .toc-row-label,
+.toc-row--depth-0 > .toc-row-label .toc-chapter-link,
+.toc-row--depth-0 > .toc-row-label .toc-chapter-link:link,
+.toc-row--depth-0 > .toc-row-label .toc-chapter-link:visited {
   font-size: 13px;
   font-weight: 500;
   color: var(--ink);
 }
 
-.toc-row--depth-1 > .toc-row-label {
+.toc-row--depth-1 > .toc-row-label,
+.toc-row--depth-1 > .toc-row-label .toc-chapter-link,
+.toc-row--depth-1 > .toc-row-label .toc-chapter-link:link,
+.toc-row--depth-1 > .toc-row-label .toc-chapter-link:visited {
   font-size: 13px;
   font-weight: 400;
-  color: #3d3a34;
+  color: var(--ink);
 }
 
 .toc-row--depth-2 > .toc-row-label,
-.toc-row--depth-3 > .toc-row-label {
+.toc-row--depth-2 > .toc-row-label .toc-chapter-link,
+.toc-row--depth-2 > .toc-row-label .toc-chapter-link:link,
+.toc-row--depth-2 > .toc-row-label .toc-chapter-link:visited,
+.toc-row--depth-3 > .toc-row-label,
+.toc-row--depth-3 > .toc-row-label .toc-chapter-link,
+.toc-row--depth-3 > .toc-row-label .toc-chapter-link:link,
+.toc-row--depth-3 > .toc-row-label .toc-chapter-link:visited {
   font-size: 12px;
   font-weight: 400;
-  color: #3d3a34;
+  color: var(--ink);
 }
 
 .toc-group-body {
@@ -223,6 +325,13 @@
 
 .toc-chapter.active > .toc-row-label {
   background: #edeae0;
+  font-weight: 400;
+  color: var(--ink);
+}
+
+.toc-chapter.active > .toc-row-label .toc-chapter-link,
+.toc-chapter.active > .toc-row-label .toc-chapter-link:link,
+.toc-chapter.active > .toc-row-label .toc-chapter-link:visited {
   font-weight: 400;
   color: var(--ink);
 }
@@ -264,7 +373,8 @@
 .toc-sections a {
   display: flex;
   align-items: center;
-  gap: 8px;
+  /* number → title via .digest-outline-num; note-count uses margin-left: auto */
+  gap: 0;
   padding: 5px 8px;
   font-size: 13px;
   color: var(--muted);
@@ -386,7 +496,8 @@
 .outline-key-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  /* checkbox → number (1.2× number → title) */
+  gap: var(--outline-check-to-num);
   padding: 5px 8px;
   border-radius: 6px;
   cursor: pointer;
@@ -406,7 +517,7 @@
   padding: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0;
   font-size: 13px;
   color: var(--muted);
   text-decoration: none;
@@ -416,15 +527,6 @@
 .outline-key-row:hover a {
   background: transparent;
   color: var(--ink);
-}
-
-.outline-key-check {
-  margin: 0;
-  flex: none;
-  width: 14px;
-  height: 14px;
-  accent-color: var(--accent);
-  cursor: pointer;
 }
 
 .outline-key-dim > .outline-key-row {
@@ -531,8 +633,8 @@
 }
 
 .digest-outline-num {
-  margin-right: 0.4em;
-  opacity: 0.55;
+  margin-right: var(--outline-num-to-title);
+  color: inherit;
   font-variant-numeric: tabular-nums;
 }
 

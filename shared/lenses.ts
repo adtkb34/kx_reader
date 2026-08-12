@@ -346,8 +346,6 @@ export function pageVisibleInSelection(
       if (opts.length > 0) return false;
       continue;
     }
-    // 概览 = 该轴不按整页层收窄（与小节 allowlist 一致）.
-    if (leaves.includes('overview')) continue;
     if (axisOpenedByWholePageLayers(moduleIndex, axis, leaves)) continue;
     if (opts.length === 0) continue;
     if (!leaves.some((leaf) => opts.includes(leaf))) return false;
@@ -488,7 +486,7 @@ function axisOpenedByWholePageLayers(
 ): boolean {
   if (!chapter) return false;
   const opts = layerOptions(chapter.layers?.[axis as LensAxisId]);
-  return leaves.some((leaf) => leaf === 'overview' || opts.includes(leaf));
+  return leaves.some((leaf) => opts.includes(leaf));
 }
 
 /**
@@ -499,7 +497,7 @@ function axisOpenedByWholePageLayers(
  *   (尺子刻度常显；挂靠正文隐藏); `hungOnly` = empty. Untagged chapters also get
  *   shells-only (not `continue` / open-axis).
  * - Selected leaf with no allowlist on this page:
- *   - `overview`, or a leaf in page `layers` → whole-page (no section filter).
+ *   - leaf in page `layers` → whole-page (no section filter).
  *   - or module index has matching whole-page layers → same (挂靠页跟随模块归属).
  *   - otherwise → `display` = index shells only; `hungOnly` = empty.
  * - Selected leaf with an allowlist:
@@ -542,10 +540,7 @@ export function sectionAllowlistFor(
 
     // No section table on this axis: whole-page leaf / module ownership → skip; else shells only.
     if (!axisAllows) {
-      if (
-        leaves.some((leaf) => leaf === 'overview' || layerOpts.includes(leaf)) ||
-        moduleOpens
-      ) {
+      if (leaves.some((leaf) => layerOpts.includes(leaf)) || moduleOpens) {
         continue;
       }
       lists.push(mode === 'display' ? [...shellIds] : []);
@@ -557,8 +552,8 @@ export function sectionAllowlistFor(
     for (const leaf of leaves) {
       const allow = axisAllows[leaf];
       if (!allow) {
-        // 概览 = 整页总览；`layers` 整页叶同理。其它未配小节表的叶 → 无本叶挂靠。
-        if (leaf === 'overview' || layerOpts.includes(leaf) || moduleOpens) {
+        // 整页层匹配 / 模块 index 归属 → 整页；其它未配小节表的叶 → 无本叶挂靠。
+        if (layerOpts.includes(leaf) || moduleOpens) {
           wholePage = true;
           break;
         }

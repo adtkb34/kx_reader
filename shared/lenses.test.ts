@@ -314,12 +314,19 @@ describe('pageVisibleInSelection', () => {
     expect(pageVisibleInSelection(index, { read: ['impl'] }, tocWithLenses)).toBe(true);
   });
 
-  it('overview leaf does not hide pages tagged to other leaves on that axis', () => {
+  it('overview leaf only shows pages tagged overview (same as any other leaf)', () => {
     const flow: TocChapter = {
       id: 'flow',
       title: '流程',
       file: 'flow.md',
       layers: { read: ['scenario'] },
+      sections: [],
+    };
+    const overview: TocChapter = {
+      id: 'ov',
+      title: '概览',
+      file: 'overview.md',
+      layers: { read: ['overview'] },
       sections: [],
     };
     const toc = {
@@ -333,7 +340,8 @@ describe('pageVisibleInSelection', () => {
         ],
       },
     };
-    expect(pageVisibleInSelection(flow, { read: ['overview'] }, toc)).toBe(true);
+    expect(pageVisibleInSelection(flow, { read: ['overview'] }, toc)).toBe(false);
+    expect(pageVisibleInSelection(overview, { read: ['overview'] }, toc)).toBe(true);
     expect(pageVisibleInSelection(flow, { read: ['impl'] }, toc)).toBe(false);
   });
 
@@ -716,8 +724,8 @@ describe('sectionAllowlistFor', () => {
         ],
       },
     };
-    // 概览 = whole-page overview of the module (index / hang-offs stay visible).
-    expect(sectionAllowlistFor(process, { biz: ['overview'] }, toc)).toBeNull();
+    // 概览与其它叶相同：无本叶挂靠表 → 不放开整页（只留壳，本页无壳则空）。
+    expect(sectionAllowlistFor(process, { biz: ['overview'] }, toc)?.sort()).toEqual([]);
     // 选流程叶：只看挂流程的；未挂 biz 的 stub 隐藏。
     expect(sectionAllowlistFor(process, { biz: ['flow'] }, toc)?.sort()).toEqual([
       'flow-a',

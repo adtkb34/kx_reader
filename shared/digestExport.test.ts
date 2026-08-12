@@ -289,4 +289,35 @@ title: 流程
     });
     expect(ids.sort()).toEqual(['flow', 'idx']);
   });
+
+  it('focusModuleIds limits export to listed modules', () => {
+    const md = buildDigestMarkdown(book, chapterMarkdown, {
+      selection: { read: ['flow'], priority: ['p0'] },
+      rulerPick: 'index',
+      hangFilter: 'all',
+      focusModuleIds: ['idx'],
+    });
+    expect(md).toMatch(/步骤一/);
+    expect(md).toContain('刻度一正文');
+    const ids = listDigestExportChapterIds(book, {
+      selection: { read: ['flow'], priority: ['p0'] },
+      rulerPick: 'index',
+      focusModuleIds: ['idx'],
+    });
+    expect(ids.sort()).toEqual(['flow', 'idx']);
+  });
+
+  it('outlineKeyIdsByModule keeps only selected ruler keys', () => {
+    const md = buildDigestMarkdown(book, chapterMarkdown, {
+      selection: { read: ['flow'], priority: ['p0'] },
+      rulerPick: 'index',
+      hangFilter: 'all',
+      outlineKeyIdsByModule: { idx: ['k1'] },
+    });
+    expect(md).toMatch(/步骤一/);
+    expect(md).toContain('刻度一正文');
+    expect(md).toContain('挂靠正文');
+    expect(md).not.toMatch(/步骤二/);
+    expect(md).not.toContain('刻度二正文');
+  });
 });

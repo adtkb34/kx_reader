@@ -2,21 +2,24 @@
 import {
   getBookShowLevel,
   getBookRulerPick,
+  getOutlineKeySelection,
   getStoredLensSelection,
   setBookLensSelection,
   setBookRulerPick,
   setBookShowLevel,
   setLensContentFilter,
   setLensPickMode,
-  setLensReadMode,
   toggleDetailsOpen,
   toggleTocOpen,
   ui,
   type LensAxisPickMode,
-  type LensReadMode,
 } from '@/stores/ui';
 import { useOrphans } from '@/composables/orphans';
-import { useRulerOutlineKeySelection } from '@/composables/outlineKeys';
+import {
+  useDigestOutlineKeySelection,
+  useRulerOutlineKeySelection,
+} from '@/composables/outlineKeys';
+import { useTocPageSelection } from '@/composables/tocPageSelection';
 import {
   allowedAxisSelectionIds,
   bookContentRanks,
@@ -46,7 +49,7 @@ import {
   filterRulerModuleIndexIds,
   findLeafModule,
   findRulerModuleIndexId,
-  findRulerSkeletonChapter,
+  listLeafModules,
   moduleHasEmptyTicks,
   moduleHasHungTicks,
   normalizeRulerPick,
@@ -98,9 +101,40 @@ const canExportDigest = computed(() => {
   return hasLenses(t) || !!t.ruler;
 });
 
+/** Outline key picks for export (same as reading filter). Missing module ⇒ no key filter. */
+function outlineKeyIdsByModuleForExport(focusIds: string[] | null): Record<string, string[]> | null {
+  const t = toc.value;
+  const bid = bookId.value;
+  if (!t?.ruler || !bid) return null;
+  const out: Record<string, string[]> = {};
+  const focus = focusIds?.length ? new Set(focusIds) : null;
+  const mods = listLeafModules(t).filter((m) => !focus || focus.has(m.indexChapterId));
+  for (const mod of mods) {
+    const scope = `${bid}::${mod.indexChapterId}`;
+    const fromUi = ui.outlineKeysByScope[scope];
+    if (fromUi) {
+      out[mod.indexChapterId] = [...fromUi];
+      continue;
+    }
+    const stored = getOutlineKeySelection(bid, mod.indexChapterId);
+    if (stored) out[mod.indexChapterId] = stored;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 async function exportDigestMarkdown(): Promise<void> {
   const t = toc.value;
   if (!t || exportBusy.value) return;
+  const focusIds = orderedSelectedIds.value.length
+    ? [...orderedSelectedIds.value]
+    : chapterId.value
+      ? [
+          t.ruler
+            ? (findRulerModuleIndexId(t, chapterId.value) ?? chapterId.value)
+            : chapterId.value,
+        ]
+      : [];
+  if (focusIds.length === 0) return;
   exportBusy.value = true;
   exportError.value = '';
   try {
@@ -108,12 +142,16 @@ async function exportDigestMarkdown(): Promise<void> {
     const rulerPick = t.ruler ? activeRulerPick.value : 'index';
     const hangFilter = ui.lensContentFilter as RulerTickHangFilter;
     const showLevel = readerShowLevel.value;
-    const ids = listDigestExportChapterIds(t, {
+    const outlineKeyIdsByModule = outlineKeyIdsByModuleForExport(focusIds);
+    const exportOpts = {
       selection,
       rulerPick,
       readerShowLevel: showLevel,
       hangFilter,
-    });
+      focusModuleIds: focusIds,
+      outlineKeyIdsByModule,
+    };
+    const ids = listDigestExportChapterIds(t, exportOpts);
     const chapterMarkdown = new Map<string, string>();
     await Promise.all(
       ids.map(async (id) => {
@@ -121,14 +159,16 @@ async function exportDigestMarkdown(): Promise<void> {
         chapterMarkdown.set(id, content.markdown);
       }),
     );
-    const md = buildDigestMarkdown(t, chapterMarkdown, {
-      selection,
-      rulerPick,
-      readerShowLevel: showLevel,
-      hangFilter,
-    });
-    const pickLabel = t.ruler ? String(rulerPick) : 'digest';
-    const filename = `${sanitizeDownloadName(t.title)}-汇总-${sanitizeDownloadName(pickLabel)}.md`;
+    const md = buildDigestMarkdown(t, chapterMarkdown, exportOpts);
+    let filename: string;
+    if (focusIds.length === 1) {
+      const pageTitle =
+        t.chapters.find((c) => c.id === focusIds[0])?.title ?? focusIds[0]!;
+      filename = `${sanitizeDownloadName(t.title)}-${sanitizeDownloadName(pageTitle)}.md`;
+    } else {
+      const pickLabel = t.ruler ? String(rulerPick) : 'export';
+      filename = `${sanitizeDownloadName(t.title)}-${sanitizeDownloadName(pickLabel)}.md`;
+    }
     downloadTextFile(filename, md);
   } catch (e) {
     exportError.value = e instanceof Error ? e.message : String(e);
@@ -169,18 +209,6 @@ const activeSelection = computed<LensSelection | null>(() => {
   const candidate = ui.lensByBook[bookId.value] ?? getStoredLensSelection(bookId.value);
   return sanitizeSelection(candidate, t);
 });
-
-const {
-  selectedIds: outlineKeyIds,
-  visibleKeyIds: outlineVisibleIds,
-  onToggleKey: onOutlineKeyToggle,
-  selectTopLevelKeys: onOutlineSelectTopLevel,
-} = useRulerOutlineKeySelection(
-  () => bookId.value,
-  () => toc.value,
-  () => activeSelection.value,
-  () => chapterId.value || null,
-);
 
 const isModuleBook = computed(() => !!toc.value?.ruler);
 
@@ -501,19 +529,6 @@ function onLensPickMode(mode: LensAxisPickMode): void {
   syncLensQueryToRoute(nextSel, t, target !== chapterId.value ? 'push' : 'replace', target);
 }
 
-function onLensReadMode(mode: LensReadMode): void {
-  setLensReadMode(mode === 'digest' ? 'digest' : 'page');
-  const t = toc.value;
-  if (!t?.ruler || !chapterId.value) return;
-  // Ensure route points at module index when reading a ruler book.
-  const indexId =
-    findRulerModuleIndexId(t, chapterId.value) ?? findRulerSkeletonChapter(t)?.id;
-  if (indexId && indexId !== chapterId.value && mode === 'page') {
-    const sel = activeSelection.value;
-    if (sel) syncLensQueryToRoute(sel, t, 'replace', indexId);
-  }
-}
-
 function onRulerPick(raw: string): void {
   const t = toc.value;
   if (!t?.ruler) return;
@@ -523,14 +538,6 @@ function onRulerPick(raw: string): void {
   digestOutlineSync.value = [];
   moduleOutlineSync.value = [];
 }
-
-const isDigestMode = computed(
-  () =>
-    !!toc.value &&
-    hasLenses(toc.value) &&
-    ui.lensReadMode === 'digest' &&
-    !!activeSelection.value,
-);
 
 const filteredTree = computed(() => {
   const t = toc.value;
@@ -555,8 +562,65 @@ const filteredTree = computed(() => {
         title: c.title,
         file: c.file,
       }));
-  return collapseSingletonGroups(filterTree(base, ids));
+  return t.ruler
+    ? collapseSingletonGroups(filterTree(base, ids))
+    : filterTree(base, ids);
 });
+
+const {
+  selectedIds: tocSelectedPageIds,
+  visibleIds: tocVisiblePageIds,
+  orderedSelectedIds,
+  isMultiPageView,
+  onTogglePage: onTocTogglePage,
+  selectAllPages: onTocSelectAllPages,
+  setMode: onTocPagePickMode,
+} = useTocPageSelection(
+  () => bookId.value,
+  () => toc.value,
+  () => filteredTree.value,
+  () => chapterId.value,
+);
+
+/** Focus chapter for single-page ModulePage / outline keys. */
+const focusReadChapterId = computed(
+  () => orderedSelectedIds.value[0] ?? chapterId.value,
+);
+
+const {
+  selectedIds: outlineKeyIds,
+  visibleKeyIds: outlineVisibleIds,
+  onToggleKey: onOutlineKeyToggle,
+  selectTopLevelKeys: onOutlineSelectTopLevel,
+} = useRulerOutlineKeySelection(
+  () => bookId.value,
+  () => toc.value,
+  () => activeSelection.value,
+  () => focusReadChapterId.value || null,
+);
+
+const {
+  selectedByModule: digestOutlineSelectedByModule,
+  visibleByModule: digestOutlineVisibleByModule,
+  onToggleKey: onDigestOutlineKeyToggle,
+  selectTopLevelKeys: onDigestOutlineSelectTopLevel,
+} = useDigestOutlineKeySelection(
+  () => bookId.value,
+  () => toc.value,
+  () => activeSelection.value,
+);
+
+function onTocPageToggle(pageId: string, checked: boolean): void {
+  onTocTogglePage(pageId, checked);
+  if (ui.tocPagePickMode === 'single' && checked && pageId !== chapterId.value) {
+    const t = toc.value;
+    const page = t?.chapters.find((c) => c.id === pageId);
+    if (!page) return;
+    const sel = activeSelection.value;
+    if (t && sel) syncLensQueryToRoute(sel, t, 'push', pageId);
+    else go(page);
+  }
+}
 
 watch(
   () => [toc.value?.ruler, getBookRulerPick(bookId.value)] as const,
@@ -597,6 +661,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
       :book-id="bookId"
       :current-chapter-id="chapterId"
       :lens-selection="activeSelection"
+      :page-selected-ids="tocSelectedPageIds"
+      :page-visible-ids="tocVisiblePageIds"
+      :page-pick-enabled="true"
+      @toggle-page="onTocPageToggle"
+      @select-all-pages="onTocSelectAllPages"
+      @set-page-pick-mode="onTocPagePickMode"
     />
     <div class="book-main">
       <div class="topbar">
@@ -616,17 +686,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
           v-if="(lensSelectTree.length && activeSelection) || contentRanks.length || isModuleBook"
           class="lens-controls"
         >
-          <template v-if="lensSelectTree.length && activeSelection">
-            <span class="visually-hidden">阅读模式</span>
-            <el-select
-              class="lens-mode-select"
-              :model-value="ui.lensReadMode"
-              @update:model-value="onLensReadMode($event as LensReadMode)"
-            >
-              <el-option label="单页" value="page" />
-              <el-option label="汇总" value="digest" />
-            </el-select>
-          </template>
           <template v-if="rulerPickOptions.length">
             <span class="visually-hidden">尺子</span>
             <el-select
@@ -649,8 +708,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
               :model-value="ui.lensPickMode"
               @update:model-value="onLensPickMode($event as LensAxisPickMode)"
             >
-              <el-option label="多选" value="multi" />
               <el-option label="单选" value="single" />
+              <el-option label="多选" value="multi" />
             </el-select>
             <div class="lens-select-wrap">
               <span class="visually-hidden">透镜</span>
@@ -707,11 +766,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
           v-if="canExportDigest"
           class="btn ghost"
           type="button"
-          :disabled="exportBusy"
-          :title="exportError || '按当前透镜与尺子导出全书汇总 Markdown'"
+          :disabled="exportBusy || orderedSelectedIds.length === 0"
+          :title="exportError || '导出当前勾选与过滤下的 Markdown'"
           @click="exportDigestMarkdown()"
         >
-          {{ exportBusy ? '导出中…' : '导出汇总' }}
+          {{ exportBusy ? '导出中…' : '导出' }}
         </button>
         <button class="btn ghost" @click="toggleDetailsOpen()">
           {{ ui.detailsOpen ? '收起细节' : '展开细节' }}
@@ -721,18 +780,20 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
         <div class="book-reading">
           <div class="book-content">
             <LensDigestView
-              v-if="isDigestMode && toc"
+              v-if="isMultiPageView && toc"
               :book-id="bookId"
               :toc="toc"
               :lens-selection="activeSelection"
               :ruler-pick="activeRulerPick"
+              :outline-key-ids-by-module="digestOutlineSelectedByModule"
+              :focus-module-ids="orderedSelectedIds"
               @outline="digestOutlineSync = $event"
             />
             <ModulePage
-              v-else-if="isModuleBook && chapterId && toc"
+              v-else-if="isModuleBook && focusReadChapterId && toc"
               :book-id="bookId"
               :toc="toc"
-              :chapter-id="chapterId"
+              :chapter-id="focusReadChapterId"
               :prev-chapter="prevChapter"
               :next-chapter="nextChapter"
               :lens-selection="activeSelection"
@@ -740,28 +801,37 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
               @outline="moduleOutlineSync = $event"
             />
             <ChapterPage
-              v-else-if="chapterId"
+              v-else-if="focusReadChapterId"
               :book-id="bookId"
-              :chapter-id="chapterId"
+              :chapter-id="focusReadChapterId"
               :prev-chapter="prevChapter"
               :next-chapter="nextChapter"
               :lens-selection="activeSelection"
             />
           </div>
           <DigestOutline
-            v-if="isDigestMode && toc"
+            v-if="isMultiPageView && toc"
             :toc="toc"
             :book-id="bookId"
             :lens-selection="activeSelection"
             :ruler-pick="activeRulerPick"
             :sync-rows="digestOutlineSync"
+            :focus-module-ids="orderedSelectedIds"
+            :outline-selected-by-module="
+              toc.ruler ? digestOutlineSelectedByModule : undefined
+            "
+            :outline-visible-by-module="
+              toc.ruler ? digestOutlineVisibleByModule : undefined
+            "
+            @toggle-key="onDigestOutlineKeyToggle"
+            @select-top-level="onDigestOutlineSelectTopLevel"
           />
           <ModuleOutline
-            v-else-if="isModuleBook && toc && chapterId"
+            v-else-if="isModuleBook && toc && focusReadChapterId"
             :toc="toc"
             :book-id="bookId"
             :lens-selection="activeSelection"
-            :focus-chapter-id="chapterId"
+            :focus-chapter-id="focusReadChapterId"
             :sync-rows="moduleOutlineSync"
             :outline-selected-ids="outlineKeyIds"
             :outline-visible-ids="outlineVisibleIds"

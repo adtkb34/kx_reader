@@ -8,4 +8,6 @@ export interface DigestOutlineRow {
   sectionId?: string;
   isKey?: boolean;
   leafTitle?: string;
+  /** Ruler leaf-module index id (for digest multi-module key picks). */
+  moduleIndexId?: string;
 }

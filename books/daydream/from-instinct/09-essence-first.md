@@ -25,7 +25,7 @@ title: 本质优先
 ## 例子
 
 :::details 写札记 / 讲道理
-要带走的是「同级混用了不同尺子」；目录、导航只是插图。开篇若写成「PRD 怎么排」，带走的多半是 PRD。见 [维度错位](07-dimension-mixup.md#claim)。
+要带走的是「同级混用了不同尺子」；目录、导航只是插图。开篇若写成「PRD 怎么排」，带走的多半是 PRD。见 [同级同尺](07-dimension-mixup.md#claim)。
 :::
 
 :::details 教与带人

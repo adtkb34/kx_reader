@@ -13,6 +13,9 @@
   --unread: #9ca3af;
   --read: #22c55e;
   --question: #f59e0b;
+  /* Outline / TOC: number→title base; checkbox→number = 1.2× */
+  --outline-num-to-title: 0.4em;
+  --outline-check-to-num: calc(var(--outline-num-to-title) * 1.2);
   --confirmed: #3b82f6;
   /* Lens dimension accents — soft edge tints only (multi-select chrome) */
   --lens-default: #9a958c;

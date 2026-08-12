@@ -8,8 +8,8 @@ export type LensAxisPickMode = 'multi' | 'single';
 /** Outline key multi-select vs single-select (independent from lens). */
 export type OutlinePickMode = 'multi' | 'single';
 
-/** Single-page (leaf module) reading vs lens digest. */
-export type LensReadMode = 'page' | 'digest';
+/** Left TOC page pick: one page vs many pages in the reading body. */
+export type TocPagePickMode = 'multi' | 'single';
 
 /** TOC group expand: one sibling at a time vs many. */
 export type TocSiblingExpand = 'single' | 'multi';
@@ -18,8 +18,8 @@ export type TocSiblingExpand = 'single' | 'multi';
 export type LensContentFilter = 'all' | 'content' | 'empty';
 
 const LENS_PICK_KEY = 'reader.lensPickMode';
-const LENS_READ_KEY = 'reader.lensReadMode';
 const OUTLINE_PICK_KEY = 'reader.outlinePickMode';
+const TOC_PAGE_PICK_KEY = 'reader.tocPagePickMode';
 const TOC_EXPAND_KEY = 'reader.tocSiblingExpand';
 const TOC_EXPAND_LEGACY_KEY = 'reader.tocLightboxExpand';
 const LENS_CONTENT_FILTER_KEY = 'reader.lensContentFilter';
@@ -37,11 +37,10 @@ function readOutlinePickMode(): OutlinePickMode {
   return 'multi';
 }
 
-function readLensReadMode(): LensReadMode {
-  const raw = localStorage.getItem(LENS_READ_KEY);
-  // Migrate removed「尺子」read mode → 单页.
-  if (raw === 'digest') return 'digest';
-  return 'page';
+function readTocPagePickMode(): TocPagePickMode {
+  const raw = localStorage.getItem(TOC_PAGE_PICK_KEY);
+  if (raw === 'multi') return 'multi';
+  return 'single';
 }
 
 function readTocSiblingExpand(): TocSiblingExpand {
@@ -86,8 +85,8 @@ export const ui = reactive({
   lensPickMode: readLensPickMode() as LensAxisPickMode,
   /** Outline keys: default multi; independent from lensPickMode. */
   outlinePickMode: readOutlinePickMode() as OutlinePickMode,
-  /** 单页 = leaf module; 汇总 = all visible modules. */
-  lensReadMode: readLensReadMode() as LensReadMode,
+  /** Left TOC page pick: default single. */
+  tocPagePickMode: readTocPagePickMode() as TocPagePickMode,
   /** TOC groups: 单开 = one sibling; 多开 = many siblings open. */
   tocSiblingExpand: readTocSiblingExpand() as TocSiblingExpand,
   /**
@@ -97,6 +96,8 @@ export const ui = reactive({
   lensContentFilter: readLensContentFilter() as LensContentFilter,
   /** Selected ruler outline keys per `bookId::moduleIndexId`. */
   outlineKeysByScope: {} as Record<string, string[]>,
+  /** Selected TOC page ids (leaf module index / chapter) per book. */
+  tocPagesByBook: {} as Record<string, string[]>,
 });
 
 /** Load per-book content rank ceiling; `null` = 全部. */
@@ -142,9 +143,9 @@ export function setOutlinePickMode(mode: OutlinePickMode): void {
   localStorage.setItem(OUTLINE_PICK_KEY, mode);
 }
 
-export function setLensReadMode(mode: LensReadMode): void {
-  ui.lensReadMode = mode;
-  localStorage.setItem(LENS_READ_KEY, mode);
+export function setTocPagePickMode(mode: TocPagePickMode): void {
+  ui.tocPagePickMode = mode;
+  localStorage.setItem(TOC_PAGE_PICK_KEY, mode);
 }
 
 export function setTocSiblingExpand(mode: TocSiblingExpand): void {
@@ -278,4 +279,37 @@ export function setOutlineKeySelection(
   if (availableIds) {
     outlineAvailableByScope[scope] = [...availableIds];
   }
+}
+
+function tocPagesStorageKey(bookId: string): string {
+  return `reader.tocPages.${bookId}`;
+}
+
+function readStoredTocPages(bookId: string): string[] | null {
+  const raw = localStorage.getItem(tocPagesStorageKey(bookId));
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return null;
+    return parsed.filter((x): x is string => typeof x === 'string' && x.length > 0);
+  } catch {
+    return null;
+  }
+}
+
+/** Selected left-TOC page ids for a book (leaf module index or chapter). */
+export function getTocPageSelection(bookId: string): string[] | null {
+  if (!bookId) return null;
+  if (!(bookId in ui.tocPagesByBook)) {
+    ui.tocPagesByBook[bookId] = readStoredTocPages(bookId) ?? [];
+  }
+  const cur = ui.tocPagesByBook[bookId]!;
+  return cur.length ? cur : null;
+}
+
+export function setTocPageSelection(bookId: string, ids: string[]): void {
+  if (!bookId) return;
+  const copy = [...ids];
+  ui.tocPagesByBook[bookId] = copy;
+  localStorage.setItem(tocPagesStorageKey(bookId), JSON.stringify(copy));
 }

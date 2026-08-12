@@ -30,8 +30,8 @@ title: 注意为枢
 
 结构上的高发源：
 
-- 同级混尺，见 [维度错位](07-dimension-mixup.md#claim)——注意在换轴，不在下钻。  
-- 同维父子乱，见 [层级错位](08-hierarchy-mixup.md#claim)——粗细并排，注意找不到该停的粒度。  
+- 同级混尺，见 [同级同尺](07-dimension-mixup.md#claim)——注意在换轴，不在下钻。  
+- 同维粗细乱，见 [同维嵌套](08-hierarchy-mixup.md#claim)——粗细并排，注意找不到该停的粒度。  
 - 同义再绕，见 [换皮复述](12-paraphrase-restatement.md#claim)——带宽耗在重听同一句。  
 - 多处副本，见 [一源为真](15-single-source.md#claim)——注意耗在分辨「哪份算数」。
 

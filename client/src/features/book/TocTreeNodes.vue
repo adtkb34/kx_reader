@@ -28,9 +28,26 @@ const props = withDefaults(
     siblingExpand?: TocSiblingExpand | null;
     /** Outline labels from the full filtered tree (`group:id` / `page:id` → `1.2`). */
     outlineNums?: ReadonlyMap<string, string> | null;
+    /** When set, page rows show checkboxes for multi-page reading. */
+    pageSelectedIds?: string[] | null;
+    /** Expanded visible ids (selected ∪ ancestors ∪ descendants) for dimming. */
+    pageVisibleIds?: string[] | null;
+    pagePickEnabled?: boolean;
   }>(),
-  { depth: 0, lensSelection: null, siblingExpand: null, outlineNums: null },
+  {
+    depth: 0,
+    lensSelection: null,
+    siblingExpand: null,
+    outlineNums: null,
+    pageSelectedIds: null,
+    pageVisibleIds: null,
+    pagePickEnabled: false,
+  },
 );
+
+const emit = defineEmits<{
+  togglePage: [pageId: string, checked: boolean];
+}>();
 
 const anns = computed(() => annotationsFor(props.bookId));
 const bookToc = computed(() => tocOf(props.bookId));
@@ -183,6 +200,38 @@ function chapterLocation(chapterId: string): RouteLocationRaw {
 function outlineNum(type: 'group' | 'page', id: string): string {
   return props.outlineNums?.get(tocOutlineKey(type, id)) ?? '';
 }
+
+const hasOutlineNums = computed(() => !!props.outlineNums && props.outlineNums.size > 0);
+
+const selectedPageSet = computed(() => new Set(props.pageSelectedIds ?? []));
+const visiblePageSet = computed(() => {
+  if (props.pageVisibleIds != null) return new Set(props.pageVisibleIds);
+  return selectedPageSet.value;
+});
+
+/** Dim only in multi-pick; single-pick would grey out almost the whole TOC. */
+function isDimmed(id: string): boolean {
+  return (
+    props.pagePickEnabled &&
+    ui.tocPagePickMode === 'multi' &&
+    !visiblePageSet.value.has(id)
+  );
+}
+
+function onPageClick(pageId: string): void {
+  const currently = selectedPageSet.value.has(pageId);
+  if (ui.tocPagePickMode === 'single') {
+    // Single: select only (never clear); ignore re-click on current.
+    if (currently) return;
+    emit('togglePage', pageId, true);
+    return;
+  }
+  emit('togglePage', pageId, !currently);
+}
+
+function onChildTogglePage(pageId: string, checked: boolean): void {
+  emit('togglePage', pageId, checked);
+}
 </script>
 
 <template>
@@ -190,7 +239,10 @@ function outlineNum(type: 'group' | 'page', id: string): string {
     <details
       v-if="node.type === 'group'"
       class="toc-group toc-row"
-      :class="`toc-row--depth-${depth}`"
+      :class="[
+        `toc-row--depth-${depth}`,
+        isDimmed(node.id) ? 'toc-page-dim' : '',
+      ]"
       :key="siblingExpand != null ? 'g-' + node.id : 'g-' + node.id + '-' + currentChapterId"
       :open="isOpen(node)"
     >
@@ -198,11 +250,30 @@ function outlineNum(type: 'group' | 'page', id: string): string {
         class="toc-row-label toc-group-summary"
         @click="siblingExpand ? ($event.preventDefault(), toggleGroup(node)) : undefined"
       >
+        <button
+          v-if="pagePickEnabled"
+          type="button"
+          class="toc-page-check-wrap"
+          role="radio"
+          :aria-checked="selectedPageSet.has(node.id)"
+          :aria-label="`选择 ${node.title}`"
+          @click.stop.prevent="onPageClick(node.id)"
+        >
+          <span
+            class="outline-key-check"
+            :class="{ 'is-on': selectedPageSet.has(node.id) }"
+          />
+        </button>
         <span class="toc-row-title">
           <span v-if="outlineNum('group', node.id)" class="toc-outline-num">{{
             outlineNum('group', node.id)
           }}</span>
-          {{ node.title }}
+          <span
+            v-else-if="hasOutlineNums"
+            class="toc-outline-num toc-outline-num--empty"
+            aria-hidden="true"
+          />
+          <span class="toc-row-title-text">{{ node.title }}</span>
         </span>
         <span class="toc-badges">
           <span
@@ -227,6 +298,10 @@ function outlineNum(type: 'group' | 'page', id: string): string {
           :depth="depth + 1"
           :sibling-expand="siblingExpand"
           :outline-nums="outlineNums"
+          :page-selected-ids="pageSelectedIds"
+          :page-visible-ids="pageVisibleIds"
+          :page-pick-enabled="pagePickEnabled"
+          @toggle-page="onChildTogglePage"
         />
       </div>
     </details>
@@ -237,31 +312,53 @@ function outlineNum(type: 'group' | 'page', id: string): string {
       :class="[
         `toc-row--depth-${depth}`,
         { active: node.id === currentChapterId },
+        isDimmed(node.id) ? 'toc-page-dim' : '',
       ]"
     >
-      <router-link
-        :to="chapterLocation(node.id)"
-        class="toc-row-label toc-chapter-link"
-      >
-        <span class="toc-row-title">
-          <span v-if="outlineNum('page', node.id)" class="toc-outline-num">{{
-            outlineNum('page', node.id)
-          }}</span>
-          {{ node.title }}
-        </span>
-        <span class="toc-badges">
+      <div class="toc-row-label toc-chapter-row">
+        <button
+          v-if="pagePickEnabled"
+          type="button"
+          class="toc-page-check-wrap"
+          role="radio"
+          :aria-checked="selectedPageSet.has(node.id)"
+          :aria-label="`选择 ${node.title}`"
+          @click.stop.prevent="onPageClick(node.id)"
+        >
           <span
-            v-if="chapterStats(node.id).question"
-            class="badge q"
-            title="疑问"
-          >{{ chapterStats(node.id).question }}</span>
-          <span
-            v-if="chapterStats(node.id).unread"
-            class="badge u"
-            title="未读"
-          >{{ chapterStats(node.id).unread }}</span>
-        </span>
-      </router-link>
+            class="outline-key-check"
+            :class="{ 'is-on': selectedPageSet.has(node.id) }"
+          />
+        </button>
+        <router-link
+          :to="chapterLocation(node.id)"
+          class="toc-chapter-link"
+        >
+          <span class="toc-row-title">
+            <span v-if="outlineNum('page', node.id)" class="toc-outline-num">{{
+              outlineNum('page', node.id)
+            }}</span>
+            <span
+              v-else-if="hasOutlineNums"
+              class="toc-outline-num toc-outline-num--empty"
+              aria-hidden="true"
+            />
+            <span class="toc-row-title-text">{{ node.title }}</span>
+          </span>
+          <span class="toc-badges">
+            <span
+              v-if="chapterStats(node.id).question"
+              class="badge q"
+              title="疑问"
+            >{{ chapterStats(node.id).question }}</span>
+            <span
+              v-if="chapterStats(node.id).unread"
+              class="badge u"
+              title="未读"
+            >{{ chapterStats(node.id).unread }}</span>
+          </span>
+        </router-link>
+      </div>
     </div>
   </template>
 </template>
