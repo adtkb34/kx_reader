@@ -278,6 +278,47 @@ describe('assembleModuleView', () => {
       view!.buckets[0]!.keys.every((k) => k.groups.every((g) => g.blocks.length === 0)),
     ).toBe(true);
   });
+
+  it('bare module index without role:ruler keeps ticks under 概览 leaf', () => {
+    const insp: TocChapter = page({
+      id: 'insp',
+      title: '检验能力',
+      file: 'insp.md',
+      sections: [
+        { id: 't1', title: '检验单生成', level: 2 },
+        { id: 't2', title: '检验单录入', level: 2 },
+      ],
+    });
+    const bare: BookToc = {
+      id: 'jian',
+      title: '吉安',
+      ruler: { links: {} },
+      lensAxisOrder: ['biz', 'impl'],
+      lenses: {
+        biz: [
+          { id: 'brief', title: '概览' },
+          { id: 'flow', title: '流程' },
+        ],
+        impl: [{ id: 'rule', title: '规则' }],
+      },
+      tree: [
+        {
+          type: 'group',
+          id: 'quality',
+          title: '质量',
+          children: [{ type: 'page', id: 'insp', title: '检验能力', file: 'insp.md' }],
+        },
+      ],
+      chapters: [insp],
+    };
+    const view = assembleModuleView(
+      bare,
+      { biz: ['brief'], impl: ['rule'] },
+      undefined,
+      'insp',
+    );
+    expect(view!.buckets[0]!.keys.map((k) => k.sectionId)).toEqual(['t1', 't2']);
+  });
 });
 
 describe('rulerOutlineEntries', () => {

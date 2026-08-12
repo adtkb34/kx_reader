@@ -8,6 +8,7 @@ import type {
   TocSection,
   TocTreeNode,
 } from './types';
+import { tocTreeOutlineNumbers } from './outlineNumbers';
 
 /** Axis title from book config; falls back to the id. */
 export function axisLabel(toc: BookToc, axisId: LensAxisId): string {
@@ -324,9 +325,10 @@ export function pageVisibleInSelection(
   ctx?: SectionAllowlistContext,
 ): boolean {
   if (!selection || Object.keys(selection).length === 0) return true;
-  // Ruler index pages are shells: ticks stay visible under any leaf; hang-offs
+  // Module index / ruler skeleton: ticks stay visible under any leaf; hang-offs
   // are filtered later via section allowlists / assemble.
   if (chapter.role === 'ruler') return true;
+  if (toc?.ruler && leafModuleIndexIds(toc).has(chapter.id)) return true;
   const layers = chapter.layers;
   if (!layers) return true;
   const moduleIndex =
@@ -382,8 +384,61 @@ export function expandSectionAllowlist(
 }
 
 /**
+ * Leaf-module index chapter ids (mirrors `listLeafModules` index pick, without
+ * importing ruler — lenses ↔ ruler would cycle).
+ */
+export function leafModuleIndexIds(toc: BookToc): Set<string> {
+  const out = new Set<string>();
+  if (!toc.ruler) return out;
+  const chapterById = new Map(toc.chapters.map((c) => [c.id, c]));
+  const keyIds = new Set(Object.keys(toc.ruler.links ?? {}));
+
+  function isSkeleton(ch: TocChapter): boolean {
+    if (ch.role === 'ruler') return true;
+    if (ch.role === 'page') return false;
+    const bare = !ch.layers || Object.keys(ch.layers).length === 0;
+    return bare && ch.sections.some((s) => keyIds.has(s.id));
+  }
+
+  function walk(nodes: TocTreeNode[]): void {
+    for (const node of nodes) {
+      if (node.type === 'page') {
+        out.add(node.id);
+        continue;
+      }
+      if (node.children.some((c) => c.type === 'group')) {
+        walk(node.children);
+        continue;
+      }
+      const pageIds = node.children.filter((c) => c.type === 'page').map((c) => c.id);
+      const chapters = pageIds
+        .map((id) => chapterById.get(id))
+        .filter((c): c is TocChapter => !!c);
+      if (chapters.length === 0) continue;
+      const index = chapters.find((c) => isSkeleton(c)) ?? chapters[0]!;
+      out.add(index.id);
+    }
+  }
+
+  const tree =
+    toc.tree?.length > 0
+      ? toc.tree
+      : toc.chapters.map(
+          (c): TocTreeNode => ({
+            type: 'page',
+            id: c.id,
+            title: c.title,
+            file: c.file,
+          }),
+        );
+  walk(tree);
+  return out;
+}
+
+/**
  * Index / ruler skeleton section ids on this chapter (shells that stay visible
- * under any leaf). Empty when the chapter is not a ruler index.
+ * under any leaf). Includes leaf-module indexes even without `role: "ruler"`
+ * (e.g. a bare 检验能力 page that is its own module index).
  */
 export function chapterIndexShellIds(
   chapter: TocChapter,
@@ -392,7 +447,9 @@ export function chapterIndexShellIds(
   const out = new Set<string>();
   if (!toc?.ruler) return out;
   const linkKeys = new Set(Object.keys(toc.ruler.links));
-  if (chapter.role === 'ruler') {
+  const isIndex =
+    chapter.role === 'ruler' || leafModuleIndexIds(toc).has(chapter.id);
+  if (isIndex) {
     for (const s of chapter.sections) {
       if (s.title) out.add(s.id);
     }
@@ -790,6 +847,32 @@ export function collapseSingletonGroups(nodes: TocTreeNode[]): TocTreeNode[] {
     out.push({ ...node, children });
   }
   return out;
+}
+
+function tocBaseTree(toc: BookToc): TocTreeNode[] {
+  if (toc.tree?.length) return toc.tree;
+  return toc.chapters.map(
+    (c): TocTreeNode => ({
+      type: 'page',
+      id: c.id,
+      title: c.title,
+      file: c.file,
+    }),
+  );
+}
+
+/**
+ * Stable TOC outline numbers for the sidebar.
+ * Non-ruler: full book tree (lens filter must not renumber).
+ * Ruler: module-index-only tree + singleton collapse — matches the sidebar shape
+ * (hang-offs never appear), so「质量主据」wrapper → `3.1` not `3.1.1`.
+ */
+export function tocSidebarOutlineNumbers(toc: BookToc): Map<string, string> {
+  const base = tocBaseTree(toc);
+  if (!toc.ruler) return tocTreeOutlineNumbers(base);
+  return tocTreeOutlineNumbers(
+    collapseSingletonGroups(filterTree(base, leafModuleIndexIds(toc))),
+  );
 }
 
 export function visibleIdSet(

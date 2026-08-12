@@ -33,7 +33,9 @@ import {
   sectionLensLeaves,
   selectionLegendLeaves,
   selectionToFlatIds,
+  tocSidebarOutlineNumbers,
 } from './lenses';
+import { tocOutlineKey } from './outlineNumbers';
 import type { BookToc, TocChapter, TocSection, TocTreeNode } from './types';
 
 const tocWithLenses: BookToc = {
@@ -766,6 +768,18 @@ describe('sectionAllowlistFor', () => {
     const toc: BookToc = {
       ...tocWithLenses,
       ruler: { links: { 'tick-a': ['f1'], 'tick-b': [] } },
+      tree: [
+        {
+          type: 'group',
+          id: 'mod',
+          title: '模块',
+          children: [
+            { type: 'page', id: 'idx', title: '骨架', file: 'index.md' },
+            { type: 'page', id: 'flow-page', title: '流程', file: 'flow.md' },
+            { type: 'page', id: 'notes', title: '备注', file: 'notes.md' },
+          ],
+        },
+      ],
       chapters: [index, tagged, untagged],
     };
     // Empty = unmatched leaf: hang / untagged body hidden; index ticks stay.
@@ -774,6 +788,48 @@ describe('sectionAllowlistFor', () => {
     expect(sectionAllowlistFor(index, { read: [] }, toc)?.sort()).toEqual(['tick-a', 'tick-b']);
     expect(sectionAllowlistFor(tagged, { read: ['read'] }, toc)).toBeNull();
     expect(pageVisibleInSelection(index, { read: [] }, toc)).toBe(true);
+  });
+
+  it('bare leaf-module index (no role:ruler) still keeps titled ticks under leaf/empty', () => {
+    // Like 吉安「检验能力」: single-page module, titled sections = ticks, no role:ruler.
+    const inspection: TocChapter = {
+      id: 'insp',
+      title: '检验能力',
+      file: 'quality/02-inspection.md',
+      sections: [
+        { id: 't1', title: '检验单生成', level: 2 },
+        { id: 't2', title: '检验单录入', level: 2 },
+      ],
+    };
+    const toc: BookToc = {
+      id: 'jian',
+      title: '吉安',
+      ruler: { links: {} },
+      lensAxisOrder: ['biz'],
+      lenses: {
+        biz: [
+          { id: 'brief', title: '概览' },
+          { id: 'flow', title: '流程' },
+        ],
+      },
+      tree: [
+        {
+          type: 'group',
+          id: 'quality',
+          title: '质量',
+          children: [
+            { type: 'page', id: 'insp', title: '检验能力', file: inspection.file },
+          ],
+        },
+      ],
+      chapters: [inspection],
+    };
+    expect(sectionAllowlistFor(inspection, { biz: ['brief'] }, toc)?.sort()).toEqual([
+      't1',
+      't2',
+    ]);
+    expect(sectionAllowlistFor(inspection, { biz: [] }, toc)?.sort()).toEqual(['t1', 't2']);
+    expect(pageVisibleInSelection(inspection, { biz: ['brief'] }, toc)).toBe(true);
   });
 
   it('intermediate parent selection also opens the axis', () => {
@@ -1147,5 +1203,72 @@ describe('collapseSingletonGroups', () => {
     ]);
     expect(tree[0]).toMatchObject({ type: 'group', id: 'register', title: '账号注册' });
     expect(tree[0].type === 'group' && tree[0].children).toHaveLength(2);
+  });
+});
+
+describe('tocSidebarOutlineNumbers', () => {
+  it('ruler: collapsed leaf-module index is numbered like sibling pages (not 3.1.1)', () => {
+    const toc: BookToc = {
+      id: 'jian',
+      title: '吉安',
+      ruler: { links: { k1: ['h1'] } },
+      chapters: [
+        {
+          id: 'master',
+          title: '质量主据页',
+          file: 'master.md',
+          role: 'ruler',
+          sections: [{ id: 'k1', title: '刻度', level: 2 }],
+        },
+        {
+          id: 'hang',
+          title: '挂靠',
+          file: 'hang.md',
+          sections: [{ id: 'h1', title: '挂', level: 2 }],
+        },
+        {
+          id: 'insp',
+          title: '检验能力',
+          file: 'insp.md',
+          sections: [{ id: 't1', title: 'T', level: 2 }],
+        },
+      ],
+      tree: [
+        { type: 'page', id: 'ov', title: '概览', file: 'ov.md' },
+        {
+          type: 'group',
+          id: 'pipe',
+          title: '履约',
+          children: [{ type: 'page', id: 'd1', title: '需求', file: 'd1.md' }],
+        },
+        {
+          type: 'group',
+          id: 'quality',
+          title: '质量',
+          children: [
+            {
+              type: 'group',
+              id: 'qm-master',
+              title: '质量主据',
+              children: [
+                { type: 'page', id: 'master', title: '质量主据页', file: 'master.md' },
+                { type: 'page', id: 'hang', title: '挂靠', file: 'hang.md' },
+              ],
+            },
+            { type: 'page', id: 'insp', title: '检验能力', file: 'insp.md' },
+          ],
+        },
+      ],
+      lenses: {},
+    };
+    // Fix chapters for ov/d1 referenced in tree
+    toc.chapters.unshift(
+      { id: 'ov', title: '概览', file: 'ov.md', sections: [] },
+      { id: 'd1', title: '需求', file: 'd1.md', sections: [] },
+    );
+    const map = tocSidebarOutlineNumbers(toc);
+    expect(map.get(tocOutlineKey('page', 'master'))).toBe('3.1');
+    expect(map.get(tocOutlineKey('page', 'insp'))).toBe('3.2');
+    expect(map.get(tocOutlineKey('group', 'quality'))).toBe('3');
   });
 });

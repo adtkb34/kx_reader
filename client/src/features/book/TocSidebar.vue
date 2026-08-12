@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue';
 import { Fold, ZoomIn } from '@element-plus/icons-vue';
 import type { BookToc, LensSelection, TocChapter, TocTreeNode } from '@shared/types';
-import { tocTreeOutlineNumbers } from '@shared/outlineNumbers';
+import { tocSidebarOutlineNumbers } from '@shared/lenses';
 import TocTreeNodes from '@/features/book/TocTreeNodes.vue';
 import TocLightbox from '@/features/book/TocLightbox.vue';
 import TocExpandModeSwitch from '@/features/book/TocExpandModeSwitch.vue';
@@ -25,19 +25,8 @@ const pageById = computed(() => {
   return map;
 });
 
-/** Numbers from the full book tree so lens/content filters never drop or renumber. */
-const outlineNums = computed(() => {
-  const t = props.toc;
-  const base = t.tree?.length
-    ? t.tree
-    : t.chapters.map((c) => ({
-        type: 'page' as const,
-        id: c.id,
-        title: c.title,
-        file: c.file,
-      }));
-  return tocTreeOutlineNumbers(base);
-});
+/** Stable numbers: full tree, or ruler module-index shape (not lens-filtered). */
+const outlineNums = computed(() => tocSidebarOutlineNumbers(props.toc));
 </script>
 
 <template>
