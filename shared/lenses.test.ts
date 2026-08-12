@@ -292,6 +292,42 @@ describe('pageVisibleInSelection', () => {
     expect(pageVisibleInSelection(chapter, { read: ['scenario'] }, tocWithLenses)).toBe(true);
     expect(pageVisibleInSelection(chapter, { read: ['read'] }, tocWithLenses)).toBe(true);
   });
+
+  it('keeps ruler index shells visible even when page layers miss the leaf', () => {
+    const index: TocChapter = {
+      id: 'idx',
+      title: '工艺定义',
+      file: 'process/index.md',
+      role: 'ruler',
+      layers: { read: ['impl'] },
+      sections: [{ id: 'tick-a', title: '建档', level: 2 }],
+    };
+    expect(pageVisibleInSelection(index, { read: ['scenario'] }, tocWithLenses)).toBe(true);
+    expect(pageVisibleInSelection(index, { read: ['impl'] }, tocWithLenses)).toBe(true);
+  });
+
+  it('overview leaf does not hide pages tagged to other leaves on that axis', () => {
+    const flow: TocChapter = {
+      id: 'flow',
+      title: '流程',
+      file: 'flow.md',
+      layers: { read: ['scenario'] },
+      sections: [],
+    };
+    const toc = {
+      ...tocWithLenses,
+      lenses: {
+        ...tocWithLenses.lenses!,
+        read: [
+          { id: 'overview', title: '概览' },
+          { id: 'scenario', title: '场景' },
+          { id: 'impl', title: '实现' },
+        ],
+      },
+    };
+    expect(pageVisibleInSelection(flow, { read: ['overview'] }, toc)).toBe(true);
+    expect(pageVisibleInSelection(flow, { read: ['impl'] }, toc)).toBe(false);
+  });
 });
 
 describe('filterChapters', () => {
@@ -602,7 +638,7 @@ describe('sectionAllowlistFor', () => {
     expect(sectionAllowlistFor(chapter, { read: ['read'] }, tocWithLenses)).toBeNull();
   });
 
-  it('returns null when option has no allowlist (whole page)', () => {
+  it('returns null when whole-page leaf matches layers without section table', () => {
     const whole: TocChapter = {
       ...chapter,
       sectionAllowlists: undefined,
@@ -610,7 +646,7 @@ describe('sectionAllowlistFor', () => {
     expect(sectionAllowlistFor(whole, { read: ['scenario'] }, tocWithLenses)).toBeNull();
   });
 
-  it('leaf selection keeps untagged; hides other-leaf hung sections', () => {
+  it('leaf selection shows hung + shells only; hides untagged', () => {
     // Page has no layers on biz — only section tags.
     const process: TocChapter = {
       id: 'process',
@@ -638,14 +674,13 @@ describe('sectionAllowlistFor', () => {
     };
     // 概览 = whole-page overview of the module (index / hang-offs stay visible).
     expect(sectionAllowlistFor(process, { biz: ['overview'] }, toc)).toBeNull();
-    // 选流程叶：挂流程的 + 未挂靠 stub。
+    // 选流程叶：只看挂流程的；未挂 biz 的 stub 隐藏。
     expect(sectionAllowlistFor(process, { biz: ['flow'] }, toc)?.sort()).toEqual([
       'flow-a',
       'flow-b',
-      'stub',
     ]);
-    // 权限无表叶：只留未挂靠；其它叶挂靠隐藏。
-    expect(sectionAllowlistFor(process, { biz: ['permission'] }, toc)?.sort()).toEqual(['stub']);
+    // 权限无表叶：未挂任何 biz 子叶的也不显示。
+    expect(sectionAllowlistFor(process, { biz: ['permission'] }, toc)?.sort()).toEqual([]);
     // 选父「biz」轴 = 该维不筛选 → stub 与 flow 都显示。
     expect(sectionAllowlistFor(process, { biz: ['biz'] }, toc)).toBeNull();
   });
@@ -679,14 +714,92 @@ describe('sectionAllowlistFor', () => {
         ],
       },
     };
-    // 未挂靠 stub 常显；其它叶挂靠隐藏；选父不筛选。
-    expect(sectionAllowlistFor(process, { status: ['draft'] }, toc)?.sort()).toEqual([
-      'flow-a',
-      'stub',
-    ]);
-    expect(sectionAllowlistFor(process, { status: ['published'] }, toc)?.sort()).toEqual(['stub']);
+    // 选子叶：只看挂该叶的；未挂隐藏；选父不筛选。
+    expect(sectionAllowlistFor(process, { status: ['draft'] }, toc)?.sort()).toEqual(['flow-a']);
+    expect(sectionAllowlistFor(process, { status: ['published'] }, toc)?.sort()).toEqual([]);
     expect(sectionAllowlistFor(process, { status: ['lifecycle'] }, toc)).toBeNull();
     expect(sectionAllowlistFor(process, { status: ['status'] }, toc)).toBeNull();
+  });
+
+  it('leaf on axis with no tags on chapter hides hang body (shells only)', () => {
+    const hang: TocChapter = {
+      id: 'flow-page',
+      title: '流程正文',
+      file: 'flow.md',
+      layers: { read: ['scenario'] },
+      sections: [
+        { id: 'f1', title: '步骤', level: 2 },
+        { id: 'f2', title: '细节', level: 2 },
+      ],
+      // no role / status sectionAllowlists — 未挂角色轴
+    };
+    const toc = {
+      ...tocWithLenses,
+      lenses: {
+        ...tocWithLenses.lenses!,
+        role: [
+          { id: 'scheduler', title: '调度员' },
+          { id: 'process-eng', title: '工艺员' },
+        ],
+      },
+    };
+    // 选调度员：本页未挂 role → 正文全隐（无 index 壳）.
+    expect(
+      sectionAllowlistFor(hang, { read: ['scenario'], role: ['scheduler'] }, toc)?.sort(),
+    ).toEqual([]);
+    // 选角色父轴 = 不筛选 role；read=scenario 整页层 → 仍 null/全显。
+    expect(
+      sectionAllowlistFor(hang, { read: ['scenario'], role: ['role'] }, toc),
+    ).toBeNull();
+  });
+
+  it('module index whole-page role opens hang-offs for that role', () => {
+    const index: TocChapter = {
+      id: 'idx',
+      title: '工艺定义',
+      file: 'process/index.md',
+      role: 'ruler',
+      layers: { role: ['process-eng', 'foreman'] },
+      sections: [{ id: 'tick', title: '建档', level: 2 }],
+    };
+    const hang: TocChapter = {
+      id: 'flow-page',
+      title: '流程',
+      file: 'flow.md',
+      layers: { read: ['scenario'] },
+      sections: [{ id: 'f1', title: '步骤', level: 2 }],
+    };
+    const toc = {
+      ...tocWithLenses,
+      ruler: { links: { tick: ['f1'] } },
+      lenses: {
+        ...tocWithLenses.lenses!,
+        role: [
+          { id: 'scheduler', title: '调度员' },
+          { id: 'process-eng', title: '工艺员' },
+        ],
+      },
+    };
+    // 调度员：模块 index 未归属 → 挂靠正文隐。
+    expect(
+      sectionAllowlistFor(
+        hang,
+        { read: ['scenario'], role: ['scheduler'] },
+        toc,
+        'display',
+        { moduleIndex: index },
+      )?.sort(),
+    ).toEqual([]);
+    // 工艺员：index 整页归属 → 挂靠跟随模块放开。
+    expect(
+      sectionAllowlistFor(
+        hang,
+        { read: ['scenario'], role: ['process-eng'] },
+        toc,
+        'display',
+        { moduleIndex: index },
+      ),
+    ).toBeNull();
   });
 
   it('index shell sections stay visible even when tagged to another leaf', () => {

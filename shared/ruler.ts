@@ -95,10 +95,11 @@ function visibleSectionIds(
   selection: LensSelection | null,
   toc: BookToc,
   readerShowLevel?: ReaderShowLevel,
+  moduleIndex?: TocChapter | null,
 ): Set<string> {
   const out = new Set<string>();
   for (const ch of chapters) {
-    const allow = sectionAllowlistFor(ch, selection, toc);
+    const allow = sectionAllowlistFor(ch, selection, toc, 'display', { moduleIndex });
     const list = allow
       ? ch.sections.filter((s) => allow.includes(s.id))
       : ch.sections;
@@ -109,6 +110,28 @@ function visibleSectionIds(
     }
   }
   return out;
+}
+
+function moduleIndexChapter(
+  toc: BookToc,
+  focusChapterId?: string | null,
+): TocChapter | undefined {
+  if (!focusChapterId) return undefined;
+  const mod = findLeafModule(toc, focusChapterId);
+  const indexId = mod?.indexChapterId ?? focusChapterId;
+  return toc.chapters.find((c) => c.id === indexId);
+}
+
+/** Like filterChapters, but module index whole-page layers can keep hang-off pages. */
+function filterChaptersForModule(
+  toc: BookToc,
+  selection: LensSelection | null,
+  focusChapterId?: string | null,
+): TocChapter[] {
+  const moduleIndex = moduleIndexChapter(toc, focusChapterId);
+  return toc.chapters.filter((c) =>
+    pageVisibleInSelection(c, selection, toc, { moduleIndex }),
+  );
 }
 
 function layersAsList(raw: PageLayer | PageLayer[] | undefined): PageLayer[] {
@@ -435,7 +458,21 @@ export function rulerTickHasHang(
   const linked = ruler.links[keyId] ?? [];
   if (linked.length === 0) return false;
   const chapters = filterChapters(toc.chapters, selection, toc);
-  const visible = visibleSectionIds(chapters, selection, toc, readerShowLevel);
+  const keyHit = sectionIndex(toc.chapters).get(keyId);
+  const focusId =
+    keyHit?.chapter.role === 'ruler' ? keyHit.chapter.id : keyHit?.chapter.id;
+  const moduleIndex =
+    keyHit?.chapter.role === 'ruler'
+      ? keyHit.chapter
+      : moduleIndexChapter(toc, focusId);
+  const visibleChapters = filterChaptersForModule(toc, selection, moduleIndex?.id ?? focusId);
+  const visible = visibleSectionIds(
+    visibleChapters,
+    selection,
+    toc,
+    readerShowLevel,
+    moduleIndex,
+  );
   return linked.some((sid) => visible.has(sid));
 }
 
@@ -575,8 +612,9 @@ function buildKeyBlocks(
   axisFilter: LensAxisId | null,
   onlyLeaf: PageLayer | null,
 ): RulerKeyBlock[] {
-  const chapters = filterChapters(toc.chapters, selection, toc);
-  const visible = visibleSectionIds(chapters, selection, toc, readerShowLevel);
+  const chapters = filterChaptersForModule(toc, selection, focusChapterId);
+  const moduleIndex = moduleIndexChapter(toc, focusChapterId);
+  const visible = visibleSectionIds(chapters, selection, toc, readerShowLevel, moduleIndex);
   const index = sectionIndex(toc.chapters);
   const chapterById = new Map(toc.chapters.map((c) => [c.id, c]));
   const keyOrder = resolveKeyIds(toc, ruler, focusChapterId);
@@ -637,8 +675,15 @@ export function buildRulerPreamble(
 ): RulerPreamble[] {
   const ruler = toc.ruler;
   if (!ruler) return [];
-  const visibleChapters = filterChapters(toc.chapters, selection, toc);
-  const visible = visibleSectionIds(visibleChapters, selection, toc, readerShowLevel);
+  const visibleChapters = filterChaptersForModule(toc, selection, focusChapterId);
+  const moduleIndex = moduleIndexChapter(toc, focusChapterId);
+  const visible = visibleSectionIds(
+    visibleChapters,
+    selection,
+    toc,
+    readerShowLevel,
+    moduleIndex,
+  );
   const keyIds = new Set(resolveKeyIds(toc, ruler, focusChapterId));
   const hangOffIds = new Set(Object.values(ruler.links).flat());
   const out: RulerPreamble[] = [];

@@ -321,20 +321,29 @@ export function pageVisibleInSelection(
   chapter: TocChapter,
   selection: LensSelection | null,
   toc?: BookToc | null,
+  ctx?: SectionAllowlistContext,
 ): boolean {
   if (!selection || Object.keys(selection).length === 0) return true;
+  // Ruler index pages are shells: ticks stay visible under any leaf; hang-offs
+  // are filtered later via section allowlists / assemble.
+  if (chapter.role === 'ruler') return true;
   const layers = chapter.layers;
   if (!layers) return true;
+  const moduleIndex =
+    ctx?.moduleIndex && ctx.moduleIndex.id !== chapter.id ? ctx.moduleIndex : null;
   for (const [axis, chosen] of Object.entries(selection)) {
     if (toc?.lenses?.[axis]?.length && axisSelectionIsOpen(toc, axis, chosen)) {
       continue; // 父/轴 = 该维不筛选
     }
-    const opts = layerOptions(layers[axis]);
-    if (opts.length === 0) continue;
     const leaves = toc?.lenses?.[axis]?.length
       ? effectiveAxisLeaves(toc, axis, normalizeAxisSelection(chosen))
       : normalizeAxisSelection(chosen);
     if (leaves.length === 0) return false;
+    // 概览 = 该轴不按整页层收窄（与小节 allowlist 一致）.
+    if (leaves.includes('overview')) continue;
+    if (axisOpenedByWholePageLayers(moduleIndex, axis, leaves)) continue;
+    const opts = layerOptions(layers[axis]);
+    if (opts.length === 0) continue;
     if (!leaves.some((leaf) => opts.includes(leaf))) return false;
   }
   return true;
@@ -403,8 +412,23 @@ function axisTaggedSectionIds(
   return tagged;
 }
 
-/** `display` = shells + untagged + selected hung; `hungOnly` =「仅有/仅无内容」判定. */
+/** `display` = shells + selected hung; `hungOnly` =「仅有/仅无内容」判定. */
 export type SectionAllowlistMode = 'display' | 'hungOnly';
+
+/** Extra context for ruler assemble: module index whole-page layers open hang-offs. */
+export type SectionAllowlistContext = {
+  moduleIndex?: TocChapter | null;
+};
+
+function axisOpenedByWholePageLayers(
+  chapter: TocChapter | null | undefined,
+  axis: string,
+  leaves: PageLayer[],
+): boolean {
+  if (!chapter) return false;
+  const opts = layerOptions(chapter.layers?.[axis as LensAxisId]);
+  return leaves.some((leaf) => leaf === 'overview' || opts.includes(leaf));
+}
 
 /**
  * Section ids to show for the current selection, or null = no filter (all).
@@ -412,9 +436,10 @@ export type SectionAllowlistMode = 'display' | 'hungOnly';
  * - Non-leaf selected (axis id / parent) → 该维不筛选 (skip).
  * - Selected leaf with no allowlist on this page:
  *   - `overview`, or a leaf in page `layers` → whole-page (no section filter).
- *   - `display` → untagged ∪ index shells; `hungOnly` → empty list.
+ *   - or module index has matching whole-page layers → same (挂靠页跟随模块归属).
+ *   - otherwise → `display` = index shells only; `hungOnly` = empty.
  * - Selected leaf with an allowlist:
- *   - `display` → that leaf's hung ∪ untagged ∪ index shells.
+ *   - `display` → that leaf's hung ∪ index shells (not untagged).
  *   - `hungOnly` → that leaf's hung only (for「仅有内容」/「仅无内容」).
  * Across axes, intersecting lists still apply.
  */
@@ -423,10 +448,14 @@ export function sectionAllowlistFor(
   selection: LensSelection | null,
   toc?: BookToc | null,
   mode: SectionAllowlistMode = 'display',
+  ctx?: SectionAllowlistContext,
 ): string[] | null {
-  if (!selection || !chapter.sectionAllowlists) return null;
+  if (!selection || Object.keys(selection).length === 0) return null;
   const shellIds = mode === 'display' ? chapterIndexShellIds(chapter, toc) : new Set<string>();
   const lists: string[][] = [];
+  const moduleIndex =
+    ctx?.moduleIndex && ctx.moduleIndex.id !== chapter.id ? ctx.moduleIndex : null;
+
   for (const [axis, chosen] of Object.entries(selection)) {
     if (toc?.lenses?.[axis]?.length && axisSelectionIsOpen(toc, axis, chosen)) {
       continue; // 父/轴 = 该维不筛选
@@ -437,17 +466,29 @@ export function sectionAllowlistFor(
       : normalizeAxisSelection(chosen);
     if (leaves.length === 0) continue;
 
-    const axisAllows = chapter.sectionAllowlists[axis];
-    if (!axisAllows) continue;
-
+    const axisAllows = chapter.sectionAllowlists?.[axis];
     const layerOpts = layerOptions(chapter.layers?.[axis]);
+    const moduleOpens = axisOpenedByWholePageLayers(moduleIndex, axis, leaves);
+
+    // No section table on this axis: whole-page leaf / module ownership → skip; else shells only.
+    if (!axisAllows) {
+      if (
+        leaves.some((leaf) => leaf === 'overview' || layerOpts.includes(leaf)) ||
+        moduleOpens
+      ) {
+        continue;
+      }
+      lists.push(mode === 'display' ? [...shellIds] : []);
+      continue;
+    }
+
     let wholePage = false;
     const selectedTagged = new Set<string>();
     for (const leaf of leaves) {
       const allow = axisAllows[leaf];
       if (!allow) {
         // 概览 = 整页总览；`layers` 整页叶同理。其它未配小节表的叶 → 无本叶挂靠。
-        if (leaf === 'overview' || layerOpts.includes(leaf)) {
+        if (leaf === 'overview' || layerOpts.includes(leaf) || moduleOpens) {
           wholePage = true;
           break;
         }
@@ -463,19 +504,13 @@ export function sectionAllowlistFor(
     if (mode === 'hungOnly') {
       const allowed = [...selectedTagged];
       if (hasAnyAxisTags || allowed.length > 0) lists.push(allowed);
+      else lists.push([]);
       continue;
     }
 
-    if (!hasAnyAxisTags && selectedTagged.size === 0 && shellIds.size === 0) {
-      continue;
-    }
-
-    // display: selected hung ∪ untagged ∪ index shells (never hide shells).
+    // display: selected hung ∪ index shells only (未挂该轴的正文隐藏).
     const allowed = new Set<string>(selectedTagged);
     for (const id of shellIds) allowed.add(id);
-    for (const s of chapter.sections) {
-      if (!taggedOnAxis.has(s.id)) allowed.add(s.id);
-    }
     lists.push([...allowed]);
   }
   if (lists.length === 0) return null;

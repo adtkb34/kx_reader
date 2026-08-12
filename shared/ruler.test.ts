@@ -190,6 +190,33 @@ describe('assembleModuleView', () => {
     expect(view!.buckets[0]!.keys[2]!.groups[0]!.blocks).toEqual([]);
   });
 
+  it('keeps ruler index ticks when page layers miss the selected leaf', () => {
+    const gated: BookToc = {
+      ...book,
+      chapters: book.chapters.map((c) =>
+        c.id === 'idx'
+          ? {
+              ...c,
+              role: 'ruler',
+              // Whole-page role layers that do not include the selected leaf.
+              layers: { ...(c.layers ?? {}), read: ['entity'] },
+            }
+          : c,
+      ),
+    };
+    const view = assembleModuleView(
+      gated,
+      { read: ['flow'], priority: ['p0', 'p1'] },
+      undefined,
+      'idx',
+      'index',
+    );
+    expect(view!.buckets[0]!.keys.map((k) => k.sectionId)).toEqual(['k1', 'k2']);
+    // Hang-offs for flow still show; entity hang on k2 is hidden under flow leaf.
+    expect(view!.buckets[0]!.keys[0]!.groups[0]!.blocks.map((b) => b.sectionId)).toEqual(['f1']);
+    expect(view!.buckets[0]!.keys[1]!.groups[0]!.blocks).toEqual([]);
+  });
+
   it('axis pick buckets by priority leaf order', () => {
     const view = assembleModuleView(
       book,
