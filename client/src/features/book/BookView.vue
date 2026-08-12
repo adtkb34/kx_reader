@@ -69,6 +69,10 @@ import ComparePanel from '@/features/compare/ComparePanel.vue';
 import AgentPanel from '@/features/agent/AgentPanel.vue';
 import { loadToc, tocOf } from '@/stores/books';
 import { loadAnnotations } from '@/stores/annotations';
+import { api } from '@/api/client';
+import { downloadTextFile, sanitizeDownloadName } from '@/download';
+import { buildDigestMarkdown, listDigestExportChapterIds } from '@shared/digestExport';
+import type { RulerTickHangFilter } from '@shared/ruler';
 import { Expand } from '@element-plus/icons-vue';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -82,9 +86,56 @@ const chapterId = computed(() => (route.params.chapterId ? String(route.params.c
 const toc = computed(() => tocOf(bookId.value));
 const orphans = useOrphans(bookId);
 const loadError = ref('');
+const exportBusy = ref(false);
+const exportError = ref('');
 /** Outline rows emitted by body views so right rail stays in lockstep. */
 const digestOutlineSync = ref<DigestOutlineRow[]>([]);
 const moduleOutlineSync = ref<DigestOutlineRow[]>([]);
+
+const canExportDigest = computed(() => {
+  const t = toc.value;
+  if (!t) return false;
+  return hasLenses(t) || !!t.ruler;
+});
+
+async function exportDigestMarkdown(): Promise<void> {
+  const t = toc.value;
+  if (!t || exportBusy.value) return;
+  exportBusy.value = true;
+  exportError.value = '';
+  try {
+    const selection = activeSelection.value;
+    const rulerPick = t.ruler ? activeRulerPick.value : 'index';
+    const hangFilter = ui.lensContentFilter as RulerTickHangFilter;
+    const showLevel = readerShowLevel.value;
+    const ids = listDigestExportChapterIds(t, {
+      selection,
+      rulerPick,
+      readerShowLevel: showLevel,
+      hangFilter,
+    });
+    const chapterMarkdown = new Map<string, string>();
+    await Promise.all(
+      ids.map(async (id) => {
+        const content = await api.chapter(bookId.value, id);
+        chapterMarkdown.set(id, content.markdown);
+      }),
+    );
+    const md = buildDigestMarkdown(t, chapterMarkdown, {
+      selection,
+      rulerPick,
+      readerShowLevel: showLevel,
+      hangFilter,
+    });
+    const pickLabel = t.ruler ? String(rulerPick) : 'digest';
+    const filename = `${sanitizeDownloadName(t.title)}-汇总-${sanitizeDownloadName(pickLabel)}.md`;
+    downloadTextFile(filename, md);
+  } catch (e) {
+    exportError.value = e instanceof Error ? e.message : String(e);
+  } finally {
+    exportBusy.value = false;
+  }
+}
 
 function sanitizeSelection(
   sel: LensSelection | null,
@@ -651,6 +702,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
           @click="ui.compareOpen = true"
         >
           对比变更
+        </button>
+        <button
+          v-if="canExportDigest"
+          class="btn ghost"
+          type="button"
+          :disabled="exportBusy"
+          :title="exportError || '按当前透镜与尺子导出全书汇总 Markdown'"
+          @click="exportDigestMarkdown()"
+        >
+          {{ exportBusy ? '导出中…' : '导出汇总' }}
         </button>
         <button class="btn ghost" @click="toggleDetailsOpen()">
           {{ ui.detailsOpen ? '收起细节' : '展开细节' }}
