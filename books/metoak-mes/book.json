@@ -16,6 +16,7 @@
       "title": "实现",
       "children": [
         { "id": "rule", "title": "规则", "color": "#7a8a9a" },
+        { "id": "api", "title": "接口", "color": "#5f7a9a" },
         { "id": "ui", "title": "界面", "color": "#a88b55" },
         { "id": "entity", "title": "实体", "color": "#6a9478" },
         { "id": "exception", "title": "异常", "color": "#9a7482" }
@@ -59,7 +60,24 @@
   ],
   "ruler": {
     "axes": ["priority", "status"],
-    "links": {}
+    "links": {
+      "202608101508": [
+        "20260810150801",
+        "20260810150803",
+        "20260810150804",
+        "20260810150802"
+      ],
+      "202608101427": [
+        "20260810142701",
+        "20260810142704",
+        "20260810142706",
+        "20260810142705",
+        "202608101214",
+        "20260810142702",
+        "20260810142703",
+        "20260810142707"
+      ]
+    }
   },
   "contents": [
     {
@@ -140,7 +158,55 @@
               "id": "202608101208",
               "file": "process/index.md",
               "role": "ruler",
-              "lenses": { "priority": { "p1": true } }
+              "lenses": {
+                "priority": { "p1": true },
+                "role": {
+                  "process-eng": true,
+                  "foreman": true,
+                  "supervisor": true,
+                  "admin": true
+                }
+              }
+            },
+            {
+              "id": "202608101212",
+              "file": "process/flow.md",
+              "lenses": {
+                "biz": { "flow": true },
+                "priority": { "p1": true }
+              }
+            },
+            {
+              "id": "202608101216",
+              "file": "process/ui.md",
+              "lenses": {
+                "impl": { "ui": true },
+                "priority": { "p1": true }
+              }
+            },
+            {
+              "id": "202608101213",
+              "file": "process/entity.md",
+              "lenses": {
+                "impl": { "entity": true },
+                "priority": { "p1": true }
+              }
+            },
+            {
+              "id": "202608101215",
+              "file": "process/rule.md",
+              "lenses": {
+                "impl": { "rule": true },
+                "priority": { "p1": true }
+              }
+            },
+            {
+              "id": "202608121630",
+              "file": "process/api.md",
+              "lenses": {
+                "impl": { "api": true },
+                "priority": { "p1": true }
+              }
             }
           ]
         }

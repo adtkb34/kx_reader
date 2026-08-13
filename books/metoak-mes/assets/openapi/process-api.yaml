@@ -1,0 +1,138 @@
+openapi: 3.0.3
+info:
+  title: 工艺定义 API
+  version: 1.0.0
+  description: 工艺定义 REST 契约示例。
+servers:
+  - url: /api/v1
+    description: 相对网关
+paths:
+  /process/flows:
+    get:
+      tags: [工艺流程]
+      summary: 工艺流程列表
+      operationId: listProcessFlows
+      parameters:
+        - name: q
+          in: query
+          description: 名称模糊搜索
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+      responses:
+        '200':
+          description: 分页列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FlowPage'
+    post:
+      tags: [工艺流程]
+      summary: 创建工艺流程
+      operationId: createProcessFlow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FlowCreate'
+      responses:
+        '201':
+          description: 已创建
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Flow'
+        '400':
+          description: 校验失败
+  /process/flows/{flowId}:
+    get:
+      tags: [工艺流程]
+      summary: 工艺流程详情
+      operationId: getProcessFlow
+      parameters:
+        - $ref: '#/components/parameters/FlowId'
+      responses:
+        '200':
+          description: 详情（含步骤 DAG）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FlowDetail'
+        '404':
+          description: 不存在
+components:
+  parameters:
+    FlowId:
+      name: flowId
+      in: path
+      required: true
+      schema:
+        type: string
+  schemas:
+    Flow:
+      type: object
+      required: [id, name, version]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        version:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum: [draft, published, archived]
+    FlowCreate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        remark:
+          type: string
+    FlowPage:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Flow'
+        total:
+          type: integer
+          minimum: 0
+    FlowStep:
+      type: object
+      required: [id, code, name]
+      properties:
+        id:
+          type: string
+        code:
+          type: string
+        name:
+          type: string
+        predecessors:
+          type: array
+          items:
+            type: string
+          description: 前序步骤 id（同流程内，禁止自指）
+    FlowDetail:
+      allOf:
+        - $ref: '#/components/schemas/Flow'
+        - type: object
+          required: [steps]
+          properties:
+            steps:
+              type: array
+              items:
+                $ref: '#/components/schemas/FlowStep'
+tags:
+  - name: 工艺流程

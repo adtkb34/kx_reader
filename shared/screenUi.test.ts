@@ -357,4 +357,47 @@ describe('renderScreenUi', () => {
         expect(html).toContain('screen-ui-error')
         expect(html).not.toContain('now-order')
     })
+
+    it('renders mes-stage-list', () => {
+        const html = renderScreenUi('mes-stage-list')
+        expect(html).toContain('工序管理')
+        expect(html).toContain('OP.UV')
+        expect(html).toContain('仅用户等级 ≤3 可新增、修改或删除工序')
+        expect(html).toContain('新增')
+        expect(html).toContain('删除')
+    })
+
+    it('renders mes-stage-form', () => {
+        const html = renderScreenUi('mes-stage-form')
+        expect(html).toContain('新增工序')
+        expect(html).toContain('工序代码')
+        expect(html).toContain('唯一标识，创建后不可改')
+        expect(html).toContain('如 010、029')
+    })
+
+    it('renders mes-flow-list', () => {
+        const html = renderScreenUi('mes-flow-list')
+        expect(html).toContain('工艺流程')
+        expect(html).toContain('基于此创建')
+        expect(html).toContain('WFP.BA.VEH.KK00')
+        expect(html).toContain('预览选中')
+    })
+
+    it('renders mes-flow-create', () => {
+        const html = renderScreenUi('mes-flow-create')
+        expect(html).toContain('新增工艺流程')
+        expect(html).toContain('暂无工序，请从上方下拉选择后加入')
+        expect(html).toContain('前序（多选并行与汇合，显示工序名称）')
+        expect(html).toContain('工艺拓扑图')
+    })
+
+    it('renders mes-flow-editor', () => {
+        const html = renderScreenUi('mes-flow-editor')
+        expect(html).toContain('修改工艺流程')
+        expect(html).toContain('返回列表')
+        expect(html).toContain('提交')
+        expect(html).toContain('工艺拓扑图（起点在上）')
+        expect(html).toContain('脏污检测(AA前)')
+        expect(html).toContain('允许游离 SN')
+    })
 })

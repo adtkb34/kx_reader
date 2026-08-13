@@ -8,6 +8,7 @@ import { SECTION_MARKER_CLASS, sectionMarkerPlugin } from '@shared/sectionMarker
 import { SECTION_ROW_CLASS, tableRowIdPlugin } from '@shared/tableRowId';
 import { renderWireframe } from '@/wireframe';
 import { renderFigmaEmbed } from '@shared/figmaEmbed';
+import { renderOpenApiEmbed } from '@shared/openapiEmbed';
 import { renderScreenUi } from '@shared/screenUi';
 
 export interface RenderEnv {
@@ -43,6 +44,9 @@ const md: MarkdownIt = new MarkdownIt({
     }
     if (lang === 'figma') {
       return renderFigmaEmbed(code);
+    }
+    if (lang === 'openapi') {
+      return renderOpenApiEmbed(code);
     }
     if (lang && hljs.getLanguage(lang)) {
       try {

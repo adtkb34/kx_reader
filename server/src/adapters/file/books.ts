@@ -39,7 +39,8 @@ const SAFE_SEGMENT = /^[\w][\w.-]*$/;
 /** Relative file under book root, no `..`. */
 const SAFE_REL_FILE = /^[\w][\w./-]*\.md$/;
 /** Relative asset under book `assets/`, no `..`. */
-const SAFE_ASSET_REL = /^[\w][\w./-]*\.(?:jpg|jpeg|png|webp|gif)$/i;
+const SAFE_ASSET_REL =
+  /^[\w][\w./-]*\.(?:jpg|jpeg|png|webp|gif|ya?ml|json)$/i;
 
 const ASSET_CONTENT_TYPES: Record<string, string> = {
   '.jpg': 'image/jpeg',
@@ -47,6 +48,9 @@ const ASSET_CONTENT_TYPES: Record<string, string> = {
   '.png': 'image/png',
   '.webp': 'image/webp',
   '.gif': 'image/gif',
+  '.yaml': 'application/yaml',
+  '.yml': 'application/yaml',
+  '.json': 'application/json',
 };
 
 function isSafeBookId(bookId: string): boolean {

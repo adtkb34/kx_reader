@@ -7,6 +7,7 @@ import { tocOf } from '@/stores/books';
 import { renderChapter, splitSections, type RenderedSection } from '@/markdown';
 import { bindMermaidDetails, renderMermaidIn } from '@/mermaid';
 import { activateFigmaEmbedsIn, bindFigmaEmbedDetails } from '@/figmaEmbed';
+import { activateOpenApiEmbedsIn, bindOpenApiEmbedDetails } from '@/openapiEmbed';
 import { enhanceTableFiltersIn } from '@/tableFilters';
 import { enhanceTableCellMergeIn } from '@/tableCellMerge';
 import { enhanceTableRulerColIn } from '@/tableRulerCol';
@@ -51,6 +52,7 @@ const previewIndex = ref(0);
 const diagramHtml = ref('');
 let unbindMermaid: (() => void) | null = null;
 let unbindFigma: (() => void) | null = null;
+let unbindOpenApi: (() => void) | null = null;
 /** Ignore stale async load results when chapter/lens changes mid-flight. */
 let loadSeq = 0;
 /** Chapter id whose `title` / `sections` currently match the DOM. */
@@ -162,6 +164,8 @@ async function load(): Promise<void> {
   unbindMermaid = null;
   unbindFigma?.();
   unbindFigma = null;
+  unbindOpenApi?.();
+  unbindOpenApi = null;
   previewVisible.value = false;
   diagramHtml.value = '';
   // Keep the previous body visible until the next chapter is ready (avoids blank flash).
@@ -221,8 +225,10 @@ async function load(): Promise<void> {
     applyDetailsPref();
     unbindMermaid = bindMermaidDetails(contentEl.value);
     unbindFigma = bindFigmaEmbedDetails(contentEl.value);
+    unbindOpenApi = bindOpenApiEmbedDetails(contentEl.value, reqBookId);
     await renderMermaidIn(contentEl.value);
     activateFigmaEmbedsIn(contentEl.value);
+    activateOpenApiEmbedsIn(contentEl.value, reqBookId);
     if (seq !== loadSeq) return;
     enhanceTableRulerColIn(contentEl.value, tocOf(props.bookId));
     enhanceTableCellMergeIn(contentEl.value);
@@ -270,6 +276,7 @@ watch(
     await nextTick();
     await renderMermaidIn(contentEl.value);
     activateFigmaEmbedsIn(contentEl.value);
+    activateOpenApiEmbedsIn(contentEl.value, props.bookId);
     enhanceTableRulerColIn(contentEl.value, tocOf(props.bookId));
     enhanceTableCellMergeIn(contentEl.value);
     enhanceTableFiltersIn(contentEl.value);
@@ -281,6 +288,8 @@ onBeforeUnmount(() => {
   unbindMermaid = null;
   unbindFigma?.();
   unbindFigma = null;
+  unbindOpenApi?.();
+  unbindOpenApi = null;
   previewVisible.value = false;
   diagramHtml.value = '';
 });

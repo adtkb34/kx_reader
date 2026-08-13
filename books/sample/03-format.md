@@ -198,7 +198,7 @@ title: 结构思想
 - `alt` 文案同时作为图下说明；读者点击图片可放大预览。
 - 一组照片：同一小节里连续写多张 `![]()` 即可，不必另造相册实体。
 - 图片随书走（进该书 `.git`）；阅读器只开放 `assets/`，不会把整本目录挂成静态站。
-- **分工**：真实照片/截图用 `assets/`；架构关系与数据流用 Mermaid；界面屏示意用 wireframe；可交互原型用 <code>```figma</code>。不要用照片冒充结构图，也不要用 Mermaid 画真实 UI。
+- **分工**：真实照片/截图用 `assets/`；架构关系与数据流用 Mermaid；界面屏示意用 wireframe；可交互原型用 <code>```figma</code>；HTTP 契约用 <code>```openapi</code>（轻量方法/路径表）。不要用照片冒充结构图，也不要用 Mermaid 画真实 UI。
 
 ![样例插图：阅读器照片能力](assets/photo-demo.png)
 
@@ -275,6 +275,42 @@ https://www.figma.com/proto/FILEKEY/Name?node-id=1-2
 - 允许：`www.figma.com/proto/...`、`figma.com/proto/...`、`embed.figma.com/proto/...`。
 - 不允许：Design / FigJam / Slides 链接，或非 Figma 域；非法时显示错误文案与原文外链，不渲染 iframe。
 - 阅读器会改写成 `embed.figma.com` 并带上 `embed-host=kx-reader`。读者需能访问 Figma。
+
+{#openapi}
+### OpenAPI 接口
+
+HTTP 契约用 <code>```openapi</code> 渲染成**阅读器原生**的方法/路径列表（点开看参数与响应），不嵌 Redoc / Swagger UI。默认放在 `:::details OpenAPI`。
+
+块内第一行是规范引用或内联起点：
+
+1. **书内资产**：`assets/….yaml` / `assets/….json`（经 `/api/books/:bookId/assets/…` 拉取）
+2. **远程 URL**：`https://…`
+3. **内联**：首行以 `openapi:` / `swagger:` / `{` / `---` 开头，整块为规范正文
+
+可选第二行（资产 / URL 模式）作标题 caption。
+
+````markdown
+:::details OpenAPI
+```openapi
+assets/openapi/process-api.yaml
+```
+:::
+````
+
+内联示例：
+
+````markdown
+```openapi
+openapi: 3.0.3
+info:
+  title: Demo
+  version: 1.0.0
+paths: {}
+```
+````
+
+- 非法或缺内容时显示错误文案。
+- 大规范优先放 `assets/openapi/`，避免把整份 YAML 塞进章节 Markdown。
 
 {#markdown-misc}
 ## 其它 Markdown 约定

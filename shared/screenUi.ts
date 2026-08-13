@@ -52,11 +52,16 @@ function shellApp(
 }
 
 /** White modal dialog (e.g. 编辑资料). */
-function shellModal(title: string, body: string): string {
+function shellModal(
+  title: string,
+  body: string,
+  opts?: { wide?: boolean },
+): string {
+  const wideClass = opts?.wide ? ' su-card-modal-wide' : '';
   return (
     `<div class="screen-ui" data-zoomable="screen">` +
     `<div class="su-viewport su-viewport-modal">` +
-    `<div class="su-card su-card-modal">` +
+    `<div class="su-card su-card-modal${wideClass}">` +
     `<div class="su-modal-top">` +
     `<div class="su-modal-title">${esc(title)}</div>` +
     `</div>` +
@@ -919,6 +924,355 @@ function memberRemoveOwnerBlock(): string {
   );
 }
 
+function btnDanger(label: string): string {
+  return `<div class="su-btn su-btn-danger">${esc(label)}</div>`;
+}
+
+function mesToolbar(buttons: string): string {
+  return `<div class="su-mes-toolbar">${buttons}</div>`;
+}
+
+function mesTable(
+  headers: string[],
+  rows: string[][],
+  opts?: { empty?: string; highlightRow?: number },
+): string {
+  const head = headers.map((h) => `<th>${esc(h)}</th>`).join('');
+  if (opts?.empty && rows.length === 0) {
+    return (
+      `<div class="su-mes-table-wrap">` +
+      `<table class="su-mes-table"><thead><tr>${head}</tr></thead>` +
+      `<tbody><tr><td class="su-mes-empty" colspan="${headers.length}">${esc(opts.empty)}</td></tr></tbody>` +
+      `</table></div>`
+    );
+  }
+  const body = rows
+    .map((cells, i) => {
+      const hl = opts?.highlightRow === i ? ' class="is-hl"' : '';
+      return `<tr${hl}>${cells.map((c) => `<td>${c}</td>`).join('')}</tr>`;
+    })
+    .join('');
+  return (
+    `<div class="su-mes-table-wrap">` +
+    `<table class="su-mes-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>` +
+    `</div>`
+  );
+}
+
+function mesLink(text: string): string {
+  return `<span class="su-link">${esc(text)}</span>`;
+}
+
+function mesCheck(checked = false): string {
+  return `<span class="su-mes-check${checked ? ' is-on' : ''}" aria-hidden="true"></span>`;
+}
+
+function mesHint(text: string): string {
+  return `<p class="su-mes-hint">${esc(text)}</p>`;
+}
+
+function mesReq(label: string): string {
+  return `<span class="su-mes-req">*</span>${esc(label)}`;
+}
+
+function mesFieldRow(
+  items: { label: string; required?: boolean; body: string }[],
+): string {
+  const cols = items
+    .map(
+      (it) =>
+        `<div class="su-mes-fi">` +
+        `<div class="su-mes-fi-label">${it.required ? mesReq(it.label) : esc(it.label)}</div>` +
+        `<div class="su-mes-fi-ctrl">${it.body}</div>` +
+        `</div>`,
+    )
+    .join('');
+  return `<div class="su-mes-fi-row">${cols}</div>`;
+}
+
+function mesInput(placeholder: string, opts?: { value?: string; locked?: boolean; area?: boolean }): string {
+  const cls =
+    'su-input' +
+    (opts?.locked ? ' is-locked' : '') +
+    (opts?.value ? '' : ' is-ph') +
+    (opts?.area ? ' su-mes-area' : '');
+  return `<div class="${cls}">${esc(opts?.value ?? placeholder)}</div>`;
+}
+
+function mesSelect(placeholder: string): string {
+  return (
+    `<div class="su-input su-select is-ph">` +
+    `<span>${esc(placeholder)}</span><span class="su-chev">▾</span>` +
+    `</div>`
+  );
+}
+
+function mesCard(title: string, body: string): string {
+  return (
+    `<div class="su-mes-card">` +
+    `<div class="su-mes-card-hd">${esc(title)}</div>` +
+    `<div class="su-mes-card-bd">${body}</div>` +
+    `</div>`
+  );
+}
+
+function mesStageSortPanel(opts?: { empty?: boolean; steps?: string[] }): string {
+  const tools =
+    `<div class="su-mes-stage-tools">` +
+    mesSelect('选择要加入的工序') +
+    btnPrimary('加入列表') +
+    btnGhost('移除最后一项') +
+    `</div>` +
+    mesHint(
+      '拖动左侧手柄调整顺序，或使用每行「上移 / 下移」；每行可设置「允许游离 SN / 选做 / 有过站记录」（默认关）。顺序会同步为默认线性 DAG。',
+    );
+  if (opts?.empty || !opts?.steps?.length) {
+    return (
+      tools +
+      `<div class="su-mes-stage-empty">暂无工序，请从上方下拉选择后加入</div>`
+    );
+  }
+  const rows = opts.steps
+    .map(
+      (name, i) =>
+        `<div class="su-mes-stage-row">` +
+        `<span class="su-mes-drag">⋮⋮</span>` +
+        `<span class="su-mes-idx">${i + 1}</span>` +
+        `<span class="su-mes-stage-name">${esc(name)}</span>` +
+        `<span class="su-mes-flags-inline">` +
+        mesCheck() +
+        ` 允许游离 SN ` +
+        mesCheck() +
+        ` 选做 ` +
+        mesCheck() +
+        ` 有过站记录` +
+        `</span>` +
+        `<span class="su-mes-row-ops">↑ ↓ 🗑</span>` +
+        `</div>`,
+    )
+    .join('');
+  return tools + `<div class="su-mes-stage-list">${rows}</div>`;
+}
+
+function mesDagNodes(labels: string[]): string {
+  if (!labels.length) {
+    return `<div class="su-mes-dag-empty">暂无拓扑</div>`;
+  }
+  const nodes = labels
+    .map(
+      (lab, i) =>
+        `<div class="su-mes-dag-node">${esc(lab)}</div>` +
+        (i < labels.length - 1 ? `<div class="su-mes-dag-arrow">↓</div>` : ''),
+    )
+    .join('');
+  return `<div class="su-mes-dag-col">${nodes}</div>`;
+}
+
+/** 工序管理列表 */
+function mesStageList(): string {
+  return shellApp(
+    '工序管理',
+    mesHint(
+      '点击工序代码进入编辑；勾选行后删除。仅用户等级 ≤3 可新增、修改或删除工序。',
+    ) +
+      mesToolbar(`${btnPrimary('新增')}${btnDanger('删除')}`) +
+      mesTable(
+        ['', '#', '工序代码', '工序名称', '过站编号', '工序说明'],
+        [
+          [mesCheck(), '1', mesLink('OP.UV'), 'UV点胶', '001', 'UV胶涂布于横梁接合面'],
+          [mesCheck(), '2', mesLink('OP.FOC-A'), '自动化AA调焦', '002', '模组完成AA调焦及预固化'],
+          [mesCheck(), '3', mesLink('OP.FQC-PT'), '性能测试', '027', '进行性能终测'],
+          [mesCheck(), '4', mesLink('OP.DT-BA'), '脏污检测(AA前)', '000_01', '脏污检测(AA前)'],
+          [mesCheck(), '5', mesLink('OP.FW-M'), 'MCU烧录', '043', 'MCU烧录'],
+        ],
+        { highlightRow: 2 },
+      ),
+    { wide: true },
+  );
+}
+
+/** 工序新增弹窗（创建态） */
+function mesStageForm(): string {
+  return shellModal(
+    '新增工序',
+    mesFieldRow([
+      {
+        label: '工序代码',
+        required: true,
+        body: mesInput('唯一标识，创建后不可改'),
+      },
+      { label: '工序名称', required: true, body: mesInput('') },
+      { label: '过站编号', body: mesInput('如 010、029') },
+    ]) +
+      mesFieldRow([
+        {
+          label: '工序说明',
+          required: true,
+          body: mesInput('', { area: true }),
+        },
+      ]) +
+      `<div class="su-actions su-actions-end">${btnPrimary('确定')}${btnGhost('返回')}</div>`,
+  );
+}
+
+/** 工艺流程列表 */
+function mesFlowList(): string {
+  return shellApp(
+    '工艺流程',
+    mesHint(
+      '点击工艺编号进入编辑页；点击行可选中高亮；预览用右侧按钮。仅用户等级 ≤3 可新增或编辑工艺。',
+    ) +
+      mesToolbar(`${btnPrimary('新增工艺')}${btnGhost('预览选中')}`) +
+      mesTable(
+        ['工艺编号', '工艺名称', '工序 / 拓扑', '说明', '操作'],
+        [
+          [
+            mesLink('WFP.BA.VEH.KK00'),
+            '双目一体机 勘搜定制',
+            '6 道工序 · 5 条前序关系',
+            'kankan车载双目立体视觉相机',
+            `<span class="su-mes-ops">${mesLink('预览')} ${mesLink('基于此创建')}</span>`,
+          ],
+          [
+            mesLink('WFP.BM.S315.COM0'),
+            '双目带壳模组 S315-V3 通用版',
+            '4 道工序 · 3 条前序关系',
+            'S315 通用',
+            `<span class="su-mes-ops">${mesLink('预览')} ${mesLink('基于此创建')}</span>`,
+          ],
+          [
+            mesLink('WFP.BM.S3162.COM0'),
+            '双目带壳模组',
+            '9 道工序 · 8 条前序关系',
+            'S3162',
+            `<span class="su-mes-ops">${mesLink('预览')} ${mesLink('基于此创建')}</span>`,
+          ],
+        ],
+      ),
+    { wide: true },
+  );
+}
+
+/** 新增工艺流程弹窗（从零） */
+function mesFlowCreate(): string {
+  return shellModal(
+    '新增工艺流程',
+    mesFieldRow([
+      { label: '工艺编号', required: true, body: mesInput('') },
+      { label: '工艺名称', required: true, body: mesInput('') },
+    ]) +
+      mesFieldRow([
+        {
+          label: '工艺说明',
+          required: true,
+          body: mesInput('', { area: true }),
+        },
+      ]) +
+      mesFieldRow([
+        {
+          label: '流程工序',
+          required: true,
+          body: mesCard(
+            '工艺流程排序（拖拽顺序为默认线性前序）',
+            mesStageSortPanel({ empty: true }),
+          ),
+        },
+      ]) +
+      mesCard(
+        '前序（多选并行与汇合，显示工序名称）',
+        mesTable(['工序', 'pre'], [], { empty: '暂无数据' }),
+      ) +
+      mesFieldRow([
+        {
+          label: '工艺拓扑图',
+          body: mesCard('工艺拓扑图', mesDagNodes([])),
+        },
+      ]) +
+      `<div class="su-actions su-actions-end">${btnPrimary('确定')}${btnGhost('返回')}</div>`,
+    { wide: true },
+  );
+}
+
+/** 修改工艺流程全页 */
+function mesFlowEditor(): string {
+  const steps = [
+    '脏污检测(AA前)',
+    'UV点胶',
+    '自动化AA调焦',
+    '脏污检测(AA后)',
+    'MCU烧录',
+    'FPGA烧录',
+  ];
+  const left =
+    mesFieldRow([
+      {
+        label: '工艺编号',
+        required: true,
+        body: mesInput('', { value: 'WFP.BA.VEH.KK00', locked: true }),
+      },
+      {
+        label: '工艺名称',
+        required: true,
+        body: mesInput('', { value: '双目一体机-瞰瞰定制' }),
+      },
+    ]) +
+    mesFieldRow([
+      {
+        label: '工艺说明',
+        required: true,
+        body: mesInput('', {
+          value: 'kankan车载双目立体视觉相机',
+          area: true,
+        }),
+      },
+    ]) +
+    mesFieldRow([
+      {
+        label: '流程工序',
+        required: true,
+        body: mesCard(
+          '工艺流程排序（拖拽顺序为默认线性前序）',
+          mesStageSortPanel({ steps }),
+        ),
+      },
+    ]) +
+    mesCard(
+      '前序（多选并行与汇合，显示工序名称）',
+      mesTable(
+        ['工序', 'pre'],
+        [
+          ['脏污检测(AA前) (000_01)', '—'],
+          ['UV点胶 (001)', '脏污检测(AA前)'],
+          ['自动化AA调焦 (002)', 'UV点胶'],
+        ],
+      ),
+    );
+  const right = mesCard(
+    '工艺拓扑图（起点在上）',
+    mesDagNodes([
+      '脏污检测(AA前) (000_01)',
+      'UV点胶 (001)',
+      '自动化AA调焦 (002)',
+      '脏污检测(AA后)',
+      'MCU烧录 (043)',
+      'FPGA烧录',
+    ]),
+  );
+  return shellApp(
+    '',
+    `<div class="su-mes-editor-top">` +
+      `<div class="su-mes-back">← 返回</div>` +
+      `<div class="su-mes-editor-title">修改工艺流程</div>` +
+      `<div class="su-mes-editor-actions">${btnGhost('返回列表')}${btnPrimary('提交')}</div>` +
+      `</div>` +
+      `<div class="su-mes-editor-split">` +
+      `<div class="su-mes-editor-main">${left}</div>` +
+      `<div class="su-mes-editor-side">${right}</div>` +
+      `</div>`,
+    { wide: true },
+  );
+}
+
 const TEMPLATES: Record<string, () => string> = {
   login,
   'register-password': registerPassword,
@@ -946,6 +1300,11 @@ const TEMPLATES: Record<string, () => string> = {
   'member-remove-confirm': memberRemoveConfirm,
   'member-remove-self-confirm': memberRemoveSelfConfirm,
   'member-remove-owner-block': memberRemoveOwnerBlock,
+  'mes-stage-list': mesStageList,
+  'mes-stage-form': mesStageForm,
+  'mes-flow-list': mesFlowList,
+  'mes-flow-create': mesFlowCreate,
+  'mes-flow-editor': mesFlowEditor,
 };
 
 export function renderScreenUi(source: string): string {

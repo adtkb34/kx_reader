@@ -11,6 +11,7 @@ import {
 } from '@/markdown';
 import { bindMermaidDetails, renderMermaidIn } from '@/mermaid';
 import { activateFigmaEmbedsIn, bindFigmaEmbedDetails } from '@/figmaEmbed';
+import { activateOpenApiEmbedsIn, bindOpenApiEmbedDetails } from '@/openapiEmbed';
 import { enhanceTableFiltersIn } from '@/tableFilters';
 import { enhanceTableCellMergeIn } from '@/tableCellMerge';
 import { enhanceTableRulerColIn } from '@/tableRulerCol';
@@ -123,6 +124,7 @@ const contentEl = ref<HTMLElement | null>(null);
 const diagramHtml = ref('');
 let unbindMermaid: (() => void) | null = null;
 let unbindFigma: (() => void) | null = null;
+let unbindOpenApi: (() => void) | null = null;
 let loadGen = 0;
 
 const pick = computed(() => normalizeRulerPick(props.toc, props.rulerPick ?? 'index'));
@@ -810,6 +812,8 @@ async function load(): Promise<void> {
   unbindMermaid = null;
   unbindFigma?.();
   unbindFigma = null;
+  unbindOpenApi?.();
+  unbindOpenApi = null;
   try {
     const next = props.toc.ruler ? await loadModules() : await loadPlain();
     if (gen !== loadGen) return;
@@ -820,9 +824,11 @@ async function load(): Promise<void> {
     applyDetailsPref();
     unbindMermaid = bindMermaidDetails(contentEl.value);
     unbindFigma = bindFigmaEmbedDetails(contentEl.value);
+    unbindOpenApi = bindOpenApiEmbedDetails(contentEl.value, props.bookId);
     await renderMermaidIn(contentEl.value);
     if (gen !== loadGen) return;
     activateFigmaEmbedsIn(contentEl.value);
+    activateOpenApiEmbedsIn(contentEl.value, props.bookId);
     enhanceTableRulerColIn(contentEl.value, props.toc);
     enhanceTableCellMergeIn(contentEl.value);
     enhanceTableFiltersIn(contentEl.value);
@@ -872,6 +878,7 @@ watch(
     await nextTick();
     await renderMermaidIn(contentEl.value);
     activateFigmaEmbedsIn(contentEl.value);
+    activateOpenApiEmbedsIn(contentEl.value, props.bookId);
     enhanceTableRulerColIn(contentEl.value, props.toc);
     enhanceTableCellMergeIn(contentEl.value);
     enhanceTableFiltersIn(contentEl.value);
@@ -883,6 +890,8 @@ onBeforeUnmount(() => {
   unbindMermaid = null;
   unbindFigma?.();
   unbindFigma = null;
+  unbindOpenApi?.();
+  unbindOpenApi = null;
   diagramHtml.value = '';
 });
 
