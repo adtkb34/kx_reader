@@ -204,19 +204,6 @@ function outlineNum(type: 'group' | 'page', id: string): string {
 const hasOutlineNums = computed(() => !!props.outlineNums && props.outlineNums.size > 0);
 
 const selectedPageSet = computed(() => new Set(props.pageSelectedIds ?? []));
-const visiblePageSet = computed(() => {
-  if (props.pageVisibleIds != null) return new Set(props.pageVisibleIds);
-  return selectedPageSet.value;
-});
-
-/** Dim only in multi-pick; single-pick would grey out almost the whole TOC. */
-function isDimmed(id: string): boolean {
-  return (
-    props.pagePickEnabled &&
-    ui.tocPagePickMode === 'multi' &&
-    !visiblePageSet.value.has(id)
-  );
-}
 
 function onPageClick(pageId: string): void {
   const currently = selectedPageSet.value.has(pageId);
@@ -239,10 +226,7 @@ function onChildTogglePage(pageId: string, checked: boolean): void {
     <details
       v-if="node.type === 'group'"
       class="toc-group toc-row"
-      :class="[
-        `toc-row--depth-${depth}`,
-        isDimmed(node.id) ? 'toc-page-dim' : '',
-      ]"
+      :class="[`toc-row--depth-${depth}`]"
       :key="siblingExpand != null ? 'g-' + node.id : 'g-' + node.id + '-' + currentChapterId"
       :open="isOpen(node)"
     >
@@ -309,11 +293,7 @@ function onChildTogglePage(pageId: string, checked: boolean): void {
     <div
       v-else
       class="toc-chapter toc-row"
-      :class="[
-        `toc-row--depth-${depth}`,
-        { active: node.id === currentChapterId },
-        isDimmed(node.id) ? 'toc-page-dim' : '',
-      ]"
+      :class="[`toc-row--depth-${depth}`, { active: node.id === currentChapterId }]"
     >
       <div class="toc-row-label toc-chapter-row">
         <button

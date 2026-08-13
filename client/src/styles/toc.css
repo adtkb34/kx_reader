@@ -234,10 +234,6 @@
   );
 }
 
-.toc-page-dim {
-  opacity: 0.45;
-}
-
 .toc-page-pick-toolbar {
   display: flex;
   flex-wrap: wrap;
