@@ -1152,6 +1152,15 @@ describe('sectionLensLeaves', () => {
   it('returns empty when section is not listed', () => {
     expect(sectionLensLeaves(chapter, 'missing', tocWithLenses)).toEqual([]);
   });
+
+  it('includes whole-page layers on every section', () => {
+    const layered: TocChapter = {
+      ...chapter,
+      layers: { read: 'scenario' },
+    };
+    expect(sectionLensLeaves(layered, 'b', tocWithLenses)).toEqual(['scenario', 'impl']);
+    expect(sectionLensLeaves(layered, 'missing', tocWithLenses)).toEqual(['scenario']);
+  });
 });
 
 describe('selectionLegendLeaves / sectionClusterRole', () => {

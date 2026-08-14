@@ -390,13 +390,44 @@ export function joinSectionFragments(
   return { id, title: title || parts[0]!.title, level, html: mergedHtml };
 }
 
+const BARE_TABLE_HTML_RE = /^\s*<table[\s>]/i;
+
+function isBareTableHtml(html: string): boolean {
+  return BARE_TABLE_HTML_RE.test(html);
+}
+
+/** Consecutive hang-off fragments that are bare `<table>` HTML are merged into one. */
+export function joinHangOffTableRuns(parts: RenderedSection[]): RenderedSection[] {
+  const out: RenderedSection[] = [];
+  let i = 0;
+  while (i < parts.length) {
+    const start = parts[i]!;
+    if (!isBareTableHtml(start.html)) {
+      out.push(start);
+      i += 1;
+      continue;
+    }
+    const run = [start];
+    let j = i + 1;
+    while (j < parts.length && isBareTableHtml(parts[j]!.html)) {
+      run.push(parts[j]!);
+      j += 1;
+    }
+    const joined = joinSectionFragments(run, start.id, start.title, start.level);
+    if (joined) out.push(joined);
+    i = j;
+  }
+  return out;
+}
+
 /** Header cell texts for comparing whether two tables share one `| --- |` header. */
 function tableHeaderSignature(table: HTMLTableElement): string | null {
   const head = table.tHead?.rows[0];
   if (!head) return null;
-  return Array.from(head.cells)
-    .map((c) => (c.textContent ?? '').trim())
-    .join('\0');
+  const cells = Array.from(head.cells).map((c) => (c.textContent ?? '').trim());
+  while (cells.length > 0 && cells[cells.length - 1] === '') cells.pop();
+  if (cells.length === 0) return null;
+  return cells.join('\0');
 }
 
 function mergeAdjacentTables(html: string): string {

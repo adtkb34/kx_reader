@@ -6,6 +6,7 @@ import {
   exportSectionHeadingTitle,
   formatBlockMarkdown,
   listDigestExportChapterIds,
+  mergeAdjacentGfmTables,
   prepareExportSectionBody,
   resolveExportFocusModuleIds,
   shiftAtxHeadingLevels,
@@ -148,6 +149,53 @@ describe('stripSectionIdsFromMarkdown / ensureTableHeaderInBody', () => {
   });
 });
 
+describe('mergeAdjacentGfmTables', () => {
+  it('merges a header-only table with a body table that recopied the header', () => {
+    const md = `| 场景 | 操作 | 系统 | |
+| --- | --- | --- | --- |
+
+| 场景 | 操作 | 系统 |
+| --- | --- | --- |
+| 查看 | 打开列表 | 列出 |
+`;
+    expect(mergeAdjacentGfmTables(md)).toBe(
+      `| 场景 | 操作 | 系统 | |
+| --- | --- | --- | --- |
+| 查看 | 打开列表 | 列出 |
+`,
+    );
+  });
+
+  it('merges when one header has a trailing empty id column', () => {
+    const md = `| 场景 | 操作 | 系统 |
+| --- | --- | --- |
+| 查看 | 打开列表 | 列出 |
+
+| 场景 | 操作 | 系统 | |
+| --- | --- | --- | --- |
+| 新增 | 填写 | 建档 |
+| 修改 | 编辑 | 保存 |
+`;
+    const out = mergeAdjacentGfmTables(md);
+    expect(out.match(/\| 场景 \|/g)).toHaveLength(1);
+    expect(out).toContain('| 查看 | 打开列表 | 列出 |');
+    expect(out).toContain('| 新增 | 填写 | 建档 |');
+    expect(out).toContain('| 修改 | 编辑 | 保存 |');
+  });
+
+  it('does not merge tables with different headers', () => {
+    const md = `| 场景 | 操作 |
+| --- | --- |
+| 查看 | 打开 |
+
+| 字段 | 类型 |
+| --- | --- |
+| 名称 | 文本 |
+`;
+    expect(mergeAdjacentGfmTables(md)).toBe(md);
+  });
+});
+
 describe('shiftAtxHeadingLevels', () => {
   it('shifts and clamps heading depths', () => {
     expect(shiftAtxHeadingLevels('## A\n### B', 1)).toBe('### A\n#### B');
@@ -165,13 +213,15 @@ describe('formatBlockMarkdown', () => {
     expect(out).toContain('正文');
   });
 
-  it('emits synthetic heading when body empty', () => {
-    expect(formatBlockMarkdown(2, '1.1', '模块', '', { synthetic: true })).toBe('## 1.1 模块');
+  it('emits body without a heading when title is empty', () => {
+    expect(formatBlockMarkdown(4, '3.1.1.1', '', '| 查看 | 打开 |\n', { sourceLevel: 2 })).toBe(
+      '| 查看 | 打开 |',
+    );
   });
 });
 
 describe('exportSectionHeadingTitle', () => {
-  it('falls back to page-layer lens titles when section title is empty', () => {
+  it('uses the section title and does not fall back to lens names', () => {
     const ch = page({
       id: 'flow',
       title: '流程',
@@ -179,20 +229,8 @@ describe('exportSectionHeadingTitle', () => {
       layers: { read: 'flow', priority: 'p0' },
       sections: [{ id: 'row1', title: '', level: 2 }],
     });
-    expect(exportSectionHeadingTitle(book, ch, 'row1', '')).toBe('流程 · P0');
+    expect(exportSectionHeadingTitle(book, ch, 'row1', '')).toBe('');
     expect(exportSectionHeadingTitle(book, ch, 'row1', '  已有标题  ')).toBe('已有标题');
-  });
-
-  it('prefers section allowlist leaves over page layers', () => {
-    const ch = page({
-      id: 'flow',
-      title: '流程',
-      file: 'flow.md',
-      layers: { read: 'flow', priority: 'p0' },
-      sectionAllowlists: { read: { flow: ['row1'] }, priority: { p1: ['row1'] } },
-      sections: [{ id: 'row1', title: '', level: 2 }],
-    });
-    expect(exportSectionHeadingTitle(book, ch, 'row1', '')).toBe('流程 · P1');
   });
 });
 
@@ -241,7 +279,7 @@ describe('buildDigestMarkdown', () => {
     expect(md).not.toContain('挂靠正文');
   });
 
-  it('untitled hang sections use lens titles in headings', () => {
+  it('untitled hang sections omit lens names from headings', () => {
     const toc: BookToc = {
       ...book,
       chapters: [
@@ -281,7 +319,7 @@ title: 流程
         hangFilter: 'all',
       },
     );
-    expect(md).toMatch(/流程 · P0/);
+    expect(md).not.toMatch(/流程 · P0/);
     expect(md).toContain('| 查看 | 打开 |');
   });
 
@@ -308,6 +346,114 @@ title: 流程
       focusModuleIds: ['idx'],
     });
     expect(ids.sort()).toEqual(['flow', 'idx']);
+  });
+
+  it('single-module export omits TOC groups and uses page-local outline numbers', () => {
+    const md = buildDigestMarkdown(book, chapterMarkdown, {
+      selection: { read: ['flow'], priority: ['p0'] },
+      rulerPick: 'index',
+      hangFilter: 'all',
+      focusModuleIds: ['idx'],
+    });
+    expect(md).not.toContain('外层');
+    expect(md).toMatch(/^# 模块$/m);
+    expect(md).not.toMatch(/^# \d+ /m);
+    expect(md).toMatch(/^## 1 步骤一/m);
+    expect(md).toMatch(/^### 1\.1 流程块/m);
+    expect(md).toMatch(/^## 2 步骤二/m);
+  });
+
+  it('single-module export numbers from 1 even when the module is not first in the book', () => {
+    const toc: BookToc = {
+      ...book,
+      tree: [
+        {
+          type: 'group',
+          id: 'first',
+          title: '甲组',
+          children: [
+            {
+              type: 'group',
+              id: 'moda',
+              title: '模块甲',
+              children: [{ type: 'page', id: 'idxa', title: '骨架甲', file: 'a.md' }],
+            },
+          ],
+        },
+        {
+          type: 'group',
+          id: 'second',
+          title: '乙组',
+          children: [
+            {
+              type: 'group',
+              id: 'modb',
+              title: '模块乙',
+              children: [
+                { type: 'page', id: 'idx', title: '骨架', file: 'index.md' },
+                { type: 'page', id: 'flow', title: '流程', file: 'flow.md' },
+              ],
+            },
+          ],
+        },
+      ],
+      chapters: [
+        page({
+          id: 'idxa',
+          title: '骨架甲',
+          file: 'a.md',
+          role: 'ruler',
+          layers: { priority: ['p0'] },
+          sections: [{ id: 'ka', title: '甲步骤', level: 2 }],
+        }),
+        ...book.chapters,
+      ],
+    };
+    const md = buildDigestMarkdown(
+      toc,
+      new Map([
+        ...chapterMarkdown,
+        [
+          'idxa',
+          `---
+id: idxa
+title: 骨架甲
+---
+
+{#ka}
+## 甲步骤
+
+甲正文。
+`,
+        ],
+      ]),
+      {
+        selection: { read: ['flow'], priority: ['p0'] },
+        rulerPick: 'index',
+        hangFilter: 'all',
+        focusModuleIds: ['idx'],
+      },
+    );
+    expect(md).not.toContain('甲组');
+    expect(md).not.toContain('乙组');
+    expect(md).not.toContain('模块甲');
+    expect(md).toMatch(/^# 模块乙$/m);
+    expect(md).toMatch(/^## 1 步骤一/m);
+    expect(md).not.toMatch(/2\.1/);
+  });
+
+  it('single-module axis export keeps page buckets, not book-level axis groups', () => {
+    const md = buildDigestMarkdown(book, chapterMarkdown, {
+      selection: { read: ['flow'], priority: ['p0'] },
+      rulerPick: 'priority',
+      hangFilter: 'all',
+      focusModuleIds: ['idx'],
+    });
+    expect(md).not.toContain('外层');
+    expect(md).toMatch(/^# 模块$/m);
+    expect(md).not.toMatch(/^# 1 P0/m);
+    expect(md).toMatch(/^## 1 P0/m);
+    expect(md).toMatch(/^### 1\.1 步骤一/m);
   });
 
   it('outlineKeyIdsByModule keeps only selected ruler keys', () => {

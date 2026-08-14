@@ -1,6 +1,8 @@
 /**
- * Build a full-book digest Markdown that mirrors LensDigestView:
- * same module/axis order, display heading levels, and stable outline numbers.
+ * Build digest Markdown.
+ * Multi-page export mirrors LensDigestView (TOC groups + digest numbers).
+ * A single focused module/chapter mirrors ModulePage / ChapterPage: no group
+ * wrappers, and outline numbers match the on-page 小节 id.
  */
 import {
   digestAnchorId,
@@ -14,14 +16,11 @@ import {
   filterSectionsByShowLevel,
   defaultSelection,
   groupChaptersForDigest,
-  layerOptions,
-  lensAxisIds,
   lensNodeTitle,
   lensQueryFromSelection,
   lensSelectionFromQuery,
   pageVisibleInSelection,
   sectionAllowlistFor,
-  sectionLensLeaves,
   selectionToFlatIds,
   visibleTocSections,
   type LensQueryInput,
@@ -88,6 +87,98 @@ export function dropTrailingEmptyGfmCells(cells: string[]): string[] {
   const out = [...cells];
   while (out.length > 0 && out[out.length - 1]!.trim() === '') out.pop();
   return out;
+}
+
+function gfmHeaderSignature(headerLine: string): string | null {
+  const cells = dropTrailingEmptyGfmCells(splitGfmTableCells(headerLine)).map((c) =>
+    c.trim(),
+  );
+  return cells.length > 0 ? cells.join('\0') : null;
+}
+
+function gfmTableHeaderLine(block: string[]): string | null {
+  if (block.length < 2) return null;
+  if (isGfmSeparatorLine(block[0]!) || !isGfmSeparatorLine(block[1]!)) return null;
+  return block[0]!;
+}
+
+function gfmTableBlocksMergeable(a: string[], b: string[]): boolean {
+  const hb = gfmTableHeaderLine(b);
+  if (!hb) return true;
+  const ha = gfmTableHeaderLine(a);
+  if (!ha) return false;
+  const sa = gfmHeaderSignature(ha);
+  const sb = gfmHeaderSignature(hb);
+  return sa != null && sb != null && sa === sb;
+}
+
+function mergeGfmTableBlocks(a: string[], b: string[]): string[] {
+  const body = gfmTableHeaderLine(b) ? b.slice(2) : b;
+  return [...a, ...body];
+}
+
+/**
+ * Flatten consecutive GFM tables that share a header (hang-off slices each copy
+ * `| 场景 | 操作 | 系统 |`). Trailing empty header cells do not block a merge.
+ */
+export function mergeAdjacentGfmTables(md: string): string {
+  const lines = md.replace(/\r\n/g, '\n').split('\n');
+  const out: string[] = [];
+  let pending: string[] | null = null;
+
+  const flush = () => {
+    if (pending) {
+      out.push(...pending);
+      pending = null;
+    }
+  };
+
+  let i = 0;
+  while (i < lines.length) {
+    if (!isTableLine(lines[i]!)) {
+      if (pending && lines[i]!.trim() === '') {
+        let k = i;
+        while (k < lines.length && lines[k]!.trim() === '') k += 1;
+        if (k < lines.length && isTableLine(lines[k]!)) {
+          const nextStart = k;
+          let nextEnd = nextStart;
+          while (nextEnd < lines.length && isTableLine(lines[nextEnd]!)) nextEnd += 1;
+          const nextBlock = lines.slice(nextStart, nextEnd);
+          if (gfmTableBlocksMergeable(pending, nextBlock)) {
+            i = nextStart;
+            continue;
+          }
+        }
+      }
+      flush();
+      out.push(lines[i]!);
+      i += 1;
+      continue;
+    }
+    const start = i;
+    while (i < lines.length && isTableLine(lines[i]!)) i += 1;
+    const block = lines.slice(start, i);
+    if (!pending) {
+      pending = block;
+      continue;
+    }
+    if (gfmTableBlocksMergeable(pending, block)) {
+      pending = mergeGfmTableBlocks(pending, block);
+    } else {
+      flush();
+      pending = block;
+    }
+  }
+  flush();
+  return out.join('\n');
+}
+
+function isGfmTableMarkdown(body: string): boolean {
+  const first = body
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .find((l) => l.trim());
+  return !!first && isTableLine(first);
 }
 
 /**
@@ -281,12 +372,17 @@ export function shiftAtxHeadingLevels(md: string, delta: number): string {
 export function formatBlockMarkdown(
   displayLevel: number,
   number: string,
-  title: string,
+  titleRaw: string,
   body: string,
   opts?: { synthetic?: boolean; sourceLevel?: number },
 ): string {
   const level = clampLevel(displayLevel);
+  const title = titleRaw.trim();
   const hashes = '#'.repeat(level);
+  if (!title && body.trim() && !opts?.synthetic) {
+    const sourceLevel = opts?.sourceLevel ?? guessBodyLevel(body, level);
+    return shiftAtxHeadingLevels(body.replace(/\r\n/g, '\n'), level - sourceLevel).replace(/\s+$/, '');
+  }
   const label = number ? `${number} ${title}` : title;
   if (opts?.synthetic || !body.trim()) {
     return `${hashes} ${label}`.trimEnd();
@@ -309,36 +405,32 @@ function pageAnchorId(chapterId: string, leaf?: PageLayer): string {
   return leaf ? `page-${leaf}-${chapterId}` : `page-${chapterId}`;
 }
 
-/** Whole-page layer leaf ids across axes (declaration order). */
-function chapterLayerLeaves(toc: BookToc, chapter: TocChapter): PageLayer[] {
-  const out: PageLayer[] = [];
-  const seen = new Set<PageLayer>();
-  for (const axis of lensAxisIds(toc)) {
-    for (const id of layerOptions(chapter.layers?.[axis])) {
-      if (seen.has(id)) continue;
-      seen.add(id);
-      out.push(id);
-    }
-  }
-  return out;
+/** One focused leaf module / plain chapter → match the single-page reader. */
+function isPageLocalExport(toc: BookToc, opts: DigestExportOptions): boolean {
+  const ids = focusModuleIdSet(toc, opts);
+  return ids != null && ids.size === 1;
 }
 
-/**
- * Heading text for export: prefer section/tick title; if empty (table-row hangs),
- * fall back to lens leaf titles so `####` is not blank after the number.
- */
-export function exportSectionHeadingTitle(
-  toc: BookToc,
-  chapter: TocChapter,
+/** Outline/block id: page-local uses the same key as ModulePage (`anchorId ?? sectionId`). */
+function exportSectionAnchorId(
+  chapterId: string,
   sectionId: string,
+  pageLocal: boolean,
+  axisLeaf?: PageLayer,
+): string {
+  if (pageLocal) return sectionId;
+  const base = digestAnchorId(chapterId, sectionId);
+  return axisLeaf ? `${axisBucketAnchorId(axisLeaf)}--${base}` : base;
+}
+
+/** Heading text for export: section/tick title only (no lens tags). */
+export function exportSectionHeadingTitle(
+  _toc: BookToc,
+  _chapter: TocChapter,
+  _sectionId: string,
   preferred: string,
 ): string {
-  const text = preferred.trim();
-  if (text) return text;
-  const leaves = sectionLensLeaves(chapter, sectionId, toc);
-  const ids = leaves.length > 0 ? leaves : chapterLayerLeaves(toc, chapter);
-  if (ids.length === 0) return sectionId;
-  return ids.map((id) => lensNodeTitle(toc, id)).join(' · ');
+  return preferred.trim();
 }
 
 function sectionBodiesById(markdown: string): Map<string, SectionBody> {
@@ -369,7 +461,7 @@ function joinBodies(
     id,
     title: title || parts[0]!.title,
     level,
-    body: parts.map((p) => p.body).join('\n\n'),
+    body: mergeAdjacentGfmTables(parts.map((p) => p.body).join('\n\n')),
   };
 }
 
@@ -489,7 +581,15 @@ function stablePlainNumberMap(
   toc: BookToc,
   selection: LensSelection | null,
   showLevel: ReaderShowLevel,
+  pageLocalChapterId?: string | null,
 ): Map<string, string> {
+  if (pageLocalChapterId) {
+    const ch = toc.chapters.find((c) => c.id === pageLocalChapterId);
+    if (!ch) return new Map();
+    return outlineNumbers(
+      ch.sections.filter((s) => s.title).map((s) => ({ id: s.id, level: s.level })),
+    );
+  }
   const chapters = filterChapters(toc.chapters, selection, toc);
   const items: { id: string; level: number }[] = [];
   const emitted = new Set<string>();
@@ -521,7 +621,25 @@ function stableModuleNumberMap(
   selection: LensSelection | null,
   showLevel: ReaderShowLevel,
   pick: string,
+  pageLocalMod?: LeafModule | null,
 ): Map<string, string> {
+  if (pageLocalMod) {
+    const entries = filterRulerOutlineEntries(
+      toc,
+      selection,
+      showLevel,
+      rulerOutlineEntries(toc, selection, showLevel, pageLocalMod.indexChapterId, pick),
+      'all',
+    );
+    return outlineNumbers(
+      entries
+        .filter((e) => e.title)
+        .map((e) => ({
+          id: e.anchorId ?? e.sectionId,
+          level: e.level,
+        })),
+    );
+  }
   const keep = rulerSidebarKeepIds(toc, selection);
   const modules = listLeafModules(toc).filter((m) => keep.has(m.indexChapterId));
   const items: { id: string; level: number }[] = [];
@@ -644,6 +762,7 @@ function buildModuleBlocks(
   chapterById: Map<string, TocChapter>,
   axisLeaf?: PageLayer,
   outlineKeyIds?: string[] | null,
+  pageLocal = false,
 ): MdBlock[] {
   const raw = assembleModuleView(toc, selection, showLevel, mod.indexChapterId, pick);
   if (!raw) return [];
@@ -655,19 +774,21 @@ function buildModuleBlocks(
     hangFilter,
     outlineKeyIds,
   );
-  const buckets = axisLeaf ? view.buckets.filter((b) => b.leaf === axisLeaf) : view.buckets;
-  if (axisLeaf && buckets.length === 0) return [];
-  if (buckets.every((b) => b.keys.length === 0) && (axisLeaf || view.preamble.length === 0)) {
+  const leaf = pageLocal ? undefined : axisLeaf;
+  const buckets = leaf ? view.buckets.filter((b) => b.leaf === leaf) : view.buckets;
+  if (leaf && buckets.length === 0) return [];
+  if (buckets.every((b) => b.keys.length === 0) && (leaf || view.preamble.length === 0)) {
     return [];
   }
 
-  const pathLen = mod.groupPath.length;
-  const boost = axisLeaf ? 1 : 0;
-  const pageLevel = digestPageDisplayLevel(pathLen) + boost;
-  const pageId = pageAnchorId(mod.indexChapterId, axisLeaf);
+  const axisMode = pick !== 'index';
+  const pathLen = pageLocal ? 0 : mod.groupPath.length;
+  const boost = pageLocal ? (axisMode ? 1 : 0) : leaf ? 1 : 0;
+  const pageLevel = pageLocal ? 1 : digestPageDisplayLevel(pathLen) + boost;
+  const pageId = pageAnchorId(mod.indexChapterId, leaf);
   const out: MdBlock[] = [];
 
-  if (!axisLeaf) {
+  if (!leaf) {
     for (const p of view.preamble) {
       const ch = chapterById.get(p.chapterId);
       for (const sid of p.sectionIds) {
@@ -675,7 +796,7 @@ function buildModuleBlocks(
         if (!s || !ch) continue;
         const level = digestSectionDisplayLevel(pathLen, s.level) + boost;
         out.push({
-          id: digestAnchorId(p.chapterId, s.id),
+          id: exportSectionAnchorId(p.chapterId, s.id, pageLocal, leaf),
           title: exportSectionHeadingTitle(toc, ch, s.id, s.title),
           level,
           body: s.body,
@@ -686,7 +807,7 @@ function buildModuleBlocks(
   }
 
   for (const bucket of buckets) {
-    if (bucket.leafTitle && !axisLeaf && bucket.leaf) {
+    if (bucket.leafTitle && !leaf && bucket.leaf) {
       const bid = axisBucketAnchorId(bucket.leaf);
       out.push({
         id: bid,
@@ -705,11 +826,8 @@ function buildModuleBlocks(
       const joined = joinBodies(parts, key.sectionId, key.title, key.level);
       if (joined && keyCh) {
         const level = digestSectionDisplayLevel(pathLen, joined.level) + boost;
-        const anchorId = axisLeaf
-          ? `${axisBucketAnchorId(axisLeaf)}--${digestAnchorId(key.chapterId, joined.id)}`
-          : digestAnchorId(key.chapterId, joined.id);
         out.push({
-          id: anchorId,
+          id: exportSectionAnchorId(key.chapterId, joined.id, pageLocal, leaf),
           title: exportSectionHeadingTitle(toc, keyCh, joined.id, joined.title || key.title),
           level,
           body: joined.body,
@@ -717,11 +835,8 @@ function buildModuleBlocks(
         });
       } else if (key.title) {
         const level = digestSectionDisplayLevel(pathLen, key.level) + boost;
-        const anchorId = axisLeaf
-          ? `${axisBucketAnchorId(axisLeaf)}--${digestAnchorId(key.chapterId, key.sectionId)}`
-          : digestAnchorId(key.chapterId, key.sectionId);
         out.push({
-          id: anchorId,
+          id: exportSectionAnchorId(key.chapterId, key.sectionId, pageLocal, leaf),
           title: key.title,
           level,
           body: '',
@@ -729,21 +844,45 @@ function buildModuleBlocks(
         });
       }
       for (const g of key.groups) {
+        const rawParts: { bch: TocChapter; s: SectionBody; b: (typeof g.blocks)[number] }[] = [];
         for (const b of g.blocks) {
           const bch = chapterById.get(b.chapterId);
           const s = takeBody(bodies, b.chapterId, b.sectionId);
           if (!bch || !s) continue;
-          const rawLevel = Math.max(s.level, key.level + 1);
+          rawParts.push({ bch, s, b });
+        }
+        let i = 0;
+        while (i < rawParts.length) {
+          const start = rawParts[i]!;
+          const isTable = isGfmTableMarkdown(start.s.body);
+          let runEnd = i + 1;
+          if (isTable) {
+            while (runEnd < rawParts.length && isGfmTableMarkdown(rawParts[runEnd]!.s.body)) {
+              runEnd += 1;
+            }
+          }
+          const run = rawParts.slice(i, runEnd);
+          const joinedHang = joinBodies(
+            run.map((r) => r.s),
+            start.s.id,
+            start.s.title,
+            start.s.level,
+          );
+          i = runEnd;
+          if (!joinedHang) continue;
+          const rawLevel = Math.max(joinedHang.level, key.level + 1);
           const level = digestSectionDisplayLevel(pathLen, rawLevel) + boost;
-          const anchorId = axisLeaf
-            ? `${axisBucketAnchorId(axisLeaf)}--${digestAnchorId(b.chapterId, s.id)}`
-            : digestAnchorId(b.chapterId, s.id);
           out.push({
-            id: anchorId,
-            title: exportSectionHeadingTitle(toc, bch, s.id, s.title || b.title),
+            id: exportSectionAnchorId(start.b.chapterId, joinedHang.id, pageLocal, leaf),
+            title: exportSectionHeadingTitle(
+              toc,
+              start.bch,
+              joinedHang.id,
+              joinedHang.title || start.b.title,
+            ),
             level,
-            body: s.body,
-            sourceLevel: s.level,
+            body: joinedHang.body,
+            sourceLevel: joinedHang.level,
           });
         }
       }
@@ -772,6 +911,7 @@ function buildPlainBlocks(
   bodies: Map<string, Map<string, SectionBody>>,
   numberMap: Map<string, string>,
   focusIds?: Set<string> | null,
+  pageLocal = false,
 ): MdBlock[] {
   const chapters = visiblePlainChapters(toc, selection, showLevel, hangFilter).filter(
     (ch) => !focusIds || focusIds.has(ch.id),
@@ -801,8 +941,10 @@ function buildPlainBlocks(
       sectionList = sectionList.filter((s) => s.title.length > 0);
       if (sectionList.length === 0) continue;
 
-      out.push(...emitPathBlocks(g.groupPath, emitted, numberMap));
-      const pageLevel = digestPageDisplayLevel(g.groupPath.length);
+      if (!pageLocal) {
+        out.push(...emitPathBlocks(g.groupPath, emitted, numberMap));
+      }
+      const pageLevel = pageLocal ? 1 : digestPageDisplayLevel(g.groupPath.length);
       out.push({
         id: pageAnchorId(ch.id),
         title: ch.title,
@@ -812,9 +954,9 @@ function buildPlainBlocks(
       });
       for (const s of sectionList) {
         const body = takeBody(bodies, ch.id, s.id);
-        const level = digestSectionDisplayLevel(g.groupPath.length, s.level);
+        const level = pageLocal ? s.level : digestSectionDisplayLevel(g.groupPath.length, s.level);
         out.push({
-          id: digestAnchorId(ch.id, s.id),
+          id: pageLocal ? s.id : digestAnchorId(ch.id, s.id),
           title: s.title,
           level,
           body: body?.body ?? '',
@@ -859,7 +1001,10 @@ export function buildDigestMarkdown(
   }
 
   if (!toc.ruler) {
-    const nums = stablePlainNumberMap(toc, selection, showLevel);
+    const pageLocal = isPageLocalExport(toc, opts);
+    const focus = focusModuleIdSet(toc, opts);
+    const pageLocalChapterId = pageLocal ? [...(focus ?? [])][0] ?? null : null;
+    const nums = stablePlainNumberMap(toc, selection, showLevel, pageLocalChapterId);
     const blocks = buildPlainBlocks(
       toc,
       selection,
@@ -867,7 +1012,8 @@ export function buildDigestMarkdown(
       hangFilter,
       bodies,
       nums,
-      focusModuleIdSet(toc, opts),
+      focus,
+      pageLocal,
     );
     return renderBlocks(blocks, nums);
   }
@@ -880,8 +1026,29 @@ export function buildDigestMarkdown(
     hangFilter,
     focusModuleIdSet(toc, opts),
   );
-  const nums = stableModuleNumberMap(toc, selection, showLevel, pick);
   const chapterById = new Map(toc.chapters.map((c) => [c.id, c]));
+
+  if (isPageLocalExport(toc, opts)) {
+    const mod = modules[0];
+    if (!mod) return '';
+    const nums = stableModuleNumberMap(toc, selection, showLevel, pick, mod);
+    const blocks = buildModuleBlocks(
+      toc,
+      mod,
+      selection,
+      showLevel,
+      pick,
+      hangFilter,
+      bodies,
+      chapterById,
+      undefined,
+      outlineKeysForModule(opts, mod.indexChapterId),
+      true,
+    );
+    return renderBlocks(blocks, nums);
+  }
+
+  const nums = stableModuleNumberMap(toc, selection, showLevel, pick);
   const blocks: MdBlock[] = [];
 
   if (pick === 'index') {

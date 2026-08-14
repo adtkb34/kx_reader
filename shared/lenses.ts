@@ -663,14 +663,20 @@ export function sectionLensLeaves(
   sectionId: string,
   toc?: BookToc | null,
 ): PageLayer[] {
-  if (!chapter.sectionAllowlists) return [];
   const found = new Set<PageLayer>();
-  for (const byLeaf of Object.values(chapter.sectionAllowlists)) {
-    if (!byLeaf) continue;
-    for (const [leaf, list] of Object.entries(byLeaf)) {
-      if (!list?.length) continue;
-      const expanded = expandSectionAllowlist(chapter.sections, list) ?? list;
-      if (expanded.includes(sectionId)) found.add(leaf);
+  if (chapter.layers) {
+    for (const membership of Object.values(chapter.layers)) {
+      for (const leaf of layerOptions(membership)) found.add(leaf);
+    }
+  }
+  if (chapter.sectionAllowlists) {
+    for (const byLeaf of Object.values(chapter.sectionAllowlists)) {
+      if (!byLeaf) continue;
+      for (const [leaf, list] of Object.entries(byLeaf)) {
+        if (!list?.length) continue;
+        const expanded = expandSectionAllowlist(chapter.sections, list) ?? list;
+        if (expanded.includes(sectionId)) found.add(leaf);
+      }
     }
   }
   if (found.size === 0) return [];
@@ -685,6 +691,29 @@ export function sectionLensLeaves(
     if (!ordered.includes(id)) ordered.push(id);
   }
   return ordered;
+}
+
+/** Display titles for tags on a chapter (whole-page layers ∪ section allowlists). */
+export function sectionLensTitleMap(
+  chapter: TocChapter,
+  toc: BookToc,
+): Record<string, string> {
+  const map: Record<string, string> = {};
+  if (chapter.layers) {
+    for (const membership of Object.values(chapter.layers)) {
+      for (const leaf of layerOptions(membership)) {
+        map[leaf] = lensNodeTitle(toc, leaf);
+      }
+    }
+  }
+  if (chapter.sectionAllowlists) {
+    for (const byLeaf of Object.values(chapter.sectionAllowlists)) {
+      for (const leaf of Object.keys(byLeaf ?? {})) {
+        map[leaf] = lensNodeTitle(toc, leaf);
+      }
+    }
+  }
+  return map;
 }
 
 /** Display title for a leaf (or any lens node) across axes. */

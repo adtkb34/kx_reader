@@ -5,6 +5,7 @@ import {
   renderChapter,
   splitSections,
   extractSectionFragment,
+  joinHangOffTableRuns,
   joinSectionFragments,
   shiftHeadingLevels,
   type RenderedSection,
@@ -35,6 +36,7 @@ import {
   pageVisibleInSelection,
   sectionAllowlistFor,
   sectionLensLeaves,
+  sectionLensTitleMap,
   selectionLegendLeaves,
   selectionToFlatIds,
   visibleTocSections,
@@ -210,14 +212,7 @@ function leavesFor(chapter: TocChapter, sectionId: string): PageLayer[] {
 }
 
 function titlesFor(chapter: TocChapter): Record<string, string> {
-  if (!chapter.sectionAllowlists) return {};
-  const map: Record<string, string> = {};
-  for (const byLeaf of Object.values(chapter.sectionAllowlists)) {
-    for (const leaf of Object.keys(byLeaf ?? {})) {
-      map[leaf] = lensNodeTitle(props.toc, leaf);
-    }
-  }
-  return map;
+  return sectionLensTitleMap(chapter, props.toc);
 }
 
 function assignNumbers(items: { id: string; level: number }[]): Map<string, string> {
@@ -657,21 +652,41 @@ async function loadModulePlan(
         });
       }
       for (const g of key.groups) {
+        const raw: { chapter: TocChapter; section: RenderedSection }[] = [];
         for (const b of g.blocks) {
           const bch = opts.chapterById.get(b.chapterId);
           const s = frag(b.chapterId, b.sectionId);
           if (!bch || !s) continue;
-          const rawLevel = Math.max(s.level, key.level + 1);
-          const level = digestSectionDisplayLevel(pathLen, rawLevel) + boost;
-          const anchorId = opts.axisLeaf
-            ? `${axisBucketAnchorId(opts.axisLeaf)}--${digestAnchorId(bch.id, s.id)}`
-            : digestAnchorId(bch.id, s.id);
-          sections.push({
-            chapter: bch,
-            section: demoteSection(s, level),
-            level,
-            anchorId,
-          });
+          raw.push({ chapter: bch, section: s });
+        }
+        let i = 0;
+        while (i < raw.length) {
+          const start = raw[i]!;
+          const isTable = /^\s*<table[\s>]/i.test(start.section.html);
+          let runEnd = i + 1;
+          if (isTable) {
+            while (
+              runEnd < raw.length &&
+              /^\s*<table[\s>]/i.test(raw[runEnd]!.section.html)
+            ) {
+              runEnd += 1;
+            }
+          }
+          const run = raw.slice(i, runEnd);
+          for (const section of joinHangOffTableRuns(run.map((r) => r.section))) {
+            const rawLevel = Math.max(section.level, key.level + 1);
+            const level = digestSectionDisplayLevel(pathLen, rawLevel) + boost;
+            const anchorId = opts.axisLeaf
+              ? `${axisBucketAnchorId(opts.axisLeaf)}--${digestAnchorId(start.chapter.id, section.id)}`
+              : digestAnchorId(start.chapter.id, section.id);
+            sections.push({
+              chapter: start.chapter,
+              section: demoteSection(section, level),
+              level,
+              anchorId,
+            });
+          }
+          i = runEnd;
         }
       }
     }

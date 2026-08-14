@@ -5,6 +5,7 @@ import { api } from '@/api/client';
 import {
   renderChapter,
   extractSectionFragment,
+  joinHangOffTableRuns,
   joinSectionFragments,
   shiftHeadingLevels,
   type RenderedSection,
@@ -21,10 +22,10 @@ import DiagramLightbox from '@/features/book/DiagramLightbox.vue';
 import { ui, getBookShowLevel, getBookRulerPick } from '@/stores/ui';
 import {
   lensColorMap,
-  lensNodeTitle,
   lensQueryFromSelection,
   sectionClusterRole,
   sectionLensLeaves,
+  sectionLensTitleMap,
   selectionLegendLeaves,
 } from '@shared/lenses';
 import {
@@ -248,14 +249,7 @@ function leavesFor(chapter: TocChapter, sectionId: string): PageLayer[] {
 }
 
 function titlesFor(chapter: TocChapter): Record<string, string> {
-  if (!chapter.sectionAllowlists) return {};
-  const map: Record<string, string> = {};
-  for (const byLeaf of Object.values(chapter.sectionAllowlists)) {
-    for (const leaf of Object.keys(byLeaf ?? {})) {
-      map[leaf] = lensNodeTitle(props.toc, leaf);
-    }
-  }
-  return map;
+  return sectionLensTitleMap(chapter, props.toc);
 }
 
 function clusterFor(_chapter: TocChapter, section: RenderedSection, index: number) {
@@ -380,33 +374,23 @@ async function load(): Promise<void> {
           while (i < raw.length) {
             const start = raw[i]!;
             const isTable = /^\s*<table[\s>]/i.test(start.section.html);
-            if (!isTable) {
+            let runEnd = i + 1;
+            if (isTable) {
+              while (
+                runEnd < raw.length &&
+                /^\s*<table[\s>]/i.test(raw[runEnd]!.section.html)
+              ) {
+                runEnd += 1;
+              }
+            }
+            const run = raw.slice(i, runEnd);
+            for (const section of joinHangOffTableRuns(run.map((r) => r.section))) {
               blocks.push({
                 chapter: start.chapter,
-                section: demoteForAxis(start.section, axisActive),
-              });
-              i += 1;
-              continue;
-            }
-            const run = [start];
-            let j = i + 1;
-            while (j < raw.length && /^\s*<table[\s>]/i.test(raw[j]!.section.html)) {
-              run.push(raw[j]!);
-              j += 1;
-            }
-            const joined = joinSectionFragments(
-              run.map((r) => r.section),
-              start.section.id,
-              start.section.title,
-              start.section.level,
-            );
-            if (joined) {
-              blocks.push({
-                chapter: start.chapter,
-                section: demoteForAxis(joined, axisActive),
+                section: demoteForAxis(section, axisActive),
               });
             }
-            i = j;
+            i = runEnd;
           }
 
           return {

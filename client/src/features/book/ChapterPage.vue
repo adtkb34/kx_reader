@@ -20,10 +20,10 @@ import {
   filterSectionsByAllowlist,
   filterSectionsByShowLevel,
   lensColorMap,
-  lensNodeTitle,
   pageVisibleInSelection,
   sectionAllowlistFor,
   sectionLensLeaves,
+  sectionLensTitleMap,
   selectionLegendLeaves,
   selectionToFlatIds,
 } from '@shared/lenses';
@@ -112,14 +112,8 @@ const lensChrome = computed(() => activeLeaves.value.size > 1);
 const lensTitleMap = computed(() => {
   const toc = tocOf(props.bookId);
   const ch = displayChapter.value;
-  if (!toc || !ch?.sectionAllowlists) return {} as Record<string, string>;
-  const map: Record<string, string> = {};
-  for (const byLeaf of Object.values(ch.sectionAllowlists)) {
-    for (const leaf of Object.keys(byLeaf ?? {})) {
-      map[leaf] = lensNodeTitle(toc, leaf);
-    }
-  }
-  return map;
+  if (!toc || !ch) return {} as Record<string, string>;
+  return sectionLensTitleMap(ch, toc);
 });
 
 const lensColors = computed(() => {

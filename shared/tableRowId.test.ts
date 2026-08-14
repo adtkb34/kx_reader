@@ -28,10 +28,11 @@ describe('collectTableRowMarkers', () => {
 });
 
 describe('tableRowIdPlugin', () => {
+  const md = new MarkdownIt()
+    .use(markdownItAttrs, { allowedAttributes: ['id', 'class'] })
+    .use(tableRowIdPlugin);
+
   it('moves trailing id cell onto <tr>', () => {
-    const md = new MarkdownIt()
-      .use(markdownItAttrs, { allowedAttributes: ['id', 'class'] })
-      .use(tableRowIdPlugin);
     const html = md.render(`| 字段 | 标识 | {#h}
 | --- | --- | --- |
 | 邮箱 | email |{#a}
@@ -43,6 +44,25 @@ describe('tableRowIdPlugin', () => {
     expect(html).toContain(SECTION_ROW_CLASS);
     expect(html).not.toMatch(/<(td|th)[^>]*>\s*\{#/);
     expect(html.match(new RegExp(SECTION_ROW_CLASS, 'g'))?.length).toBe(2);
+  });
+
+  it('parses a 3-column flow table whose header id sits in the last cell', () => {
+    const html = md.render(`| 场景 | 操作 | 系统 | {#h1}
+| --- | --- | --- | --- |
+| 查看 | 打开 | 列出 | {#v1}
+`);
+    expect(html).toContain('<table>');
+    expect(html).toContain('id="h1"');
+    expect(html).toContain('id="v1"');
+    expect(html).not.toMatch(/<(td|th)[^>]*>\s*\{#/);
+  });
+
+  it('does not parse a table when the header has an extra empty cell before {#id}', () => {
+    const html = md.render(`| 场景 | 操作 | 系统 | | {#h1}
+| --- | --- | --- | --- |
+| 查看 | 打开 | 列出 | {#v1}
+`);
+    expect(html).not.toContain('<table>');
   });
 });
 
