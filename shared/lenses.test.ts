@@ -686,7 +686,7 @@ describe('sectionAllowlistFor', () => {
     );
   });
 
-  it('parent / axis selection means no filter on that axis', () => {
+  it('axis selection covering all leaves means no filter on that axis', () => {
     expect(sectionAllowlistFor(chapter, { read: ['read'] }, tocWithLenses)).toBeNull();
   });
 
@@ -733,13 +733,13 @@ describe('sectionAllowlistFor', () => {
     ]);
     // 权限无表叶：未挂任何 biz 子叶的也不显示。
     expect(sectionAllowlistFor(process, { biz: ['permission'] }, toc)?.sort()).toEqual([]);
-    // 选父「biz」轴 = 该维不筛选 → stub 与 flow 都显示。
+    // 选轴「biz」覆盖全部子叶 → 等价不藏挂靠（stub 与 flow 都显示）。
     expect(sectionAllowlistFor(process, { biz: ['biz'] }, toc)).toBeNull();
     // 空轴：有挂靠/整页层 → 藏挂靠留壳；与选不中叶一致。
     expect(sectionAllowlistFor(process, { biz: [] }, toc)?.sort()).toEqual([]);
   });
 
-  it('empty axis leaves untagged pages as shells-only; tagged hangs hide to shells; parent still open', () => {
+  it('empty axis leaves untagged pages as shells-only; tagged hangs hide to shells; axis still open', () => {
     const tagged: TocChapter = {
       id: 'flow-page',
       title: '流程',
@@ -840,7 +840,7 @@ describe('sectionAllowlistFor', () => {
     expect(pageVisibleInSelection(inspection, { biz: ['brief'] }, toc)).toBe(true);
   });
 
-  it('intermediate parent selection also opens the axis', () => {
+  it('intermediate parent covering all axis leaves keeps every section', () => {
     const process: TocChapter = {
       id: 'process',
       title: '工艺',
@@ -869,11 +869,92 @@ describe('sectionAllowlistFor', () => {
         ],
       },
     };
-    // 选子叶：只看挂该叶的；未挂隐藏；选父不筛选。
+    // 选子叶：只看挂该叶的；未挂隐藏。选父 lifecycle 覆盖 status 全部子叶 → 等价不筛。
     expect(sectionAllowlistFor(process, { status: ['draft'] }, toc)?.sort()).toEqual(['flow-a']);
     expect(sectionAllowlistFor(process, { status: ['published'] }, toc)?.sort()).toEqual([]);
     expect(sectionAllowlistFor(process, { status: ['lifecycle'] }, toc)).toBeNull();
     expect(sectionAllowlistFor(process, { status: ['status'] }, toc)).toBeNull();
+  });
+
+  it('non-leaf drops sibling-subtree hangs and keeps untagged', () => {
+    const mixed: TocChapter = {
+      id: 'process',
+      title: '工艺',
+      file: 'p.md',
+      sections: [
+        { id: 'flow-a', title: '流程段', level: 2 },
+        { id: 'ui-a', title: '界面段', level: 2 },
+        { id: 'stub', title: '未挂', level: 2 },
+      ],
+      sectionAllowlists: {
+        define: {
+          flow: ['flow-a'],
+          ui: ['ui-a'],
+        },
+      },
+    };
+    const flowPage: TocChapter = {
+      id: 'flow-page',
+      title: '工艺流程',
+      file: 'flow.md',
+      layers: { define: ['flow'] },
+      sections: [{ id: 'f1', title: '场景', level: 2 }],
+    };
+    const uiPage: TocChapter = {
+      id: 'ui-page',
+      title: '工艺界面',
+      file: 'ui.md',
+      layers: { define: ['ui'] },
+      sections: [{ id: 'u1', title: '列表', level: 2 }],
+    };
+    const untagged: TocChapter = {
+      id: 'notes',
+      title: '备注',
+      file: 'notes.md',
+      sections: [{ id: 'n1', title: 'N1', level: 2 }],
+    };
+    const toc: BookToc = {
+      ...tocWithLenses,
+      lensAxisOrder: ['define'],
+      lenses: {
+        define: [
+          {
+            id: 'biz',
+            title: '业务',
+            children: [
+              { id: 'overview', title: '概览' },
+              { id: 'flow', title: '流程' },
+              { id: 'permission', title: '权限' },
+            ],
+          },
+          {
+            id: 'impl',
+            title: '实现',
+            children: [
+              { id: 'rule', title: '规则' },
+              { id: 'ui', title: '界面' },
+              { id: 'entity', title: '实体' },
+            ],
+          },
+        ],
+      },
+    };
+    // 叶子：只留本叶挂靠。
+    expect(sectionAllowlistFor(mixed, { define: ['flow'] }, toc)?.sort()).toEqual(['flow-a']);
+    expect(sectionAllowlistFor(mixed, { define: ['ui'] }, toc)?.sort()).toEqual(['ui-a']);
+    // 非叶业务：流程挂靠 + 未挂；藏实现子叶挂靠。
+    expect(sectionAllowlistFor(mixed, { define: ['biz'] }, toc)?.sort()).toEqual(['flow-a', 'stub']);
+    expect(sectionAllowlistFor(mixed, { define: ['impl'] }, toc)?.sort()).toEqual(['stub', 'ui-a']);
+    // 轴本身覆盖全部子叶 → 不藏。
+    expect(sectionAllowlistFor(mixed, { define: ['define'] }, toc)).toBeNull();
+
+    expect(pageVisibleInSelection(flowPage, { define: ['biz'] }, toc)).toBe(true);
+    expect(pageVisibleInSelection(uiPage, { define: ['biz'] }, toc)).toBe(false);
+    expect(pageVisibleInSelection(flowPage, { define: ['impl'] }, toc)).toBe(false);
+    expect(pageVisibleInSelection(uiPage, { define: ['impl'] }, toc)).toBe(true);
+    expect(pageVisibleInSelection(untagged, { define: ['biz'] }, toc)).toBe(true);
+    expect(pageVisibleInSelection(flowPage, { define: ['flow'] }, toc)).toBe(true);
+    expect(pageVisibleInSelection(uiPage, { define: ['flow'] }, toc)).toBe(false);
   });
 
   it('leaf on axis with no tags on chapter hides hang body (shells only)', () => {
@@ -902,7 +983,7 @@ describe('sectionAllowlistFor', () => {
     expect(
       sectionAllowlistFor(hang, { read: ['scenario'], role: ['scheduler'] }, toc)?.sort(),
     ).toEqual([]);
-    // 选角色父轴 = 不筛选 role；read=scenario 整页层 → 仍 null/全显。
+    // 选角色轴覆盖全部子叶；read=scenario 整页层 → 仍 null/全显。
     expect(
       sectionAllowlistFor(hang, { read: ['scenario'], role: ['role'] }, toc),
     ).toBeNull();

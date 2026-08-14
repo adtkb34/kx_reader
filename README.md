@@ -105,6 +105,8 @@ docs/superpowers/specs/   架构等设计说明
 | --- | --- | --- |
 | GET | `/api/books` | 书籍列表 |
 | GET | `/api/books/:bookId` | 目录（章节 + 小节树） |
+| GET | `/api/books/:bookId/export` | 按透镜/尺子组装后的 Markdown（有图可 zip）。Query 见下方 |
+| GET | `/api/books/:bookId/chapters/:chapterId/export` | 同上，默认 `modules` 为该页（挂靠页会解析到模块 index） |
 | GET | `/api/books/:bookId/chapters/:chapterId` | 章节 Markdown |
 | GET | `/api/books/:bookId/assets/*` | 书内 `assets/`（图片 + OpenAPI yaml/json） |
 | GET | `/api/books/:bookId/annotations` | 全书标注 |
@@ -123,6 +125,36 @@ docs/superpowers/specs/   架构等设计说明
 | GET | `/api/agent/status` | `{ enabled, defaultAgent, defaultBehavior }` |
 | GET | `/api/agents/catalog` | `{ agents（含 bin/binOk）, behaviors, defaults }` |
 | POST | `/api/books/:bookId/agent/runs` | body `{ prompt, chapterId?, agentId?, behaviorId?, model? }`；SSE |
+
+### 导出（给 AI / curl）
+
+与阅读器顶栏「导出」同一套组装：透镜过滤 + 尺子挂靠 + 刻度勾选。默认 JSON（含 `markdown`；`assets` 列出正文引用到的图片）。`format=md` 返回 Markdown；有图时顶栏用 `format=auto` 下 zip（解压后相对路径 `assets/…` 仍有效）。`images=embed` 把图写成 data URI（单文件，体积大）。
+
+未出现的透镜轴**不做过滤**（比阅读器默认更宽松，方便只约束关心的轴）。需要与阅读器默认一致时加 `defaults=1`。
+
+```bash
+# 某模块、只看定义轴「业务」、只要指定刻度
+curl -s "http://localhost:4730/api/books/metoak-mes/export?format=md&modules=202608101208&define=biz&keys=202608101508,202608101427"
+
+# 连同引用到的图片打成 zip
+curl -sO "http://localhost:4730/api/books/metoak-mes/export?format=zip&modules=202608101208&define=biz"
+
+# 等价：按章节路径导出（挂靠页 id 会解析到模块 index）
+curl -s "http://localhost:4730/api/books/metoak-mes/chapters/202608101208/export?format=md&define=biz"
+```
+
+| Query | 说明 |
+| --- | --- |
+| `<轴id>=<节点id>` | 与阅读器 URL 相同，可重复（`define=biz&define=flow`） |
+| `modules` / `module` / `focus` | 模块 index 或挂靠页 id，逗号分隔 |
+| `keys` | 刻度小节 id（需同时给 `modules`）；或 `outlineKeys` JSON |
+| `ruler` | `index` 或 `ruler.axes` 中的轴 |
+| `hang` | `all`（默认）/ `content` / `empty` |
+| `showLevel` | 详略等级数字；省略 = 不限 |
+| `defaults` | `1` 时用阅读器默认透镜填补未写的轴 |
+| `format` | `json`（默认）/ `md` / `zip` / `auto`（有图 zip，否则 md） |
+| `images` | 默认随 zip 带文件；`embed` 写入 data URI；`1`/`base64` 填入 JSON；`0` 不带图 |
+
 
 ## 设计要点
 

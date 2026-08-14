@@ -3,23 +3,31 @@
   "description": "MES 功能域骨架：四组十一章；采集≠物联通道、派发反馈≠过程采集、调度进度≠绩效指标；工艺留在资源支撑作制造契约，调组待正文卡点再定。",
   "lenses": [
     {
-      "id": "biz",
-      "title": "业务",
+      "id": "define",
+      "title": "定义",
       "children": [
-        { "id": "overview", "title": "概览", "color": "#7a8a9a" },
-        { "id": "flow", "title": "流程", "color": "#6d86a0" },
-        { "id": "permission", "title": "权限", "color": "#5f9090" }
-      ]
-    },
-    {
-      "id": "impl",
-      "title": "实现",
-      "children": [
-        { "id": "rule", "title": "规则", "color": "#7a8a9a" },
-        { "id": "api", "title": "接口", "color": "#5f7a9a" },
-        { "id": "ui", "title": "界面", "color": "#a88b55" },
-        { "id": "entity", "title": "实体", "color": "#6a9478" },
-        { "id": "exception", "title": "异常", "color": "#9a7482" }
+        {
+          "id": "biz",
+          "title": "业务",
+          "color": "#6d86a0",
+          "children": [
+            { "id": "overview", "title": "概览", "color": "#7a8a9a" },
+            { "id": "flow", "title": "流程", "color": "#6d86a0" },
+            { "id": "permission", "title": "权限", "color": "#5f9090" }
+          ]
+        },
+        {
+          "id": "impl",
+          "title": "实现",
+          "color": "#6a9478",
+          "children": [
+            { "id": "rule", "title": "规则", "color": "#7a8a9a" },
+            { "id": "api", "title": "接口", "color": "#5f7a9a" },
+            { "id": "ui", "title": "界面", "color": "#a88b55" },
+            { "id": "entity", "title": "实体", "color": "#6a9478" },
+            { "id": "exception", "title": "异常", "color": "#9a7482" }
+          ]
+        }
       ]
     },
     {
@@ -172,7 +180,7 @@
               "id": "202608101212",
               "file": "process/flow.md",
               "lenses": {
-                "biz": { "flow": true },
+                "define": { "flow": true },
                 "priority": { "p1": true }
               }
             },
@@ -180,7 +188,7 @@
               "id": "202608101216",
               "file": "process/ui.md",
               "lenses": {
-                "impl": { "ui": true },
+                "define": { "ui": true },
                 "priority": { "p1": true }
               }
             },
@@ -188,7 +196,7 @@
               "id": "202608101213",
               "file": "process/entity.md",
               "lenses": {
-                "impl": { "entity": true },
+                "define": { "entity": true },
                 "priority": { "p1": true }
               }
             },
@@ -196,7 +204,7 @@
               "id": "202608101215",
               "file": "process/rule.md",
               "lenses": {
-                "impl": { "rule": true },
+                "define": { "rule": true },
                 "priority": { "p1": true }
               }
             },
@@ -204,7 +212,7 @@
               "id": "202608121630",
               "file": "process/api.md",
               "lenses": {
-                "impl": { "api": true },
+                "define": { "api": true },
                 "priority": { "p1": true }
               }
             }

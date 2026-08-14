@@ -73,8 +73,8 @@ import AgentPanel from '@/features/agent/AgentPanel.vue';
 import { loadToc, tocOf } from '@/stores/books';
 import { loadAnnotations } from '@/stores/annotations';
 import { api } from '@/api/client';
-import { downloadTextFile, sanitizeDownloadName } from '@/download';
-import { buildDigestMarkdown, listDigestExportChapterIds } from '@shared/digestExport';
+import { downloadBlob } from '@/download';
+import { digestExportQueryFromOptions } from '@shared/digestExport';
 import type { RulerTickHangFilter } from '@shared/ruler';
 import { Expand } from '@element-plus/icons-vue';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
@@ -151,25 +151,11 @@ async function exportDigestMarkdown(): Promise<void> {
       focusModuleIds: focusIds,
       outlineKeyIdsByModule,
     };
-    const ids = listDigestExportChapterIds(t, exportOpts);
-    const chapterMarkdown = new Map<string, string>();
-    await Promise.all(
-      ids.map(async (id) => {
-        const content = await api.chapter(bookId.value, id);
-        chapterMarkdown.set(id, content.markdown);
-      }),
-    );
-    const md = buildDigestMarkdown(t, chapterMarkdown, exportOpts);
-    let filename: string;
-    if (focusIds.length === 1) {
-      const pageTitle =
-        t.chapters.find((c) => c.id === focusIds[0])?.title ?? focusIds[0]!;
-      filename = `${sanitizeDownloadName(t.title)}-${sanitizeDownloadName(pageTitle)}.md`;
-    } else {
-      const pickLabel = t.ruler ? String(rulerPick) : 'export';
-      filename = `${sanitizeDownloadName(t.title)}-${sanitizeDownloadName(pickLabel)}.md`;
-    }
-    downloadTextFile(filename, md);
+    const file = await api.exportDigestFile(bookId.value, {
+      ...digestExportQueryFromOptions(t, exportOpts),
+      format: 'auto',
+    });
+    downloadBlob(file.filename, file.blob);
   } catch (e) {
     exportError.value = e instanceof Error ? e.message : String(e);
   } finally {
@@ -767,7 +753,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
           class="btn ghost"
           type="button"
           :disabled="exportBusy || orderedSelectedIds.length === 0"
-          :title="exportError || '导出当前勾选与过滤下的 Markdown'"
+          :title="exportError || '导出当前勾选与过滤下的 Markdown；文中有图则为 zip'"
           @click="exportDigestMarkdown()"
         >
           {{ exportBusy ? '导出中…' : '导出' }}

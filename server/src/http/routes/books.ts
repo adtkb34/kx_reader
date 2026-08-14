@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import type { AppContext } from '../../app/context';
 import {
   getChapterSection,
@@ -6,13 +6,77 @@ import {
   SectionWriteError,
 } from '../../adapters/file/sectionWrite';
 import { tryCommitBookChanges } from '../../adapters/file/bookCommit';
+import { exportBookDigest } from '../../adapters/file/exportBook';
+import { parseExportFormat } from '../../../../shared/digestExport';
 import { badRequest, requireBook } from '../helpers';
+
+function contentDispositionAttachment(filename: string): string {
+  const fallback = filename.replace(/[^\x20-\x7E]/g, '_') || 'export.bin';
+  return `attachment; filename="${fallback.replace(/"/g, '\\"')}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+}
+
+function wantsMarkdown(req: Request): boolean {
+  if (parseExportFormat(req.query.format) === 'md') return true;
+  if (req.query.format != null && String(req.query.format).length > 0) return false;
+  const accept = String(req.headers.accept ?? '');
+  return /\btext\/markdown\b/i.test(accept) && !/\bapplication\/json\b/i.test(accept);
+}
+
+async function sendBookExport(
+  ctx: AppContext,
+  req: Request,
+  res: Response,
+  query: Record<string, unknown>,
+): Promise<void> {
+  const bookId = await requireBook(ctx, req, res);
+  if (!bookId) return;
+  const bundle = await exportBookDigest(ctx.books, bookId, query);
+  if (!bundle) {
+    res.status(404).json({ error: 'book not found' });
+    return;
+  }
+  const format = parseExportFormat(req.query.format);
+  const { payload, zipBytes } = bundle;
+  const zipName = payload.zipFilename ?? payload.filename.replace(/\.md$/i, '.zip');
+  if (format === 'zip' || (format === 'auto' && payload.assets.length > 0)) {
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', contentDispositionAttachment(zipName));
+    res.send(Buffer.from(zipBytes));
+    return;
+  }
+  if (format === 'md' || format === 'auto' || wantsMarkdown(req)) {
+    res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+    res.setHeader('Content-Disposition', contentDispositionAttachment(payload.filename));
+    res.send(payload.markdown);
+    return;
+  }
+  res.json(payload);
+}
 
 export function booksRouter(ctx: AppContext): Router {
   const router = Router();
 
   router.get('/api/books', async (_req, res) => {
     res.json(await ctx.books.listBooks());
+  });
+
+  router.get('/api/books/:bookId/export', async (req, res) => {
+    await sendBookExport(ctx, req, res, req.query as Record<string, unknown>);
+  });
+
+  router.get('/api/books/:bookId/chapters/:chapterId/export', async (req, res) => {
+    const bookId = await requireBook(ctx, req, res);
+    if (!bookId) return;
+    const toc = await ctx.books.getBookToc(bookId);
+    if (!toc?.chapters.some((c) => c.id === req.params.chapterId)) {
+      res.status(404).json({ error: 'chapter not found' });
+      return;
+    }
+    const query: Record<string, unknown> = {
+      ...(req.query as Record<string, unknown>),
+      modules: req.query.modules ?? req.params.chapterId,
+    };
+    await sendBookExport(ctx, req, res, query);
   });
 
   router.get('/api/books/:bookId', async (req, res) => {

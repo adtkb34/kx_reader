@@ -1,3 +1,5 @@
+import { filenameFromContentDisposition } from '@/download';
+import type { DigestExportPayload } from '@shared/digestExport';
 import type { SectionStatus } from '@shared/annotations';
 import type {
   ChapterCompareResult,
@@ -48,6 +50,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
+function queryString(query: Record<string, string | string[]>): string {
+  const sp = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (Array.isArray(value)) {
+      for (const item of value) sp.append(key, item);
+    } else {
+      sp.set(key, value);
+    }
+  }
+  return sp.toString();
+}
+
 export const api = {
   books: () => request<BookSummary[]>('/books'),
 
@@ -55,6 +69,35 @@ export const api = {
 
   chapter: (bookId: string, chapterId: string) =>
     request<ChapterContent>(`/books/${bookId}/chapters/${chapterId}`),
+
+  exportDigest: (bookId: string, query: Record<string, string | string[]>) =>
+    request<DigestExportPayload>(`/books/${bookId}/export?${queryString(query)}`),
+
+  async exportDigestFile(
+    bookId: string,
+    query: Record<string, string | string[]>,
+  ): Promise<{ filename: string; blob: Blob }> {
+    const res = await fetch(`/api/books/${bookId}/export?${queryString(query)}`);
+    if (!res.ok) {
+      let message = `${res.status} ${res.statusText}`;
+      try {
+        const body = (await res.json()) as { error?: string };
+        if (body.error) message = body.error;
+      } catch {
+        // keep default
+      }
+      if (res.status === 502 || res.status === 504) {
+        message =
+          'API 服务未连接（502）。请确认已启动后端：AGENT_ENABLED=1 npm run dev（需同时有 server:4730 与 client:5173）';
+      }
+      throw new Error(message);
+    }
+    const blob = await res.blob();
+    const filename =
+      filenameFromContentDisposition(res.headers.get('content-disposition')) ??
+      (blob.type.includes('zip') ? 'export.zip' : 'export.md');
+    return { filename, blob };
+  },
 
   annotations: (bookId: string) => request<BookAnnotations>(`/books/${bookId}/annotations`),
 

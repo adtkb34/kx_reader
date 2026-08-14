@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  assembleDigestExport,
   buildDigestMarkdown,
+  digestExportOptionsFromQuery,
   exportSectionHeadingTitle,
   formatBlockMarkdown,
   listDigestExportChapterIds,
   prepareExportSectionBody,
+  resolveExportFocusModuleIds,
   shiftAtxHeadingLevels,
   stripSectionIdsFromMarkdown,
 } from './digestExport';
@@ -319,5 +322,78 @@ title: 流程
     expect(md).toContain('挂靠正文');
     expect(md).not.toMatch(/步骤二/);
     expect(md).not.toContain('刻度二正文');
+  });
+});
+
+const chapterMarkdown = new Map<string, string>([
+  ['idx', idxMd],
+  ['flow', flowMd],
+]);
+
+describe('digestExportOptionsFromQuery', () => {
+  it('maps hang-off page ids to the module index and applies keys', () => {
+    const opts = digestExportOptionsFromQuery(book, {
+      modules: 'flow',
+      read: 'flow',
+      hang: 'content',
+      keys: 'k1',
+    });
+    expect(opts.focusModuleIds).toEqual(['idx']);
+    expect(opts.hangFilter).toBe('content');
+    expect(opts.selection).toEqual({ read: ['flow'] });
+    expect(opts.outlineKeyIdsByModule).toEqual({ idx: ['k1'] });
+  });
+
+  it('omits unmentioned lens axes (no default filter)', () => {
+    const opts = digestExportOptionsFromQuery(book, { modules: 'idx' });
+    expect(opts.selection).toBeNull();
+    expect(opts.hangFilter).toBe('all');
+  });
+
+  it('defaults=1 fills missing axes from defaultSelection', () => {
+    const opts = digestExportOptionsFromQuery(book, { defaults: '1', modules: 'idx' });
+    expect(opts.selection).toEqual({ read: ['flow'], priority: ['p0'] });
+  });
+
+  it('splits comma-separated modules', () => {
+    const opts = digestExportOptionsFromQuery(book, { modules: 'idx,flow' });
+    expect(opts.focusModuleIds).toEqual(['idx']);
+  });
+
+  it('keeps empty outline key lists (export none of the ticks)', () => {
+    const opts = digestExportOptionsFromQuery(book, {
+      modules: 'idx',
+      outlineKeys: '{"idx":[]}',
+    });
+    expect(opts.outlineKeyIdsByModule).toEqual({ idx: [] });
+  });
+});
+
+describe('resolveExportFocusModuleIds', () => {
+  it('keeps unknown ids and unique-preserves', () => {
+    expect(resolveExportFocusModuleIds(book, ['flow', 'idx', 'flow', 'missing'])).toEqual([
+      'idx',
+      'missing',
+    ]);
+  });
+});
+
+describe('assembleDigestExport', () => {
+  it('matches buildDigestMarkdown for the same options', async () => {
+    const opts = {
+      selection: { read: ['flow'], priority: ['p0'] },
+      rulerPick: 'index' as const,
+      hangFilter: 'all' as const,
+      focusModuleIds: ['flow'],
+    };
+    const assembled = await assembleDigestExport(
+      book,
+      async (id) => chapterMarkdown.get(id),
+      opts,
+    );
+    expect(assembled.filename).toBe('Demo-骨架.md');
+    expect(assembled.chapterIds.sort()).toEqual(['flow', 'idx']);
+    expect(assembled.markdown).toBe(buildDigestMarkdown(book, chapterMarkdown, opts));
+    expect(assembled.markdown).toContain('挂靠正文');
   });
 });

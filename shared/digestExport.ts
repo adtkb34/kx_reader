@@ -12,15 +12,19 @@ import {
   filterChaptersWithoutContent,
   filterSectionsByAllowlist,
   filterSectionsByShowLevel,
+  defaultSelection,
   groupChaptersForDigest,
   layerOptions,
   lensAxisIds,
   lensNodeTitle,
+  lensQueryFromSelection,
+  lensSelectionFromQuery,
   pageVisibleInSelection,
   sectionAllowlistFor,
   sectionLensLeaves,
   selectionToFlatIds,
   visibleTocSections,
+  type LensQueryInput,
   type ReaderShowLevel,
 } from './lenses';
 import { outlineNumbers } from './outlineNumbers';
@@ -31,6 +35,7 @@ import {
   filterRulerAssembleView,
   filterRulerModuleIndexIds,
   filterRulerOutlineEntries,
+  findRulerModuleIndexId,
   listLeafModules,
   moduleMatchesRulerLeaf,
   normalizeRulerPick,
@@ -233,10 +238,15 @@ export type DigestExportOptions = {
   outlineKeyIdsByModule?: Record<string, string[]> | null;
 };
 
-function focusModuleIdSet(opts: DigestExportOptions): Set<string> | null {
-  if (opts.focusModuleIds?.length) return new Set(opts.focusModuleIds);
-  if (opts.focusModuleId) return new Set([opts.focusModuleId]);
+function rawFocusModuleIds(opts: DigestExportOptions): string[] | null {
+  if (opts.focusModuleIds?.length) return opts.focusModuleIds;
+  if (opts.focusModuleId) return [opts.focusModuleId];
   return null;
+}
+
+function focusModuleIdSet(toc: BookToc, opts: DigestExportOptions): Set<string> | null {
+  const ids = resolveExportFocusModuleIds(toc, rawFocusModuleIds(opts));
+  return ids ? new Set(ids) : null;
 }
 
 type MdBlock = {
@@ -437,7 +447,7 @@ export function listDigestExportChapterIds(
   const ids = new Set<string>();
 
   if (!toc.ruler) {
-    const focus = focusModuleIdSet(opts);
+    const focus = focusModuleIdSet(toc, opts);
     for (const ch of visiblePlainChapters(toc, selection, showLevel, hangFilter)) {
       if (focus && !focus.has(ch.id)) continue;
       ids.add(ch.id);
@@ -451,7 +461,7 @@ export function listDigestExportChapterIds(
     selection,
     showLevel,
     hangFilter,
-    focusModuleIdSet(opts),
+    focusModuleIdSet(toc, opts),
   );
   for (const mod of modules) {
     const raw = assembleModuleView(toc, selection, showLevel, mod.indexChapterId, pick);
@@ -857,7 +867,7 @@ export function buildDigestMarkdown(
       hangFilter,
       bodies,
       nums,
-      focusModuleIdSet(opts),
+      focusModuleIdSet(toc, opts),
     );
     return renderBlocks(blocks, nums);
   }
@@ -868,7 +878,7 @@ export function buildDigestMarkdown(
     selection,
     showLevel,
     hangFilter,
-    focusModuleIdSet(opts),
+    focusModuleIdSet(toc, opts),
   );
   const nums = stableModuleNumberMap(toc, selection, showLevel, pick);
   const chapterById = new Map(toc.chapters.map((c) => [c.id, c]));
@@ -938,3 +948,285 @@ export function buildDigestMarkdown(
 
   return renderBlocks(blocks, nums);
 }
+
+export type DigestExportFormat = 'md' | 'json' | 'zip' | 'auto';
+
+export type DigestExportResult = {
+  markdown: string;
+  filename: string;
+  chapterIds: string[];
+  options: DigestExportOptions;
+};
+
+/** JSON body of GET /api/books/:bookId/export (format=json). */
+export type DigestExportAsset = {
+  path: string;
+  contentType: string;
+  byteLength: number;
+  base64?: string;
+};
+
+export type DigestExportPayload = {
+  bookId: string;
+  title: string;
+  filename: string;
+  zipFilename: string | null;
+  markdown: string;
+  chapterIds: string[];
+  selection: LensSelection | null;
+  rulerPick: string | null;
+  hangFilter: RulerTickHangFilter;
+  readerShowLevel: number | null;
+  focusModuleIds: string[] | null;
+  outlineKeyIdsByModule: Record<string, string[]> | null;
+  assets: DigestExportAsset[];
+};
+
+function uniquePreserve(ids: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of ids) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
+/** Split a query value that may be repeated, comma / plus / space separated. */
+export function csvQueryValues(raw: unknown): string[] {
+  if (raw == null || raw === '') return [];
+  if (typeof raw === 'object' && !Array.isArray(raw)) return [];
+  const parts = Array.isArray(raw) ? raw : [raw];
+  const out: string[] = [];
+  for (const p of parts) {
+    if (typeof p !== 'string') continue;
+    for (const bit of p.split(/[,+\s]+/)) {
+      const s = bit.trim();
+      if (s) out.push(s);
+    }
+  }
+  return uniquePreserve(out);
+}
+
+export function parseExportHangFilter(raw: unknown): RulerTickHangFilter {
+  const v = (csvQueryValues(raw)[0] ?? '').toLowerCase();
+  if (v === 'content' || v === 'empty' || v === 'all') return v;
+  return 'all';
+}
+
+export function parseExportShowLevel(raw: unknown): ReaderShowLevel {
+  const v = csvQueryValues(raw)[0];
+  if (v == null || v === '' || v === 'null' || v === 'all') return undefined;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+export function parseExportFormat(raw: unknown): DigestExportFormat {
+  const v = (csvQueryValues(raw)[0] ?? '').toLowerCase();
+  if (v === 'md' || v === 'markdown') return 'md';
+  if (v === 'zip') return 'zip';
+  if (v === 'auto') return 'auto';
+  return 'json';
+}
+
+export type DigestExportImageMode = 'omit' | 'files' | 'embed' | 'base64';
+
+/** `images=0` skip; `embed` data URIs in markdown; `1`/`base64` JSON bytes; default keep files for zip. */
+export function parseExportImageMode(raw: unknown): DigestExportImageMode {
+  const v = (csvQueryValues(raw)[0] ?? '').toLowerCase();
+  if (v === '0' || v === 'false' || v === 'none' || v === 'omit') return 'omit';
+  if (v === 'embed' || v === 'data' || v === 'datauri') return 'embed';
+  if (v === '1' || v === 'true' || v === 'base64') return 'base64';
+  return 'files';
+}
+
+export function parseExportRulerPick(raw: unknown): string | null {
+  const v = csvQueryValues(raw)[0];
+  return v || null;
+}
+
+export function parseExportUseDefaults(raw: unknown): boolean {
+  const v = (csvQueryValues(raw)[0] ?? '').toLowerCase();
+  return v === '1' || v === 'true' || v === 'yes';
+}
+
+export function parseExportModuleIds(query: Record<string, unknown>): string[] | null {
+  const ids = uniquePreserve([
+    ...csvQueryValues(query.modules),
+    ...csvQueryValues(query.module),
+    ...csvQueryValues(query.focus),
+    ...csvQueryValues(query.chapters),
+  ]);
+  return ids.length ? ids : null;
+}
+
+function parseOutlineKeysJson(raw: unknown): Record<string, string[]> | null {
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    const out: Record<string, string[]> = {};
+    for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+      const ids = Array.isArray(v)
+        ? v.filter((x): x is string => typeof x === 'string' && x.length > 0)
+        : csvQueryValues(v);
+      out[k] = uniquePreserve(ids);
+    }
+    return Object.keys(out).length ? out : null;
+  } catch {
+    return null;
+  }
+}
+
+function outlineKeysFromNested(raw: unknown): Record<string, string[]> | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const out: Record<string, string[]> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const ids = csvQueryValues(v);
+    if (ids.length) out[k] = ids;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+export function parseExportOutlineKeys(
+  query: Record<string, unknown>,
+  moduleIds: string[] | null,
+): Record<string, string[]> | null {
+  let map: Record<string, string[]> = {};
+  const fromJson = parseOutlineKeysJson(query.outlineKeys);
+  if (fromJson) map = { ...map, ...fromJson };
+  const nested =
+    typeof query.keys === 'object' && query.keys != null && !Array.isArray(query.keys)
+      ? outlineKeysFromNested(query.keys)
+      : null;
+  if (nested) map = { ...map, ...nested };
+  const csv = csvQueryValues(query.keys);
+  if (csv.length && moduleIds?.length) {
+    for (const id of moduleIds) {
+      if (!Object.prototype.hasOwnProperty.call(map, id)) map[id] = csv;
+    }
+  }
+  return Object.keys(map).length ? map : null;
+}
+
+/** Map hang-off page ids to the module index id (same as the reader export). */
+export function resolveExportFocusModuleIds(
+  toc: BookToc,
+  ids: string[] | null | undefined,
+): string[] | null {
+  if (!ids?.length) return null;
+  if (!toc.ruler) return uniquePreserve(ids);
+  return uniquePreserve(ids.map((id) => findRulerModuleIndexId(toc, id) ?? id));
+}
+
+export function selectionForExport(
+  toc: BookToc,
+  query: LensQueryInput,
+  useDefaults: boolean,
+): LensSelection | null {
+  const fromQuery = lensSelectionFromQuery(query, toc);
+  if (!useDefaults) return fromQuery;
+  const defaults = defaultSelection(toc);
+  if (!defaults) return fromQuery;
+  if (!fromQuery) return defaults;
+  return { ...defaults, ...fromQuery };
+}
+
+function toLensQuery(query: Record<string, unknown>): LensQueryInput {
+  const out: Record<string, string | Array<string | null> | undefined> = {};
+  for (const [k, v] of Object.entries(query)) {
+    if (typeof v === 'string') out[k] = v;
+    else if (Array.isArray(v)) {
+      out[k] = v.map((x) => (typeof x === 'string' ? x : null));
+    }
+  }
+  return out;
+}
+
+/** Safe filename segment (Windows / macOS friendly). */
+export function sanitizeExportFilename(name: string): string {
+  return name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').replace(/\s+/g, ' ').trim() || 'export';
+}
+
+export function digestExportFilename(toc: BookToc, opts: DigestExportOptions): string {
+  const focus = resolveExportFocusModuleIds(toc, rawFocusModuleIds(opts));
+  if (focus?.length === 1) {
+    const pageTitle = toc.chapters.find((c) => c.id === focus[0])?.title ?? focus[0]!;
+    return `${sanitizeExportFilename(toc.title)}-${sanitizeExportFilename(pageTitle)}.md`;
+  }
+  const pickLabel = toc.ruler ? String(normalizeRulerPick(toc, opts.rulerPick)) : 'export';
+  return `${sanitizeExportFilename(toc.title)}-${sanitizeExportFilename(pickLabel)}.md`;
+}
+
+/**
+ * Parse HTTP / URL query into the same options the reader 导出 button uses.
+ *
+ * Omitted lens axes are **not** filtered (unlike the reader default of first
+ * option per axis). Pass `defaults=1` to fill missing axes from that default.
+ */
+export function digestExportOptionsFromQuery(
+  toc: BookToc,
+  query: Record<string, unknown>,
+): DigestExportOptions {
+  const moduleIds = resolveExportFocusModuleIds(toc, parseExportModuleIds(query));
+  return {
+    selection: selectionForExport(
+      toc,
+      toLensQuery(query),
+      parseExportUseDefaults(query.defaults ?? query.useDefaults),
+    ),
+    rulerPick: parseExportRulerPick(query.ruler ?? query.rulerPick),
+    readerShowLevel: parseExportShowLevel(query.showLevel ?? query.level),
+    hangFilter: parseExportHangFilter(query.hang ?? query.hangFilter ?? query.filter),
+    focusModuleIds: moduleIds,
+    outlineKeyIdsByModule: parseExportOutlineKeys(query, moduleIds),
+  };
+}
+
+/** Serialize options back to query params (for the client / curl). */
+export function digestExportQueryFromOptions(
+  toc: BookToc,
+  opts: DigestExportOptions,
+): Record<string, string | string[]> {
+  const out: Record<string, string | string[]> = {
+    ...lensQueryFromSelection(opts.selection, toc),
+  };
+  const focus = resolveExportFocusModuleIds(toc, rawFocusModuleIds(opts));
+  if (focus?.length) out.modules = focus.join(',');
+  if (opts.rulerPick) out.ruler = String(opts.rulerPick);
+  if (opts.hangFilter && opts.hangFilter !== 'all') out.hang = opts.hangFilter;
+  if (opts.readerShowLevel != null) out.showLevel = String(opts.readerShowLevel);
+  if (opts.outlineKeyIdsByModule && Object.keys(opts.outlineKeyIdsByModule).length) {
+    out.outlineKeys = JSON.stringify(opts.outlineKeyIdsByModule);
+  }
+  return out;
+}
+
+export async function assembleDigestExport(
+  toc: BookToc,
+  loadMarkdown: (chapterId: string) => Promise<string | null | undefined>,
+  opts: DigestExportOptions,
+): Promise<DigestExportResult> {
+  const resolved: DigestExportOptions = {
+    ...opts,
+    focusModuleIds: resolveExportFocusModuleIds(toc, rawFocusModuleIds(opts)),
+    hangFilter: opts.hangFilter ?? 'all',
+    rulerPick: toc.ruler ? normalizeRulerPick(toc, opts.rulerPick) : opts.rulerPick,
+  };
+  const chapterIds = listDigestExportChapterIds(toc, resolved);
+  const chapterMarkdown = new Map<string, string>();
+  await Promise.all(
+    chapterIds.map(async (id) => {
+      const md = await loadMarkdown(id);
+      if (md) chapterMarkdown.set(id, md);
+    }),
+  );
+  return {
+    markdown: buildDigestMarkdown(toc, chapterMarkdown, resolved),
+    filename: digestExportFilename(toc, resolved),
+    chapterIds,
+    options: resolved,
+  };
+}
+

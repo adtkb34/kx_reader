@@ -98,7 +98,8 @@ export function effectiveLeaves(nodes: BookLens[], selected: PageLayer[]): PageL
 /**
  * Effective leaf option ids for one axis.
  * Selecting the axis id itself = all leaves under that axis's options.
- * Prefer `axisSelectionIsOpen` when you need「父/轴 = 该维不筛选」.
+ * Non-leaf parent → descendant leaves (`axisSelectionIsOpen`); used with
+ * untagged-keep so sibling-subtree hangs are dropped.
  */
 export function effectiveAxisLeaves(
   toc: BookToc,
@@ -113,7 +114,8 @@ export function effectiveAxisLeaves(
 
 /**
  * True when the axis selection includes a non-leaf (axis id or parent node).
- * Means「该维度不筛选」: show content whether or not it hangs on any child leaf.
+ * Leaf pick: only hangs on those leaves. Non-leaf: drop hangs on child leaves
+ * outside this subtree; keep hangs under it and content hung on no child leaf.
  */
 export function axisSelectionIsOpen(
   toc: BookToc,
@@ -334,9 +336,6 @@ export function pageVisibleInSelection(
   const moduleIndex =
     ctx?.moduleIndex && ctx.moduleIndex.id !== chapter.id ? ctx.moduleIndex : null;
   for (const [axis, chosen] of Object.entries(selection)) {
-    if (toc?.lenses?.[axis]?.length && axisSelectionIsOpen(toc, axis, chosen)) {
-      continue; // 父/轴 = 该维不筛选
-    }
     const leaves = toc?.lenses?.[axis]?.length
       ? effectiveAxisLeaves(toc, axis, normalizeAxisSelection(chosen))
       : normalizeAxisSelection(chosen);
@@ -492,10 +491,8 @@ function axisOpenedByWholePageLayers(
 /**
  * Section ids to show for the current selection, or null = no filter (all).
  * Per axis:
- * - Non-leaf selected (axis id / parent) → 该维不筛选 (skip).
  * - Empty leaf selection → same as unmatched leaf: `display` = index shells only
- *   (尺子刻度常显；挂靠正文隐藏); `hungOnly` = empty. Untagged chapters also get
- *   shells-only (not `continue` / open-axis).
+ *   (尺子刻度常显；挂靠正文隐藏); `hungOnly` = empty.
  * - Selected leaf with no allowlist on this page:
  *   - leaf in page `layers` → whole-page (no section filter).
  *   - or module index has matching whole-page layers → same (挂靠页跟随模块归属).
@@ -503,6 +500,8 @@ function axisOpenedByWholePageLayers(
  * - Selected leaf with an allowlist:
  *   - `display` → that leaf's hung ∪ index shells (not untagged).
  *   - `hungOnly` → that leaf's hung only (for「仅有内容」/「仅无内容」).
+ * - Non-leaf (parent / axis): descendant-leaf hangs ∪ untagged-on-this-axis ∪ shells.
+ *   Hangs on sibling-subtree leaves are dropped. Axis covering all leaves ≡ no filter.
  * Across axes, intersecting lists still apply.
  */
 export function sectionAllowlistFor(
@@ -519,9 +518,9 @@ export function sectionAllowlistFor(
     ctx?.moduleIndex && ctx.moduleIndex.id !== chapter.id ? ctx.moduleIndex : null;
 
   for (const [axis, chosen] of Object.entries(selection)) {
-    if (toc?.lenses?.[axis]?.length && axisSelectionIsOpen(toc, axis, chosen)) {
-      continue; // 父/轴 = 该维不筛选
-    }
+    const parentOpen =
+      !!toc?.lenses?.[axis]?.length &&
+      axisSelectionIsOpen(toc, axis, normalizeAxisSelection(chosen));
 
     const leaves = toc?.lenses?.[axis]?.length
       ? effectiveAxisLeaves(toc, axis, normalizeAxisSelection(chosen))
@@ -538,11 +537,13 @@ export function sectionAllowlistFor(
 
     const moduleOpens = axisOpenedByWholePageLayers(moduleIndex, axis, leaves);
 
-    // No section table on this axis: whole-page leaf / module ownership → skip; else shells only.
+    // No section table on this axis: whole-page leaf / module ownership → skip;
+    // non-leaf keep untagged body; leaf → shells only.
     if (!axisAllows) {
       if (leaves.some((leaf) => layerOpts.includes(leaf)) || moduleOpens) {
         continue;
       }
+      if (parentOpen) continue;
       lists.push(mode === 'display' ? [...shellIds] : []);
       continue;
     }
@@ -573,9 +574,15 @@ export function sectionAllowlistFor(
       continue;
     }
 
-    // display: selected hung ∪ index shells only (未挂该轴的正文隐藏).
+    // display: leaf → hung ∪ shells; non-leaf → also keep untagged-on-this-axis.
     const allowed = new Set<string>(selectedTagged);
     for (const id of shellIds) allowed.add(id);
+    if (parentOpen) {
+      for (const s of chapter.sections) {
+        if (!taggedOnAxis.has(s.id)) allowed.add(s.id);
+      }
+      if (chapter.sections.every((s) => allowed.has(s.id))) continue;
+    }
     lists.push([...allowed]);
   }
   if (lists.length === 0) return null;
